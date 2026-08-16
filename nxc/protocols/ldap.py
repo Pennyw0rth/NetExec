@@ -1692,7 +1692,7 @@ class ldap(connection):
             )
             ad = AD(
                 auth=auth,
-                domain=self.domain,
+                domain=self.targetDomain,
                 nameserver=self.args.dns_server,
                 dns_tcp=self.args.dns_tcp,
                 dns_timeout=self.args.dns_timeout,
@@ -1700,7 +1700,7 @@ class ldap(connection):
 
             self.logger.debug("Using DNS to retrieve domain information")
             try:
-                ad.dns_resolve(domain=self.domain)
+                ad.dns_resolve(domain=self.targetDomain)
             except (resolver.LifetimeTimeout, resolver.NoNameservers):
                 self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
                 return
@@ -1763,13 +1763,13 @@ class ldap(connection):
             # Create CertiHound adapter and collector
             adapter = ImpacketLDAPAdapter(
                 search_func=self.search,
-                domain=self.domain,
+                domain=self.targetDomain,
                 domain_sid=self.sid_domain,
             )
 
             collector = ADCSCollector.from_external(
                 ldap_connection=adapter,
-                domain=self.domain,
+                domain=self.targetDomain,
                 domain_sid=self.sid_domain,
             )
             data = collector.collect_all()
