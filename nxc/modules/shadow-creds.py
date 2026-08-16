@@ -174,15 +174,23 @@ class NXCModule:
         _, credential = result
         self.context.log.success(f"KeyCredential {self.device_id} on {self.target}")
         for name, value in {
-            "Device ID": credential.DeviceId.toFormatD().lower(),
             "Owner": credential.Owner,
-            "Version": getattr(credential.Version, "value", credential.Version),
-            "Identifier": credential.Identifier,
-            "Usage": getattr(credential.Usage, "name", credential.Usage),
-            "Source": getattr(credential.Source, "name", credential.Source),
-            "Creation time": credential.CreationTime,
+            "Version": hex(credential.Version.value),
+            "Key ID": credential.Identifier,
+            "Key hash": credential.KeyHash.hex(),
             "Key size": getattr(credential.RawKeyMaterial, "keySize", "unknown"),
-            "Public exponent": getattr(credential.RawKeyMaterial, "exponent", "unknown"),
+            "  Exponent (E)": credential.RawKeyMaterial.exponent,
+            "  Modulus (N)": hex(credential.RawKeyMaterial.modulus),
+            "  Prime 1 (P)": hex(credential.RawKeyMaterial.prime1),
+            "  Prime 2 (Q)": hex(credential.RawKeyMaterial.prime2),
+            "Usage": credential.Usage,
+            "Legacy usage": credential.LegacyUsage,
+            "Source": credential.Source,
+            "Device ID": credential.DeviceId.toFormatD().lower(),
+            "Custom key info": credential.CustomKeyInfo,
+            **{f"  {key}": custom_value for key, custom_value in credential.CustomKeyInfo.items()},
+            "Last logon time": credential.LastLogonTime,
+            "Creation time": credential.CreationTime,
         }.items():
             self.context.log.highlight(f"{name:<17} {value}")
 
