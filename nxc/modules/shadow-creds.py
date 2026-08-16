@@ -175,6 +175,7 @@ class NXCModule:
         self.context.log.success(f"KeyCredential {self.device_id} on {self.target}")
         for name, value in {
             "Owner": credential.Owner,
+            "Device ID": credential.DeviceId.toFormatD().lower(),
             "Version": hex(credential.Version.value),
             "Key ID": credential.Identifier,
             "Key hash": credential.KeyHash.hex(),
@@ -186,7 +187,6 @@ class NXCModule:
             "Usage": credential.Usage,
             "Legacy usage": credential.LegacyUsage,
             "Source": credential.Source,
-            "Device ID": credential.DeviceId.toFormatD().lower(),
             "Custom key info": credential.CustomKeyInfo,
             **{f"  {key}": custom_value for key, custom_value in credential.CustomKeyInfo.items()},
             "Last logon time": credential.LastLogonTime,
