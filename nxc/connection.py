@@ -565,12 +565,13 @@ class connection:
 
         if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
             self.logger.debug("Trying to authenticate using Certificate pfx")
+            if self.args.protocol == "ldap" and self.args.schannel:
+                # Schannel maps the certificate to an account server-side, so the supplied username is ignored
+                with sem:
+                    return self.plaintext_login(self.domain, "", "")
             if not self.args.username:
                 self.logger.fail("You must specify a username when using certificate authentication")
                 return False
-            if hasattr(self.args, "schannel") and self.args.schannel:
-                with sem:
-                    return self.plaintext_login(self.domain, self.args.username[0], "")
             with sem:
                 return pfx_auth(self)
 
