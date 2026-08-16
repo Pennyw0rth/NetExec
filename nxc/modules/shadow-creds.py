@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from sys import exit
 
@@ -8,7 +9,7 @@ from dsinternals.common.data.DNWithBinary import DNWithBinary
 from dsinternals.common.data.hello.KeyCredential import KeyCredential
 from dsinternals.system.DateTime import DateTime
 from dsinternals.system.Guid import Guid
-from impacket.ldap.ldap import MODIFY_ADD, MODIFY_DELETE
+from impacket.ldap.ldap import MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE
 
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
@@ -23,34 +24,41 @@ class NXCModule:
     """
 
     name = "shadow-creds"
-    description = "List, add, inspect, or remove Shadow Credentials from a computer"
+    description = "List, add, inspect, remove, backup, or revert Shadow Credentials on a computer"
     supported_protocols = ["ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
         TARGET      sAMAccountName of the target computer (for example, TARGET=DESKTOP-123456$)
-        ACTION      Action to perform: list, add, info, or remove (default: list)
+        ACTION      Action to perform: list, add, info, remove, backup, or revert (default: list)
         DEVICE_ID   KeyCredential device ID; required for info and remove
+        JSONFILE    JSON backup path; required for revert and optional for backup
 
         Examples:
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=list
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=add
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=info DEVICE_ID=<guid>
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=remove DEVICE_ID=<guid>
+        netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=backup JSONFILE=shadow-creds.json
+        netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=revert JSONFILE=shadow-creds.json
         """
         self.target = module_options.get("TARGET", "").strip()
         self.action = module_options.get("ACTION", "list").lower().strip()
         self.device_id = module_options.get("DEVICE_ID")
+        self.jsonfile = module_options.get("JSONFILE")
 
         if not self.target:
             context.log.fail("TARGET is required")
             exit(1)
-        if self.action not in {"list", "add", "info", "remove"}:
-            context.log.fail("ACTION must be one of: add, info, list, remove")
+        if self.action not in {"list", "add", "info", "remove", "backup", "revert"}:
+            context.log.fail("ACTION must be one of: list, add, info, remove, backup, revert")
             exit(1)
         if self.action in {"info", "remove"} and not self.device_id:
             context.log.fail(f"DEVICE_ID is required for ACTION={self.action}")
+            exit(1)
+        if self.action == "revert" and not self.jsonfile:
+            context.log.fail("JSONFILE is required for ACTION=revert")
             exit(1)
 
     def on_login(self, context, connection):
@@ -68,16 +76,20 @@ class NXCModule:
 
         target_dn = resp_parsed[0]["distinguishedName"]
         raw_values = resp_parsed[0].get("msDS-KeyCredentialLink", [])
-        credentials = self.parse_credentials(raw_values if isinstance(raw_values, list) else [raw_values])
+        raw_values = raw_values if isinstance(raw_values, list) else [raw_values]
 
         if self.action == "list":
-            self.list(credentials)
+            self.list(self.parse_credentials(raw_values))
         elif self.action == "add":
             self.add(target_dn)
         elif self.action == "info":
-            self.info(credentials)
+            self.info(self.parse_credentials(raw_values))
         elif self.action == "remove":
-            self.remove(target_dn, credentials)
+            self.remove(target_dn, self.parse_credentials(raw_values))
+        elif self.action == "backup":
+            self.backup(raw_values)
+        elif self.action == "revert":
+            self.revert(target_dn)
 
     def parse_credentials(self, raw_values):
         credentials = []
@@ -87,7 +99,7 @@ class NXCModule:
                 credentials.append(
                     (
                         raw_value,
-                        KeyCredential.fromDNWithBinary(DNWithBinary.fromRawDNWithBinary(raw_value.encode("utf-8") if isinstance(raw_value, str) else bytes(raw_value))),
+                        KeyCredential.fromDNWithBinary(DNWithBinary.fromRawDNWithBinary(raw_value.encode())),
                     )
                 )
             except Exception as e:
@@ -188,3 +200,35 @@ class NXCModule:
             return
 
         self.context.log.success(f"Removed KeyCredential {self.device_id} from {self.target}")
+
+    def backup(self, raw_values):
+        key_credentials = []
+        for raw_value in raw_values:
+            try:
+                key_credentials.append(KeyCredential.fromDNWithBinary(DNWithBinary.fromRawDNWithBinary(raw_value.encode())).toDict())
+            except Exception as e:
+                self.context.log.fail(f"Could not serialize an existing KeyCredential, preserving its raw value: {e}")
+                key_credentials.append(raw_value)
+
+        output_path = Path(self.jsonfile) if self.jsonfile else Path(NXC_PATH) / "modules" / "shadow-creds" / f"{self.target.rstrip('$')}.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps({"keyCredentials": key_credentials}, indent=4))
+        self.context.log.success(f"Backed up {len(key_credentials)} KeyCredential(s) from {self.target} to {output_path}")
+
+    def revert(self, target_dn):
+        try:
+            key_credentials = []
+            for key_credential in json.loads(Path(self.jsonfile).read_text())["keyCredentials"]:
+                if not isinstance(key_credential, (dict, str)):
+                    raise ValueError("keyCredentials entries must be objects or strings")
+                key_credentials.append(KeyCredential.fromDict(key_credential).toDNWithBinary().toString() if isinstance(key_credential, dict) else key_credential)
+        except Exception as e:
+            self.context.log.fail(f"Failed to read Shadow Credentials backup: {e}")
+            return
+
+        try:
+            self.connection.ldap_connection.modify(target_dn, {"msDS-KeyCredentialLink": [(MODIFY_REPLACE, key_credentials)]})
+        except Exception as e:
+            self.context.log.fail(f"Failed to revert Shadow Credentials: {e}")
+            return
+        self.context.log.success(f"Reverted {self.target} to {len(key_credentials)} backed-up KeyCredential(s)")
