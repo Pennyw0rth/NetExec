@@ -364,7 +364,7 @@ class ldap(connection):
                 color="yellow",
             )
             # If no preauth is set, we want to be able to execute commands such as --kerberoasting
-            if self.args.no_preauth_targets:  # noqa: SIM103
+            if self.args.no_preauth_targets:  # ruff: ignore[needless-bool]
                 return True
             else:
                 return False

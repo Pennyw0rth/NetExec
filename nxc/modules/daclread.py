@@ -249,7 +249,7 @@ class NXCModule:
                 context.log.debug("There is a target specified!")
                 if isfile(module_options[option]):
                     try:
-                        target_file = open(module_options[option])  # noqa: SIM115
+                        target_file = open(module_options[option])  # ruff: ignore[open-file-with-context-handler]
                         for line in target_file:
                             context.log.debug(f"Adding target from file: {line}")
                             self.targets.append((line.strip(), SEARCH_FILTERS[option]))
