@@ -642,13 +642,13 @@ class nfs(connection):
         # Format for the file id see: https://elixir.bootlin.com/linux/v6.13.4/source/include/linux/exportfs.h#L25
         fh = bytearray(mount_fh)
         if filesystem in [FileID.ext, FileID.unknown]:
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))  # noqa: E226
-            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))  # noqa: E226
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x02\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x02\x00\x00\x00"))  # ruff: ignore[missing-whitespace-around-arithmetic-operator]
+            root_handles.append(bytes(fh[:3] + b"\x02" + fh[4:4+fh_fsid_len] + b"\x80\x00\x00\x00" + b"\x00\x00\x00\x00" + b"\x80\x00\x00\x00"))  # ruff: ignore[missing-whitespace-around-arithmetic-operator]
         if filesystem in [FileID.btrfs, FileID.unknown]:
             # Iterate over btrfs subvolumes, use 16 as default similar to the guys from nfs-security-tooling
             for i in range(16):
                 subvolume = int.to_bytes(i) + b"\x01\x00\x00"
-                root_handles.append(bytes(fh[:3] + b"\x4d" + fh[4:4+fh_fsid_len] + b"\x00\x01\x00\x00" + b"\x00\x00\x00\x00" + subvolume + b"\x00\x00\x00\x00" + b"\x00\x00\x00\x00"))  # noqa: E226
+                root_handles.append(bytes(fh[:3] + b"\x4d" + fh[4:4+fh_fsid_len] + b"\x00\x01\x00\x00" + b"\x00\x00\x00\x00" + subvolume + b"\x00\x00\x00\x00" + b"\x00\x00\x00\x00"))  # ruff: ignore[missing-whitespace-around-arithmetic-operator]
 
         return root_handles
 

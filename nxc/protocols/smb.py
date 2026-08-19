@@ -876,15 +876,17 @@ class smb(connection):
 
         probes = [self._is_dc_via_smb]
         if aggressive_check:
-            probes += [self._is_dc_via_rpc, self._is_dc_via_kerberos]
+            probes.append(self._is_dc_via_rpc)
+        if self.no_ntlm or aggressive_check:
+            probes.append(self._is_dc_via_kerberos)
 
         for probe in probes:
             result = probe()
             if result is not None:
                 self.isdc = result
                 return self.isdc
-        # inconclusive if all probes return None
-        if aggressive_check:
+
+        if self.no_ntlm or aggressive_check:
             self.isdc = False
         return self.isdc
 
@@ -897,13 +899,13 @@ class smb(connection):
         session, the reason is decisive: a DC with NTLM enabled always accepts
         the null bind, so "NTLM on + no null session" means this is NOT a DC.
         Only "NTLM disabled" is inconclusive here (a real DC can refuse the null
-        bind then), so we hand that case off to the Kerberos/RPC tiers.
+        bind then), so we hand that case off to the Kerberos tier.
         """
         if not self.null_auth:
             if not self.no_ntlm:
                 self.logger.debug("NTLM enabled but no null session: host is not a DC")
                 return False
-            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos/RPC")
+            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos")
             return None
         try:
             tid = self.conn.connectTree("SYSVOL")
@@ -934,6 +936,9 @@ class smb(connection):
         one (a PRINCIPAL_UNKNOWN reply is marginally quieter) and otherwise a
         placeholder - we never need to actually know the domain.
         """
+        if not self._is_port_open(88):
+            self.logger.debug("Port 88 closed/filtered: no KDC reachable, deferring")
+            return None
         # targetDomain is not set yet when this runs on the no-NTLM path (it is
         # produced later by the isdc-dependent LDAP resolution), so read it
         # defensively and fall back to a placeholder - the realm need not be real.
@@ -954,27 +959,30 @@ class smb(connection):
         return True
 
     def _is_dc_via_rpc(self):
-        """Tier 3: unauthenticated Netlogon endpoint lookup on 135. NTLM-agnostic
-        and needs no session, but heavier and noisier than the SMB/Kerberos
-        probes above, so it only runs when both of those were inconclusive.
+        """
+        Unauthenticated Netlogon endpoint-mapper lookup on 135. NTLM-agnostic
+        and needs no session;
         """
         from impacket.dcerpc.v5 import nrpc, epm
 
         if not self._is_port_open(135):
-            self.logger.debug("Port 135 closed and no higher-tier signal: treating as not a DC")
-            return False
+            self.logger.debug("Port 135 closed/filtered: RPC inconclusive, deferring to Kerberos")
+            return None
 
         self.logger.debug("Port 135 is open, attempting Netlogon MSRPC lookup...")
         try:
             epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+            self.logger.debug("Netlogon endpoint registered: host is a DC")
             return True
         except DCERPCException:
-            self.logger.debug("DCERPCException on Netlogon lookup: probably not a DC")
+            self.logger.debug("Endpoint mapper answered but Netlogon not registered: host is not a DC")
+            return False
         except TimeoutError:
-            self.logger.debug("Timeout on Netlogon lookup: likely not a DC or unreachable")
+            self.logger.debug("Timeout on Netlogon lookup: inconclusive, deferring to Kerberos")
+            return None
         except Exception as e:
-            self.logger.debug(f"Error on Netlogon lookup: {e}")
-        return False
+            self.logger.debug(f"Error on Netlogon lookup ({e}): inconclusive, deferring to Kerberos")
+            return None
 
     def _is_port_open(self, port, timeout=1):
         """Check if a specific port is open on the target host."""
@@ -2394,7 +2402,8 @@ class smb(connection):
 
         if self.args.pvk is not None:
             try:
-                self.pvkbytes = open(self.args.pvk, "rb").read()  # noqa: SIM115
+                with open(self.args.pvk, "rb") as f:
+                    self.pvkbytes = f.read()
                 self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
             except Exception as e:
                 self.logger.fail(str(e))
@@ -2417,7 +2426,7 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
-        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler]
 
         conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
         if conn is None:
