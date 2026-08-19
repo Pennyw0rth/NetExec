@@ -327,7 +327,7 @@ class SMBSpiderPlus:
             download_success = True
         except SessionError as e:
             if "STATUS_SHARING_VIOLATION" in str(e):
-                pass
+                self.logger.debug(f"Sharing violation while downloading file: {file_path}")
         except Exception as e:
             self.logger.fail(f'Failed to download file "{file_path}". Error: {e!s}')
 

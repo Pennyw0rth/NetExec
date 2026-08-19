@@ -100,7 +100,7 @@ class SMBSpider:
         for result in filelist:
             # this can potentially be refactored
             if result.is_directory() and result.get_longname() not in [".", ".."]:
-                if subfolder == "*":  # noqa: SIM114
+                if subfolder == "*":  # ruff: ignore[if-with-same-arms]
                     self._spider(
                         subfolder.replace("*", "") + result.get_longname(),
                         depth - 1 if depth else None,
@@ -216,7 +216,7 @@ class SMBSpider:
 
         except SessionError as e:
             if "STATUS_SHARING_VIOLATION" in str(e):
-                pass
+                self.logger.debug(f"Sharing violation while reading file: {path}{result.get_longname()}")
 
         except Exception:
             traceback.print_exc()
