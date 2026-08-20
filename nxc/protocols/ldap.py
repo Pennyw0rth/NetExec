@@ -744,12 +744,11 @@ class ldap(connection):
         self.users()
 
     def groups(self):
-        # Building the search filter
+        # Group specific member search
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
             # Resolve group DN and primaryGroupID (objectSid) and member attribute
-            # This to include users which do not have a populated memberOf backlink
             group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid", "member"])
             group_parsed = parse_result_attributes(group_resp)
 
@@ -763,15 +762,10 @@ class ldap(connection):
             search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
             attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
 
-        else:
-            search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member", "description"]
+            resp = self.search(search_filter, attributes)
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
-        resp = self.search(search_filter, attributes)
-        resp_parsed = parse_result_attributes(resp)
-        self.logger.debug(f"Total of records returned {len(resp_parsed)}")
-
-        if self.args.groups:
             # Fall back to the group's member attribute for any DN the
             # memberOf/primaryGroupID search above didn't already return
             group_members = group.get("member", [])
@@ -781,23 +775,14 @@ class ldap(connection):
             member_attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
 
             if group_members:
-                original_scope = self.scope
-                try:
-                    self.scope = ldapasn1_impacket.Scope("baseObject")
-                    for member_dn in group_members:
-                        try:
-                            member_resp = self.search("(objectClass=*)", member_attributes, baseDN=member_dn)
-                        except Exception as e:
-                            self.logger.debug(f"Failed to resolve member DN '{member_dn}': {e}")
-                            member_resp = []
+                for member_dn in group_members:
+                    member_resp = self.search("(objectClass=*)", member_attributes, baseDN=member_dn)
+                    member_parsed = parse_result_attributes(member_resp)
 
-                        member_parsed = parse_result_attributes(member_resp)
-                        if member_parsed:
-                            resp_parsed.append(member_parsed[0])
-                        else:
-                            self.logger.debug(f"Could not resolve group member DN: {member_dn}")
-                finally:
-                    self.scope = original_scope
+                    if member_parsed:
+                        resp_parsed.append(member_parsed[0])
+                    else:
+                        self.logger.debug(f"Could not resolve group member DN: {member_dn}")
 
                 deduped = {}
                 for item in resp_parsed:
@@ -813,7 +798,16 @@ class ldap(connection):
                     # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
                     # Fallback to cn should sAMAccountName not be present (e.g. Service Principal Names)
                     self.logger.highlight(item.get("sAMAccountName", item["cn"]) if "group" not in item["objectClass"] else item["cn"])
+
+        # List all groups
         else:
+            search_filter = "(objectCategory=group)"
+            attributes = ["cn", "member", "description"]
+
+            resp = self.search(search_filter, attributes)
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
