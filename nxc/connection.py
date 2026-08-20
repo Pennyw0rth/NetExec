@@ -360,7 +360,7 @@ class connection:
             if global_lockouts < abort_on_lockout:
                 return
 
-            answer = nxc_console.input(f"[bold yellow]\\[!] {global_lockouts} lockout responses detected, would you like to quit? \\[Y/n] [/]")
+            answer = nxc_console.input(f"[bold red]\\[!] {global_lockouts} lockout responses detected, would you like to quit? \\[Y/n] [/]")
             if answer.strip().lower() in ("y", "yes", ""):
                 spray_abort_all = True
                 self.spray_aborted = True
