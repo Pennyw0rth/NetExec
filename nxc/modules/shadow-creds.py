@@ -108,7 +108,7 @@ class NXCModule:
 
     def get_credential(self, credentials):
         for raw_value, credential in credentials:
-            if credential.DeviceId and credential.DeviceId.toFormatD().lower() == self.device_id:
+            if credential.DeviceId and credential.DeviceId.toFormatD().lower() == self.device_id.lower():
                 return raw_value, credential
         self.context.log.fail(f"No KeyCredential with device ID {self.device_id} was found on {self.target}")
         return None
