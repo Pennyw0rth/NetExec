@@ -35,7 +35,6 @@ dependencies = [
     "pyasn1-modules>=0.3.0",
     "pylnk3>=0.4.3",
     "pypsrp>=0.8.1",
-    "pyspnego[kerberos]>=0.9.0",
     "pypykatz>=0.6.8",
     "python-dateutil>=2.8.2",
     "python-libnmap>=0.7.3",

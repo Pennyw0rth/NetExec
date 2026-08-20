@@ -1,7 +1,5 @@
 import os
 import base64
-import binascii
-import tempfile
 import traceback
 import requests
 import urllib3
@@ -16,10 +14,6 @@ from termcolor import colored
 
 from dploot.lib.utils import is_guid, is_credfile
 from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
-from impacket.krb5.kerberosv5 import getKerberosTGT, KerberosError
-from impacket.krb5.types import Principal, KerberosException
-from impacket.krb5.ccache import CCache
-from impacket.krb5 import constants
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 from impacket.uuid import bin_to_string
 
@@ -33,13 +27,6 @@ from nxc.logger import NXCAdapter
 from nxc.paths import TMP_PATH
 
 urllib3.disable_warnings()
-
-KERB_ERROR_STATUS = {
-    "KDC_ERR_CLIENT_REVOKED": "STATUS_ACCOUNT_LOCKED_OUT",
-    "KDC_ERR_PREAUTH_FAILED": "STATUS_LOGON_FAILURE",
-    "KDC_ERR_KEY_EXPIRED": "STATUS_PASSWORD_EXPIRED",
-    "KDC_ERR_CLIENT_NOT_TRUSTED": "STATUS_ACCOUNT_DISABLED",
-}
 
 
 class winrm(connection):
@@ -260,127 +247,6 @@ class winrm(connection):
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
-
-    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
-        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
-        self.admin_privs = False
-        self.username = username
-        self.domain = domain
-        lmhash = ""
-        nthash = ""
-        if ntlm_hash.find(":") != -1:
-            lmhash, nthash = ntlm_hash.split(":")
-        else:
-            nthash = ntlm_hash
-        self.lmhash = lmhash
-        self.nthash = nthash
-        kerb_pass = next((s for s in [nthash, password, aesKey] if s), "")
-        kdc = kdcHost or self.kdcHost
-        used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
-
-        try:
-            ccache_path = self._get_kerberos_ccache(username, password, domain, lmhash, nthash, aesKey, kdc, useCache)
-        except KerberosError as e:
-            err_name = str(next(iter(e.getErrorString())))
-            status = KERB_ERROR_STATUS.get(err_name.upper().split("(")[0].strip(), err_name)
-            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} {status}", color="magenta")
-            if status == "STATUS_ACCOUNT_LOCKED_OUT":
-                self.inc_failed_login(username)
-                self.register_lockout(username)
-            return False
-        except (FileNotFoundError, KerberosException) as e:
-            self.logger.fail(f"CCache Error: {e}")
-            return False
-        except Exception as e:
-            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} Kerberos TGT error: {e!s}")
-            return False
-
-        try:
-            import gssapi  # noqa: F401
-        except ImportError:
-            self.logger.fail("WinRM Kerberos requires the 'gssapi' package and system libkrb5 (e.g. 'apt install libkrb5-dev && pip install gssapi'); use NTLM instead")
-            return False
-
-        self._write_krb5_conf(domain, kdc)
-        os.environ["KRB5CCNAME"] = ccache_path
-
-        try:
-            target_fqdn = f"{self.hostname}.{self.domain}" if self.hostname else self.host
-            self.conn = Client(
-                target_fqdn,
-                port=self.port,
-                auth="kerberos",
-                ssl=self.ssl,
-                cert_validation=False,
-            )
-            self.check_if_admin()
-        except Exception as e:
-            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} {e!s}")
-            return False
-
-        self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
-        try:
-            self.db.add_credential("plaintext" if password else "hash", domain, self.username, kerb_pass)
-            user_id = self.db.get_credential("plaintext" if password else "hash", domain, self.username, kerb_pass)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
-            if self.admin_privs:
-                self.db.add_admin_user("plaintext" if password else "hash", domain, self.username, kerb_pass, self.host, user_id=user_id)
-                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
-        except Exception as e:
-            self.logger.debug(f"Error adding credential/relation to database: {e!s}")
-        if not self.args.local_auth and self.username != "":
-            add_user_bh(self.username, self.domain, self.logger, self.config)
-        return True
-
-    def _get_kerberos_ccache(self, username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache):
-        if useCache:
-            ccache_file = os.getenv("KRB5CCNAME")
-            if not ccache_file:
-                raise FileNotFoundError("KRB5CCNAME is not set (required for --use-kcache)")
-            if not self.username:
-                self.username = CCache.parseFile(domain)[1]
-            return ccache_file
-
-        user = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        tgt, _cipher, old_session_key, session_key = getKerberosTGT(
-            clientName=user,
-            password=password,
-            domain=domain.upper(),
-            lmhash=binascii.unhexlify(lmhash) if lmhash else b"",
-            nthash=binascii.unhexlify(nthash) if nthash else b"",
-            aesKey=aesKey,
-            kdcHost=kdcHost,
-        )
-        ccache = CCache()
-        ccache.fromTGT(tgt, old_session_key, session_key)
-        fd, ccache_path = tempfile.mkstemp(suffix=".ccache", prefix="nxc_winrm_")
-        os.close(fd)
-        ccache.saveFile(ccache_path)
-        self.logger.debug(f"TGT obtained for {self.username}@{self.domain}, ccache: {ccache_path}")
-        return ccache_path
-
-    def _write_krb5_conf(self, domain, kdcHost):
-        realm = domain.upper()
-        conf = (
-            "[libdefaults]\n"
-            f"    default_realm = {realm}\n"
-            "    dns_lookup_kdc = false\n"
-            "    dns_lookup_realm = false\n"
-            "    rdns = false\n"
-            "\n"
-            "[realms]\n"
-            f"    {realm} = {{\n"
-            f"        kdc = {kdcHost}\n"
-            f"        admin_server = {kdcHost}\n"
-            "    }\n"
-        )
-        fd, conf_path = tempfile.mkstemp(suffix=".conf", prefix="nxc_krb5_")
-        with os.fdopen(fd, "w") as f:
-            f.write(conf)
-        os.environ["KRB5_CONFIG"] = conf_path
-        self.logger.debug(f"Wrote temp krb5.conf for realm {realm} -> kdc {kdcHost}: {conf_path}")
-        return conf_path
 
     def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:

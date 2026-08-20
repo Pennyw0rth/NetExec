@@ -183,16 +183,6 @@ class wmi(connection):
                     self.logger.extra["protocol"] = "WMI"
                     self.admin_privs = True
 
-    def handle_rpc_error(self, error, username):
-        error_msg = str(error).lower()
-        for code in self.rpc_error_status:
-            if code in error_msg:
-                error_msg = self.rpc_error_status[code]
-        if error_msg == "STATUS_ACCOUNT_LOCKED_OUT":
-            self.inc_failed_login(username)
-            self.register_lockout(username)
-        return error_msg
-
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug("Starting WMI login with Kerberos")
         lmhash = ""
@@ -240,9 +230,6 @@ class wmi(connection):
             elif "kerberos sessionerror" in error_msg:
                 out = f"{self.domain}\\{self.username}{used_ccache} {next(iter(e.getErrorString()))}"
                 self.logger.fail(out, color="magenta")
-                if "kdc_err_client_revoked" in error_msg:
-                    self.inc_failed_login(self.username)
-                    self.register_lockout(self.username)
             else:
                 out = f"{self.domain}\\{self.username}{used_ccache} {e!s}"
                 self.logger.fail(out, color="red")
@@ -261,8 +248,11 @@ class wmi(connection):
                 dce.request(request)
             except Exception as e:
                 dce.disconnect()
-                self.logger.debug(str(e).lower())
-                error_msg = self.handle_rpc_error(e, self.username)
+                error_msg = str(e).lower()
+                self.logger.debug(error_msg)
+                for code in self.rpc_error_status:
+                    if code in error_msg:
+                        error_msg = self.rpc_error_status[code]
                 out = f"{self.domain}\\{self.username}{used_ccache} {error_msg.upper()}"
                 self.logger.fail(out, color=("red" if "access_denied" in error_msg else "magenta"))
                 return False
@@ -304,8 +294,11 @@ class wmi(connection):
                 dce.request(request)
             except Exception as e:
                 dce.disconnect()
-                self.logger.debug(str(e).lower())
-                error_msg = self.handle_rpc_error(e, self.username)
+                error_msg = str(e).lower()
+                self.logger.debug(error_msg)
+                for code in self.rpc_error_status:
+                    if code in error_msg:
+                        error_msg = self.rpc_error_status[code]
                 self.logger.fail((f"{self.domain}\\{self.username}:{process_secret(self.password)} ({error_msg.upper()})"), color=("red" if "access_denied" in error_msg else "magenta"))
                 return False
             else:
@@ -356,8 +349,11 @@ class wmi(connection):
                 dce.request(request)
             except Exception as e:
                 dce.disconnect()
-                self.logger.debug(str(e).lower())
-                error_msg = self.handle_rpc_error(e, self.username)
+                error_msg = str(e).lower()
+                self.logger.debug(error_msg)
+                for code in self.rpc_error_status:
+                    if code in error_msg:
+                        error_msg = self.rpc_error_status[code]
                 self.logger.fail((f"{self.domain}\\{self.username}:{process_secret(self.nthash)} ({error_msg.upper()})"), color=("red" if "access_denied" in error_msg else "magenta"))
                 return False
             else:

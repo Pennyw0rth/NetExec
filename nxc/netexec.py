@@ -20,7 +20,6 @@ import asyncio
 from nxc.helpers import powershell
 import signal
 import shutil
-import time
 import os
 from os.path import exists
 from os.path import join as path_join
@@ -224,11 +223,6 @@ def main():
 
     if getattr(args, "spray_window", 0) and len(targets) > 1:
         nxc_logger.highlight(highlight("[!] Lockout-safe spray timing is applied PER TARGET. Spraying multiple DCs of the same domain in parallel can still lock accounts - use a single target or --threads 1.", "red"))
-
-    if args.protocol in ("wmi", "winrm") and getattr(args, "password", None) and not (args.kerberos or args.use_kcache or args.aesKey):
-        proto_name = {"wmi": "WMI", "winrm": "WinRM"}[args.protocol]
-        nxc_logger.highlight(highlight(f"[!] Lockout detection unavailable via {proto_name}. Use -k to enable it", "red"))
-        time.sleep(1)
 
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
