@@ -9,7 +9,7 @@ from dsinternals.common.data.DNWithBinary import DNWithBinary
 from dsinternals.common.data.hello.KeyCredential import KeyCredential
 from dsinternals.system.DateTime import DateTime
 from dsinternals.system.Guid import Guid
-from impacket.ldap.ldap import MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE
+from impacket.ldap.ldap import MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, LDAPSessionError
 
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
@@ -142,7 +142,7 @@ class NXCModule:
         try:
             # Add one value instead of replacing the complete multi-valued attribute.
             self.connection.ldap_connection.modify(target_dn, {"msDS-KeyCredentialLink": [(MODIFY_ADD, [ldap_value])]})
-        except Exception as e:
+        except LDAPSessionError as e:
             self.context.log.fail(f"Failed to add the KeyCredential: {e}")
             self.context.log.display(f"Generated PFX retained at {output_path}")
             return
@@ -203,7 +203,7 @@ class NXCModule:
         try:
             # Delete the exact raw value so neighboring credentials remain untouched.
             self.connection.ldap_connection.modify(target_dn, {"msDS-KeyCredentialLink": [(MODIFY_DELETE, [raw_value])]})
-        except Exception as e:
+        except LDAPSessionError as e:
             self.context.log.fail(f"Failed to remove the KeyCredential: {e}")
             return
 
