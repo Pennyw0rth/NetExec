@@ -1705,6 +1705,14 @@ class ldap(connection):
                 self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
                 return
 
+            # Applied after dns_resolve(), which sets baseDN from the domain name.
+            # bloodhound's ADDC.search() defaults search_base to ad.baseDN, so this
+            # scopes the object collection to the given subtree. Queries that pass an
+            # explicit search_base (schema, configuration naming context) are unaffected.
+            if self.args.base_dn:
+                ad.baseDN = self.args.base_dn
+                self.logger.display(f"Scoping BloodHound collection to {ad.baseDN}")
+
             if self.args.kerberos:
                 self.logger.highlight("Using kerberos auth without ccache, getting TGT")
                 auth.get_tgt()
