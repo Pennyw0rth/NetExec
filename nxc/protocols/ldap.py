@@ -364,7 +364,7 @@ class ldap(connection):
                 color="yellow",
             )
             # If no preauth is set, we want to be able to execute commands such as --kerberoasting
-            if self.args.no_preauth_targets:  # noqa: SIM103
+            if self.args.no_preauth_targets:  # ruff: ignore[needless-bool]
                 return True
             else:
                 return False
@@ -791,6 +791,52 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
+
+    def ous(self):
+        if self.args.ous:
+            # Find the OU's distinguished name first
+            self.logger.debug(f"Dumping users from OU: {self.args.ous}")
+            ou_resp = self.search(
+                f"(&(objectCategory=organizationalUnit)(ou={self.args.ous}))",
+                ["distinguishedName"],
+            )
+            ou_parsed = parse_result_attributes(ou_resp)
+
+            if not ou_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' not found")
+                return
+
+            self.logger.debug(f"Found OU DN: {ou_parsed[0]['distinguishedName']}")
+
+            # Search for users scoped to that OU
+            resp = self.search(
+                "(&(objectCategory=person)(objectClass=user))",
+                ["sAMAccountName", "cn"],
+                baseDN=ou_parsed[0]["distinguishedName"],
+            )
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            if not resp_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' has no users")
+                return
+
+            self.logger.highlight(f"{'-sAMAccountName-':<30} -cn-")
+            for user in resp_parsed:
+                self.logger.highlight(f"{user.get('sAMAccountName'):<30} {user.get('cn', '')}")
+        else:
+            # List all OUs
+            self.logger.debug("Dumping all organizational units")
+            resp = self.search("(objectCategory=organizationalUnit)", ["ou", "distinguishedName"])
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            self.logger.highlight(f"{'-OU-':<40} -Distinguished Name-")
+            for ou in resp_parsed:
+                try:
+                    self.logger.highlight(f"{ou['ou']:<40} {ou['distinguishedName']}")
+                except Exception as e:
+                    self.logger.debug(f"Exception: {e}", exc_info=True)
 
     def computers(self):
         resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
@@ -1646,7 +1692,7 @@ class ldap(connection):
             )
             ad = AD(
                 auth=auth,
-                domain=self.domain,
+                domain=self.targetDomain,
                 nameserver=self.args.dns_server,
                 dns_tcp=self.args.dns_tcp,
                 dns_timeout=self.args.dns_timeout,
@@ -1654,7 +1700,7 @@ class ldap(connection):
 
             self.logger.debug("Using DNS to retrieve domain information")
             try:
-                ad.dns_resolve(domain=self.domain)
+                ad.dns_resolve(domain=self.targetDomain)
             except (resolver.LifetimeTimeout, resolver.NoNameservers):
                 self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
                 return
@@ -1717,13 +1763,13 @@ class ldap(connection):
             # Create CertiHound adapter and collector
             adapter = ImpacketLDAPAdapter(
                 search_func=self.search,
-                domain=self.domain,
+                domain=self.targetDomain,
                 domain_sid=self.sid_domain,
             )
 
             collector = ADCSCollector.from_external(
                 ldap_connection=adapter,
-                domain=self.domain,
+                domain=self.targetDomain,
                 domain_sid=self.sid_domain,
             )
             data = collector.collect_all()
