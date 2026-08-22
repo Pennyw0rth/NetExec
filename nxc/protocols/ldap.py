@@ -1693,7 +1693,11 @@ class ldap(connection):
             ad = AD(
                 auth=auth,
                 domain=self.targetDomain,
-                nameserver=self.args.dns_server,
+                # Same default as every other DNS lookup in this protocol (see the
+                # resolver setup in dns_query): without it an unset --dns-server
+                # leaves bloodhound on the operator's system resolver, which
+                # cannot answer the _ldap._tcp and _gc._tcp SRV records it needs.
+                nameserver=self.args.dns_server or self.host,
                 dns_tcp=self.args.dns_tcp,
                 dns_timeout=self.args.dns_timeout,
             )
