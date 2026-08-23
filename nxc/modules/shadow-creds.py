@@ -50,16 +50,16 @@ class NXCModule:
 
         if not self.target:
             context.log.fail("TARGET is required")
-            exit(1)
+            return False
         if self.action not in {"list", "add", "info", "remove", "backup", "revert"}:
             context.log.fail("ACTION must be one of: list, add, info, remove, backup, revert")
-            exit(1)
+            return False
         if self.action in {"info", "remove"} and not self.device_id:
             context.log.fail(f"DEVICE_ID is required for ACTION={self.action}")
-            exit(1)
+            return False
         if self.action == "revert" and not self.jsonfile:
             context.log.fail("JSONFILE is required for ACTION=revert")
-            exit(1)
+            return False
 
     def on_login(self, context, connection):
         self.context = context
