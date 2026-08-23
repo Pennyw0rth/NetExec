@@ -326,7 +326,7 @@ class DPAPITriage:
     # The dpapi function for every protocol
     def triage_dpapi(self):
         # Get the handle of the output file, this will be use by every triage functions to write looted secrets in there
-        self.output_file = open(self.context.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
+        self.output_file = open(self.context.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler]
 
         # Load masterkeys
         masterkeys = self.collect_masterkeys_from_target(dump_users=True, dump_system="nosystem" not in self.context.args.dpapi)
