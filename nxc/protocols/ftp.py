@@ -128,7 +128,8 @@ class ftp(connection):
             # Check if the file exists
             self.conn.size(filename)
             # Attempt to download the file
-            self.conn.retrbinary(f"RETR {filename}", open(downloaded_file, "wb").write)  # ruff: ignore[open-file-with-context-handler]
+            with open(downloaded_file, "wb") as f:
+                self.conn.retrbinary(f"RETR {filename}", f.write)
         except error_perm as error_message:
             self.logger.fail(f"Failed to download the file. Response: ({error_message})")
             self.conn.close()
@@ -146,7 +147,8 @@ class ftp(connection):
     def put_file(self, local_file, remote_file):
         try:
             # Attempt to upload the file
-            self.conn.storbinary(f"STOR {remote_file}", open(local_file, "rb"))  # ruff: ignore[open-file-with-context-handler]
+            with open(local_file, "rb") as f:
+                self.conn.storbinary(f"STOR {remote_file}", f.read)
         except error_perm as error_message:
             self.logger.fail(f"Failed to upload file. Response: ({error_message})")
             return False
