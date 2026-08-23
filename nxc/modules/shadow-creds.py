@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from sys import exit
 
 from cryptography.hazmat.primitives.serialization import NoEncryption
 from cryptography.hazmat.primitives.serialization.pkcs12 import serialize_key_and_certificates
