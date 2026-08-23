@@ -746,17 +746,15 @@ wheels = [
 
 [[package]]
 name = "dploot"
-version = "3.2.2"
-source = { registry = "https://pypi.org/simple" }
+version = "4.0.0"
+source = { git = "https://github.com/zblurx/dploot.git?rev=network_proto_upgrade#603059633b88b4735f9df377fd56d8d7b1b38dee" }
 dependencies = [
     { name = "cryptography" },
     { name = "impacket" },
     { name = "lxml" },
+    { name = "pick" },
     { name = "pyasn1" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/80/b1/40295eaf9ac7ab4c93a2568356971480d335b410cf67075064cb4e9ddaec/dploot-3.2.2.tar.gz", hash = "sha256:3f6acf90113ad076be9b59ea4142d0de4d910d4ae8f99a744d47cf010352d3a8", size = 68524, upload-time = "2026-03-13T16:27:31.139Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/96/4f81066afd9dc958c3cea89a3dc371c94cc651d528853545cf3a54bade7c/dploot-3.2.2-py2.py3-none-any.whl", hash = "sha256:8c7e436f382af7ae46642b8dbb91a4aa0818a2556c3ef802197ffd95ba9c8ea9", size = 93718, upload-time = "2026-03-13T16:27:29.83Z" },
+    { name = "pypsrp" },
 ]
 
 [[package]]
@@ -1409,7 +1407,7 @@ requires-dist = [
     { name = "certihound", specifier = ">=0.1.1" },
     { name = "certipy-ad", git = "https://github.com/Pennyw0rth/Certipy" },
     { name = "cryptography", specifier = ">=42.0.8" },
-    { name = "dploot", specifier = ">=3.2.2" },
+    { name = "dploot", git = "https://github.com/zblurx/dploot.git?rev=network_proto_upgrade" },
     { name = "dsinternals", specifier = ">=1.2.4" },
     { name = "impacket", git = "https://github.com/fortra/impacket" },
     { name = "jwt", specifier = ">=1.3.1" },
@@ -1485,6 +1483,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/03/4f/2750f7f6f025a1507cd3b7218691671eecfd0bbebebe8b39aa0fe1d360b8/pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632", size = 76008, upload-time = "2024-08-26T20:58:38.155Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f", size = 74766, upload-time = "2024-08-26T21:01:02.632Z" },
+]
+
+[[package]]
+name = "pick"
+version = "2.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "windows-curses", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b6/f9/450cc44b21190d99b86df3e59f7573d85f3ef2c4f7670ce4f65cb2def3b4/pick-2.6.0.tar.gz", hash = "sha256:f24434a845ae9265ebf7657fc224b9a203ac75aa576b568e061484a72e27be82", size = 6266, upload-time = "2026-02-28T13:47:06.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/93/704982e09f3481d2055cf8ef7372445dc8ea6c883daf60f0816deb9e362c/pick-2.6.0-py3-none-any.whl", hash = "sha256:2acd5cad09be96398fba3b8be89454929de7b05362e01c69d94a05801820871f", size = 7890, upload-time = "2026-02-28T13:47:05.311Z" },
 ]
 
 [[package]]
@@ -2363,6 +2373,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/23/fc/70784bbc5521a4a59c78dea0050e1478d67b2e77a54abcc5aa5f835faaf5/winacl-0.1.9.tar.gz", hash = "sha256:af70c2ec30178bf9e3c8a1c48c25e8781235fe2c1b321adb46e2f2ae1f8d4aab", size = 81777, upload-time = "2024-05-06T07:23:15.729Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/82/9be45ef89488ad87870da83271cb734f410373ca86dde76d6907d74cf0e0/winacl-0.1.9-py3-none-any.whl", hash = "sha256:31ba781a35f3b1bd3c2ece994816c0a5fe113c73018689ab6118010ac0d15099", size = 89218, upload-time = "2024-05-06T07:23:14.411Z" },
+]
+
+[[package]]
+name = "windows-curses"
+version = "2.4.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/6c/21393045010dd74887c71f1738f2bb1e60758c04d74cc97cefc03731a6d6/windows_curses-2.4.2-cp310-cp310-win32.whl", hash = "sha256:fb55b40df1dd8633f431307f204293ca2a0b4f928927490509f1bf68beef3cfe", size = 71143, upload-time = "2026-03-31T12:44:33.2Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/aa/4a67a104ab4d6ac4d5d5f8f80363feec688d7846180c5ca69327f602196a/windows_curses-2.4.2-cp310-cp310-win_amd64.whl", hash = "sha256:0ff2a0884cb78d48e15eea1e274f73c1f5a780a4b872357724c17b39de75c996", size = 81848, upload-time = "2026-03-31T12:44:34.869Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/58/5fd430fec0ebe1cef88ddccba345ca119f1b44e58f58d6998878a01c9973/windows_curses-2.4.2-cp311-cp311-win32.whl", hash = "sha256:ecf7af9c97002af661d3e47b9c5eb31cdb7629a032adcdab46530efea8ba1864", size = 71135, upload-time = "2026-03-31T12:44:35.863Z" },
+    { url = "https://files.pythonhosted.org/packages/84/62/e2bae0ab9c5c80dca9a708a4cb9c8afaf0ef61c8d4459b57f96785040831/windows_curses-2.4.2-cp311-cp311-win_amd64.whl", hash = "sha256:03c4ef0095ab8212ed964236d51b4d8c815f302c5a7de94831dae468f05ce333", size = 81863, upload-time = "2026-03-31T12:44:36.834Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/9c/b2a3706c8edadae8ae88b327ba072d6056ad1b492f9996214cff027e9f01/windows_curses-2.4.2-cp312-cp312-win32.whl", hash = "sha256:7ec4629685add716d494e8fbdd0b83485de726e9deeda57d30e742c77a32a156", size = 71547, upload-time = "2026-03-31T12:44:37.797Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/ee/8c5da36191524856fb2c675f8cae99211ccf77bcd4e4a9010477e08000ac/windows_curses-2.4.2-cp312-cp312-win_amd64.whl", hash = "sha256:df782859176f9e8142618e4966d6cee7a53a8b1c819faeb6e606a60fa4f8972a", size = 82282, upload-time = "2026-03-31T12:44:39.106Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/54/195f2c4d0258ced34a401c8e3c9eefa2aa2221a9f0179ae64ad3cb039e64/windows_curses-2.4.2-cp313-cp313-win32.whl", hash = "sha256:248bf3f1d973e92ca193b1ea8a626ec7f81a66be6f6d6c5e31ff82056453678d", size = 71458, upload-time = "2026-03-31T12:44:40.184Z" },
+    { url = "https://files.pythonhosted.org/packages/47/e8/38fd0fef95271280a77a4f3b65e0961d3c39716388b39c08b3040bfb4f2c/windows_curses-2.4.2-cp313-cp313-win_amd64.whl", hash = "sha256:1bf3d0c902374b6c430a954adcb686a5ecd7a31fc4195d31136385b5c1bea925", size = 82200, upload-time = "2026-03-31T12:44:41.503Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/22/f90c7d1d83464eb63345802f33e8de41bd732521d9a60a69ad985c8faa90/windows_curses-2.4.2-cp314-cp314-win32.whl", hash = "sha256:a970bf067b3126251423b4da051ef8c1c77acf6294ec96a7d6de7f6b9e5c27a0", size = 77028, upload-time = "2026-03-31T12:44:42.611Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/6a/1f8754de746474a049a841e139b443b250a96908d6913ccf2db9a4303584/windows_curses-2.4.2-cp314-cp314-win_amd64.whl", hash = "sha256:6c22cb0310500dfbfe54c76354e37070e300d5473596d48ac4f9c65b2d578b6f", size = 86361, upload-time = "2026-03-31T12:44:43.893Z" },
 ]
 
 [[package]]
