@@ -1,4 +1,4 @@
-# Author: xiaolichan # noqa: ERA001
+# Author: xiaolichan  # ruff: ignore[commented-out-code]
 # Link: https://github.com/XiaoliChan/wmiexec-Pro
 # Note: windows version under NT6 not working with this command execution way, it need Win32_ScheduledJob.
 #       https://github.com/XiaoliChan/wmiexec-Pro/blob/main/lib/modules/exec_command.py

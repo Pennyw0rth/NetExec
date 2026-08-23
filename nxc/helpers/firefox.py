@@ -143,7 +143,7 @@ class FirefoxTriage:
 
     def parse_cookie_data(self, windows_user, cookies_data):
         cookies = []
-        fh = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115
+        fh = tempfile.NamedTemporaryFile(delete=False)  # ruff: ignore[open-file-with-context-handler]
         fh.write(cookies_data)
         fh.seek(0)
         db = sqlite3.connect(fh.name)
@@ -188,7 +188,7 @@ class FirefoxTriage:
         # Instead of disabling "delete" and removing the file manually,
         # in the future (py3.12) we could use "delete_on_close=False" as a cleaner solution
         # Related issue: #134
-        fh = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115
+        fh = tempfile.NamedTemporaryFile(delete=False)  # ruff: ignore[open-file-with-context-handler]
         fh.write(key4_data)
         fh.seek(0)
         db = sqlite3.connect(fh.name)
@@ -212,7 +212,7 @@ class FirefoxTriage:
             for row in cursor:
                 try:
                     a11 = row[0]
-                    a102 = row[1]  # noqa: F841
+                    a102 = row[1]  # ruff: ignore[unused-variable]
 
                     decoded_a11 = decoder.decode(a11)
                     key = self.decrypt_3des(decoded_a11, master_password, global_salt)

@@ -23,6 +23,7 @@ dependencies = [
     "beautifulsoup4>=4.11,<5",
     "bloodhound-ce>=1.8.0",
     "certihound>=0.1.1",
+    "cryptography>=42.0.8",
     "dploot@git+https://github.com/zblurx/dploot.git#network_proto_upgrade",
     "dsinternals>=1.2.4",
     "jwt>=1.3.1",
@@ -47,7 +48,6 @@ dependencies = [
     # Git Dependencies
     "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
     "impacket @ git+https://github.com/fortra/impacket",
-    "oscrypto @ git+https://github.com/wbond/oscrypto",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
 
@@ -116,7 +116,7 @@ ignore = [
     "A004", "E501", "F405", "D100", "D101", "D102", "D103", "D104", "D105", "D106",
     "D107", "D203", "D204", "D205", "D212", "D213", "D400", "D401", "D413", "D415",
     "D417", "D419", "FURB", "RET503", "RET505", "RET506", "RET507", "RET508",
-    "PERF203", "RUF012", "RUF052", "RUF059"
+    "PERF203", "RUF012", "RUF052", "RUF059", "RUF201"
 ]
 
 # THE SETTINGS BELOW ARE DEFAULTS, left in here to override potential vs-code settings
