@@ -7,7 +7,6 @@
 
 # Coding style
 
-- Only assign an expression to a variable when that variable will be reassigned later; otherwise, use the expression directly.
 - Assume ordinary LDAP searches and LDAP response parsing do not raise exceptions; do not wrap them in `try`/`except`.
 - Always bind caught exceptions as `e`, not `error` or another name.
 - Do not prefix function or method names with underscores; preserve required Python special methods such as `__init__`.
