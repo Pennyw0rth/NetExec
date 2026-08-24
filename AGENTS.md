@@ -29,7 +29,7 @@
 # Development and validation
 
 - To verify that a module works, run the module's actual NetExec command instead of pytest or compilation checks.
-- Record every module-verification command in `e2e_commands.txt`.
+- Record every module-verification command in `tests/e2e_commands.txt`.
 - Do not run compilation checks.
 - Run Ruff after completing a coding session.
 
