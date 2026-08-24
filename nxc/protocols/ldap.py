@@ -757,38 +757,35 @@ class ldap(connection):
                 return
             else:
                 group = group_parsed[0]
+                direct_group_members = group.get("member", [])
+                if not isinstance(direct_group_members, list):
+                    direct_group_members = [direct_group_members]
 
-            # Search filter: user must have membership OR primaryGroupID
+            # Get all group members: user must have membership OR primaryGroupID
             search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
             attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
-
             resp = self.search(search_filter, attributes)
-            resp_parsed = parse_result_attributes(resp)
-            self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+            group_members = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(group_members)}")
 
-            # Fall back to the group's member attribute for any DN the
-            # memberOf/primaryGroupID search above didn't already return
-            group_members = group.get("member", [])
-            if not isinstance(group_members, list):
-                group_members = [group_members]
-
-            member_attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
-
-            if group_members:
-                for member_dn in group_members:
-                    member_resp = self.search("(objectClass=*)", member_attributes, baseDN=member_dn)
+            # Resolve any missing group members that the memberOf/primaryGroupID search above didn't already return
+            if len(group_members) < len(direct_group_members):
+                for member_dn in direct_group_members:
+                    member_resp = self.search(f"(distinguishedName={member_dn})", ["sAMAccountName", "distinguishedName", "cn", "objectClass"])
                     member_parsed = parse_result_attributes(member_resp)
 
                     if member_parsed:
-                        resp_parsed.append(member_parsed[0])
+                        group_members.append(member_parsed[0])
                     else:
-                        self.logger.debug(f"Could not resolve group member DN: {member_dn}")
+                        self.logger.debug(f"Failed to resolve group member DN '{member_dn}' for group '{self.args.groups}'")
+                        group_members.append({"distinguishedName": member_dn})
 
-                deduped = {}
-                for item in resp_parsed:
-                    key = item.get("distinguishedName", item.get("cn", "")).lower()
-                    deduped.setdefault(key, item)
-                resp_parsed = list(deduped.values())
+            # Deduplicate group members by distinguishedName or cn
+            deduped = {}
+            for item in group_members:
+                key = item.get("distinguishedName", item.get("cn", "")).lower()
+                deduped.setdefault(key, item)
+            resp_parsed = list(deduped.values())
 
             # Display group members
             if not resp_parsed:
