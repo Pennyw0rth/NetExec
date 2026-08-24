@@ -129,7 +129,7 @@ class NXCModule:
 
         for d in directories:
             if d.get_longname() not in self.false_positive and d.is_directory() > 0:
-                users.append(d.get_longname())  # noqa: PERF401, ignoring for readability
+                users.append(d.get_longname())  # ruff: ignore[manual-list-comprehension], ignoring for readability
         return users
 
     def handle_confCons_file(self, file_content):

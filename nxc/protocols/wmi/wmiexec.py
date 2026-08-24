@@ -1,4 +1,4 @@
-# Author: xiaolichan # noqa: ERA001
+# Author: xiaolichan  # ruff: ignore[commented-out-code]
 # Link: https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-regOut.py
 # Note: windows version under NT6 not working with this command execution way
 #       https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-reg-sch-UnderNT6-wip.py -- WIP

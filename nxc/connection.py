@@ -14,7 +14,7 @@ from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
-from nxc.loaders.moduleloader import ModuleLoader
+from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.paths import NXC_PATH
@@ -335,7 +335,7 @@ class connection:
             if self.failed_logins == self.args.fail_limit:
                 return True
 
-            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
+            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # ruff: ignore[needless-bool]
                 return True
 
             return False
@@ -604,5 +604,9 @@ class connection:
         self.modules = []
 
         for module_path in self.module_paths:
-            module = loader.init_module(module_path)
+            try:
+                module = loader.init_module(module_path)
+            except ModuleOptionsError as e:
+                self.logger.debug(f"Skipping module: {e}")
+                continue
             self.modules.append(module)
