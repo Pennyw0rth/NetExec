@@ -1709,6 +1709,20 @@ class ldap(connection):
                 self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
                 return
 
+            # bloodhound falls back to treating the domain controllers as Global
+            # Catalogs when _gc._tcp.<domain> does not resolve, but that fallback
+            # sits behind "if options and not options.global_catalog" and we do
+            # not pass options, so it never runs. Without it every lookup logs
+            # "Could not find a Global Catalog in this domain!" and cross-domain
+            # references go unresolved. Applying it here keeps that behavior
+            # without threading an argparse namespace into the collector.
+            if not ad.gcs():
+                ad._gcs = ad.dcs()
+                if ad._gcs:
+                    self.logger.display(
+                        "No _gc._tcp SRV record; assuming the domain controllers hold the Global Catalog role"
+                    )
+
             # Applied after dns_resolve(), which sets baseDN from the domain name.
             # bloodhound's ADDC.search() defaults search_base to ad.baseDN, so this
             # scopes the object collection to the given subtree. Queries that pass an
