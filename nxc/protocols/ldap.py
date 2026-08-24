@@ -792,9 +792,18 @@ class ldap(connection):
                 self.logger.fail(f"Group '{self.args.groups}' has no members")
             else:
                 for item in resp_parsed:
-                    # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
-                    # Fallback to cn should sAMAccountName not be present (e.g. Service Principal Names)
-                    self.logger.highlight(item.get("sAMAccountName", item["cn"]) if "group" not in item["objectClass"] else item["cn"])
+                    # Display cn if it is a group
+                    # Otherwise display sAMAccountName and fall back to cn if sAMAccountName is not present
+                    # If nothing is present, display Distinguished Name
+                    if "group" in item.get("objectClass", []):
+                        out = item["cn"]
+                    elif "sAMAccountName" in item:
+                        out = item["sAMAccountName"]
+                    elif "cn" in item:
+                        out = item["cn"]
+                    else:
+                        out = item["distinguishedName"]
+                    self.logger.highlight(out)
 
         # List all groups
         else:
