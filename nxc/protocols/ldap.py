@@ -1628,6 +1628,40 @@ class ldap(connection):
 
             break  # Only process first policy result
 
+    # Objects that exist only at the naming context root. An operator scopes to an
+    # OU to limit what is collected, but these sit above any such OU, and a search
+    # rooted there simply returns nothing: the domain and its trusts are children of
+    # the naming context, and domain controllers live in OU=Domain Controllers beside
+    # it rather than inside the scoped subtree.
+    BLOODHOUND_ROOT_SCOPED_FILTERS = (
+        "(objectClass=domain)",
+        "(objectClass=trustedDomain)",
+        "userAccountControl:1.2.840.113556.1.4.803:=8192",
+    )
+
+    def scope_bloodhound_collection(self, ad, base_dn):
+        """Collect objects from *base_dn* while leaving root-scoped queries at the root.
+
+        ADDC.search() falls back to ad.baseDN whenever a caller passes no
+        search_base, so pointing baseDN at an OU would narrow every query alike,
+        including the ones whose objects are not under it. The fallback is chosen
+        per query here instead, and ad.baseDN keeps the real root so anything
+        deriving the domain from it still works.
+        """
+        from bloodhound.ad.domain import ADDC
+
+        root_dn = ad.baseDN
+        original_search = ADDC.search
+
+        def search(dc, search_filter="(objectClass=*)", *args, **kwargs):
+            explicit = kwargs.get("search_base") or (len(args) >= 2 and args[1])
+            if not explicit and not any(f in search_filter for f in self.BLOODHOUND_ROOT_SCOPED_FILTERS):
+                kwargs["search_base"] = base_dn
+            return original_search(dc, search_filter, *args, **kwargs)
+
+        ADDC.search = search
+        ad.baseDN = root_dn
+
     def bloodhound(self):
         collect, excluded = resolve_collection_methods("Default" if not self.args.collection else self.args.collection, self.logger)
         if not collect:
@@ -1724,12 +1758,27 @@ class ldap(connection):
                     )
 
             # Applied after dns_resolve(), which sets baseDN from the domain name.
-            # bloodhound's ADDC.search() defaults search_base to ad.baseDN, so this
-            # scopes the object collection to the given subtree. Queries that pass an
-            # explicit search_base (schema, configuration naming context) are unaffected.
+            # ADDC.search() defaults search_base to ad.baseDN, so narrowing baseDN
+            # scopes the object collection to the given subtree.
+            #
+            # Not every query may be narrowed. The domain object, its trusts and the
+            # domain controllers all live at the naming context root, above any OU an
+            # operator would scope to, so those searches must keep the real root or
+            # they return nothing. get_domains() raising on an empty result is what
+            # surfaces it, and its message is misleading — it prints the requested and
+            # the reported domain, which are identical, rather than saying the search
+            # base hid the object:
+            #
+            #   Could not find the requested domain nih.gov on this DC, LDAP server
+            #   reports is domain as nih.gov (you may want to try that?)
+            #   CollectionException - Specified domain was not found in LDAP
+            #
+            # So the default is chosen per query instead of globally. Calls that
+            # already pass an explicit search_base (schema, configuration naming
+            # context) keep it and are untouched.
             if self.args.base_dn:
-                ad.baseDN = self.args.base_dn
-                self.logger.display(f"Scoping BloodHound collection to {ad.baseDN}")
+                self.scope_bloodhound_collection(ad, self.args.base_dn)
+                self.logger.display(f"Scoping BloodHound collection to {self.args.base_dn}")
 
             if self.args.kerberos:
                 self.logger.highlight("Using kerberos auth without ccache, getting TGT")
