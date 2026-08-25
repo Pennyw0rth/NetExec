@@ -442,7 +442,7 @@ class DPAPITriage:
                     domain=self.context.domain,
                     username=self.context.username,
                     password=self.context.password,
-                    address=self.context.kdcHost if self.context.kdcHost is not None and self.context.kdcHost != "" else self.context.domain,  # querying DNS server for domain will return DC
+                    address=self.context.kdcHost, # querying DNS server for domain will return DC
                     lmhash=self.context.lmhash,
                     nthash=self.context.nthash,
                     do_kerberos=self.context.kerberos,
