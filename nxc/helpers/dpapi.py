@@ -108,7 +108,7 @@ class DPAPITriage:
         if self.output_file is not None and self.secrets_counter > 0:
             self.context.logger.success(f"Dumped {highlight(self.secrets_counter)} DPAPI secrets to {self.output_file}")
 
-    def write_to_output_file(self, line):
+    def log_secret(self, line):
         # If self.output_file is not already initialized, it means it is the first time we need to write secrets in it
         if self.output_file is None:
             self.output_file = self.context.output_file_template.format(output_folder="dpapi")
@@ -208,7 +208,7 @@ class DPAPITriage:
             tag = "CREDENTIAL"
             line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
             self.context.logger.highlight(line)
-            self.write_to_output_file(line)
+            self.log_secret(line)
             self.context.db.add_dpapi_secrets(
                 self.target.address,
                 tag,
@@ -244,7 +244,7 @@ class DPAPITriage:
                 secret_url = secret.url + " -" if secret.url != "" else "-"
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     secret.browser.upper(),
@@ -256,7 +256,7 @@ class DPAPITriage:
             elif isinstance(secret, GoogleRefreshToken):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     secret.browser.upper(),
@@ -268,7 +268,7 @@ class DPAPITriage:
             elif isinstance(secret, Cookie):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
 
         try:
             browser_triage = BrowserTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
@@ -283,7 +283,7 @@ class DPAPITriage:
                 resource = secret.resource + " -" if secret.resource != "" else "-"
                 line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     tag,
@@ -307,7 +307,7 @@ class DPAPITriage:
                 url = secret.url + " -" if secret.url != "" else "-"
                 line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     tag,
@@ -319,7 +319,7 @@ class DPAPITriage:
             elif isinstance(secret, FirefoxCookie):
                 line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
 
         try:
             # Collect Firefox stored secrets
@@ -358,7 +358,7 @@ class DPAPITriage:
                 tag = "NAA Account"
                 line = f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",
@@ -371,7 +371,7 @@ class DPAPITriage:
                 tag = "Task sequences secret"
                 line = f"[{tag}] {secret.secret.decode('latin-1')}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",
@@ -384,7 +384,7 @@ class DPAPITriage:
                 tag = "Collection Variable"
                 line = f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}"
                 self.context.logger.highlight(line)
-                self.write_to_output_file(line)
+                self.log_secret(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",

@@ -31,7 +31,7 @@ class NXCModule:
                         decoded_token = jwt.decode(access_token, options={"verify_signature": False})
                         if "preferred_username" in decoded_token:
                             # Assuming that if there is no preferred_username key, this is not a valid Entra/M365 Access Token
-                            context.dpapi_triage.write_to_output_file(f"[{token.winuser}] {decoded_token['preferred_username']}: {access_token}")
+                            context.dpapi_triage.log_secret(f"[{token.winuser}] {decoded_token['preferred_username']}: {access_token}")
 
         try:
             triage = WamTriage(target=connection.dpapi_triage.target, conn=connection.dpapi_triage.conn, masterkeys=self.masterkeys, per_token_callback=token_callback)

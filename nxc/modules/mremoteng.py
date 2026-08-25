@@ -112,7 +112,7 @@ class NXCModule:
             protocol = node_attribute["Protocol"]
             port = node_attribute["Port"]
             host = f" {protocol}://{hostname}:{port}" if node_attribute["Hostname"] != "" else " "
-            self.context.dpapi_triage.write_to_output_file(f"{name}:{host} - {domain}\\{username}:{password}")
+            self.context.dpapi_triage.log_secret(f"{name}:{host} - {domain}\\{username}:{password}")
 
     def parse_xml_nodes(self, main):
         nodes = []

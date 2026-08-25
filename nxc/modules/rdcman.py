@@ -31,7 +31,7 @@ class NXCModule:
                     log_text = f"{rdg_cred.username}:{rdg_cred.password.decode('latin-1')}"
                     if isinstance(rdg_cred, RDGServerProfile):
                         log_text = f"{rdg_cred.server_name} - {log_text}"
-                        context.dpapi_triage.write_to_output_file(f"[{rdcman_file.winuser}][{rdg_cred.profile_name}] {log_text}")
+                        context.dpapi_triage.log_secret(f"[{rdcman_file.winuser}][{rdg_cred.profile_name}] {log_text}")
             for rdgfile in rdgfiles:
                 if rdgfile is None:
                     continue
@@ -39,6 +39,6 @@ class NXCModule:
                     log_text = f"{rdg_cred.username}:{rdg_cred.password.decode('latin-1')}"
                     if isinstance(rdg_cred, RDGServerProfile):
                         log_text = f"{rdg_cred.server_name} - {log_text}"
-                    context.dpapi_triage.write_to_output_file(f"[{rdcman_file.winuser}][{rdg_cred.profile_name}] {log_text}")
+                    context.dpapi_triage.log_secret(f"[{rdcman_file.winuser}][{rdg_cred.profile_name}] {log_text}")
         except Exception as e:
             context.log.debug(f"Could not loot RDCMan secrets: {e}")
