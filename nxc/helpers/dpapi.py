@@ -89,6 +89,10 @@ class DPAPITriage:
         self.masterkeys = []
         self._pvkbytes = None
 
+        # Keep track of writing secrets in file
+        self.output_file = None
+        self.secrets_counter = 0
+
         if context.args.dpapi is not None:
             self.dump_cookies = "cookies" in context.args.dpapi
 
@@ -98,6 +102,21 @@ class DPAPITriage:
 
         # Initialize the connection here, if you need this class then you will need the connection
         self.init_connection()
+
+    def __del__(self):
+        # When everything is finished, then we give the feedback to the user
+        if self.output_file is not None and self.secrets_counter > 0:
+            self.context.logger.success(f"Dumped {highlight(self.secrets_counter)} DPAPI secrets to {self.output_file}")
+
+    def write_to_output_file(self, line):
+        # If self.output_file is not already initialized, it means it is the first time we need to write secrets in it
+        if self.output_file is None:
+            self.output_file = self.context.output_file_template.format(output_folder="dpapi")  # ruff: ignore[open-file-with-context-handler]
+
+        # Handle the secret counter here, avoid to handle it in multiple places
+        with open(self.output_file, "w", encoding="utf-8") as fd:
+            self.secrets_counter += 1
+            fd.write(line + "\n")
 
     def init_connection(self):
         """Tries to initiate a DPLootConnection object from a NXC connection"""
@@ -189,8 +208,7 @@ class DPAPITriage:
             tag = "CREDENTIAL"
             line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
             self.context.logger.highlight(line)
-            if self.output_file:
-                self.output_file.write(line + "\n")
+            self.write_to_output_file(line)
             self.context.db.add_dpapi_secrets(
                 self.target.address,
                 tag,
@@ -203,11 +221,10 @@ class DPAPITriage:
         try:
             credentials_triage = CredentialsTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_credential_callback=credential_callback)
             self.context.logger.debug(f"Credentials Triage Object: {credentials_triage}")
-            secrets = credentials_triage.triage_credentials()
-            secrets += credentials_triage.triage_system_credentials()
+            credentials_triage.triage_credentials()
+            credentials_triage.triage_system_credentials()
         except Exception as e:
             self.context.logger.debug(f"Error while looting credentials: {e}")
-        return len(secrets)
 
     def triage_chromium(self, masterkeys: list[Masterkey]):
         cng_chromekey = None
@@ -227,8 +244,7 @@ class DPAPITriage:
                 secret_url = secret.url + " -" if secret.url != "" else "-"
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
                 self.context.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
+                self.write_to_output_file(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     secret.browser.upper(),
@@ -240,8 +256,7 @@ class DPAPITriage:
             elif isinstance(secret, GoogleRefreshToken):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
                 self.context.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
+                self.write_to_output_file(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     secret.browser.upper(),
@@ -253,16 +268,14 @@ class DPAPITriage:
             elif isinstance(secret, Cookie):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
                 self.context.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
+                self.write_to_output_file(line)
 
         try:
             browser_triage = BrowserTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
-            secrets = browser_triage.triage_browsers(gather_cookies=self.dump_cookies, cng_chromekey=cng_chromekey)
+            browser_triage.triage_browsers(gather_cookies=self.dump_cookies, cng_chromekey=cng_chromekey)
         except Exception as e:
             self.context.logger.debug(f"Error while looting browsers: {e}")
 
-        return len(secrets[0])
 
     def triage_vaults(self, masterkeys: list[Masterkey]):
         def vault_callback(secret):
@@ -271,8 +284,7 @@ class DPAPITriage:
                 resource = secret.resource + " -" if secret.resource != "" else "-"
                 line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
                 self.context.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
+                self.write_to_output_file(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     tag,
@@ -285,11 +297,9 @@ class DPAPITriage:
         try:
             # Collect User Internet Explorer stored secrets
             vaults_triage = VaultsTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
-            secrets = vaults_triage.triage_vaults()
+            vaults_triage.triage_vaults()
         except Exception as e:
             self.context.logger.debug(f"Error while looting vaults: {e}")
-
-        return len(secrets)
 
     def triage_firefox(self):
         def firefox_callback(secret):
@@ -298,8 +308,7 @@ class DPAPITriage:
                 url = secret.url + " -" if secret.url != "" else "-"
                 line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
                 self.context.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
+                self.write_to_output_file(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     tag,
@@ -311,23 +320,17 @@ class DPAPITriage:
             elif isinstance(secret, FirefoxCookie):
                 line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
                 self.context.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
+                self.write_to_output_file(line)
 
         try:
             # Collect Firefox stored secrets
             firefox_triage = FirefoxTriage(target=self.target, logger=self.context.logger, conn=self.conn, per_secret_callback=firefox_callback)
-            secrets = firefox_triage.run(gather_cookies=self.dump_cookies)
+            firefox_triage.run(gather_cookies=self.dump_cookies)
         except Exception as e:
             self.logger.debug(f"Error while looting firefox: {e}")
 
-        return len(secrets)
-
     # The dpapi function for every protocol
     def triage_dpapi(self):
-        # Get the handle of the output file, this will be use by every triage functions to write looted secrets in there
-        self.output_file = open(self.context.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler]
-
         # Load masterkeys
         masterkeys = self.collect_masterkeys_from_target(dump_users=True, dump_system="nosystem" not in self.context.args.dpapi)
         if len(masterkeys) == 0:
@@ -337,24 +340,11 @@ class DPAPITriage:
 
         self.context.logger.success("Looting secrets...")
 
-        # Keeping a counter to know how it went
-        counter = 0
-
         # Calling all the triage functions. We can add other triage functions here
-        counter += self.triage_credentials(masterkeys)
-        counter += self.triage_chromium(masterkeys)
-        counter += self.triage_vaults(masterkeys)
-        counter += self.triage_firefox()
-
-        # If the output file is still opened, the gently close it.
-        if self.output_file:
-            self.output_file.close()
-
-        # If no secrets recovered, then we still tell the user
-        if counter == 0:
-            self.context.logger.fail("No DPAPI secrets retrieved")
-        else:
-            self.context.logger.success(f"{counter} DPAPI secrets retrieved")
+        self.triage_credentials(masterkeys)
+        self.triage_chromium(masterkeys)
+        self.triage_vaults(masterkeys)
+        self.triage_firefox()
 
     def triage_sccm(self):
         masterkeys = self.collect_masterkeys_from_target(dump_users=False, dump_system=True)
@@ -367,7 +357,9 @@ class DPAPITriage:
         def sccm_callback(secret):
             if isinstance(secret, SCCMCred):
                 tag = "NAA Account"
-                self.context.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}")
+                line = f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}"
+                self.context.logger.highlight(line)
+                self.write_to_output_file(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",
@@ -378,7 +370,9 @@ class DPAPITriage:
                 )
             elif isinstance(secret, SCCMSecret):
                 tag = "Task sequences secret"
-                self.context.logger.highlight(f"[{tag}] {secret.secret.decode('latin-1')}")
+                line = f"[{tag}] {secret.secret.decode('latin-1')}"
+                self.context.logger.highlight(line)
+                self.write_to_output_file(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",
@@ -389,7 +383,9 @@ class DPAPITriage:
                 )
             elif isinstance(secret, SCCMCollection):
                 tag = "Collection Variable"
-                self.context.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}")
+                line = f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}"
+                self.context.logger.highlight(line)
+                self.write_to_output_file(line)
                 self.context.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",

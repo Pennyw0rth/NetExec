@@ -95,7 +95,7 @@ class NXCModule:
                         cred["password"] = self.recover_vncpassword(unhexlify(password)).decode("latin-1")
                         cred["server"] = reg.getValue(ntpath.join(registry_path, registry_keys[2]))[1].decode("latin-1")
 
-                self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
+                self.context.dpapi_triage.write_to_output_file(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
 
     def vnc_from_registry(self, dpapi_conn):
         vncs = (
@@ -114,7 +114,7 @@ class NXCModule:
             password = self.recover_vncpassword(value)
             if password is None:
                 continue
-            self.context.log.highlight(f"[{vnc_name}] Password: {password.decode('latin-1')}")
+            self.context.dpapi_triage.write_to_output_file(f"[{vnc_name}] Password: {password.decode('latin-1')}")
 
         vnc_users = (
             ("RealVNC Viewer 7.x", "HKCU\\Software\\RealVNC\\vncviewer", "ProxyUserName", "ProxyPassword", "ProxyServer"),
@@ -141,7 +141,7 @@ class NXCModule:
                 if "ERROR_FILE_NOT_FOUND" not in str(e):
                     self.context.log.debug(f"Error while RegQueryValue {path}\\{user}: {e}")
                 continue
-            self.context.log.highlight(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
+            self.context.dpapi_triage.write_to_output_file(f"[{vnc_name}] {cred['user']}:{cred['password']}@{cred['server']}")
 
     def split_len(self, seq, length):
         return [seq[i:i + length] for i in range(0, len(seq), length)]
@@ -193,7 +193,7 @@ class NXCModule:
                     for passwd_encrypted in passwds_encrypted:
                         passwd_encrypted = passwd_encrypted.split(b"=")[-1]
                         password = self.recover_vncpassword(unhexlify(passwd_encrypted))[:8]
-                        self.context.log.highlight(f"[{vnc_name}] Password: {password.decode('latin-1')}")
+                        self.context.dpapi_triage.write_to_output_file(f"[{vnc_name}] Password: {password.decode('latin-1')}")
 
     def get_users(self, conn):
         users = {}

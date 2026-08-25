@@ -26,7 +26,7 @@ class NXCModule:
                 log_text = "{} - {}:{}".format(credential.name, credential.username, credential.password.decode("latin-1"))
             elif isinstance(credential, MobaXtermPassword):
                 log_text = "{}:{}".format(credential.username, credential.password.decode("latin-1"))
-            context.log.highlight(f"[{credential.winuser}] {log_text}")
+            context.dpapi_triage.write_to_output_file(f"[{credential.winuser}] {log_text}")
 
         try:
             triage = MobaXtermTriage(target=connection.dpapi_triage.target, conn=connection.dpapi_triage.conn, masterkeys=self.masterkeys)
