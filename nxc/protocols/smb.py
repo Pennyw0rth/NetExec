@@ -2242,6 +2242,27 @@ class smb(connection):
     def dpapi(self):
         self.dpapi_triage.triage_dpapi()
 
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            address=self.remoteName,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+            do_kerberos=self.kerberos,
+            kdcHost=self.kdcHost,
+            dc_ip=self.kdcHost,
+            aesKey=self.aesKey,
+            use_kcache=self.use_kcache,
+        )
+
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage
+
     @requires_admin
     def list_snapshots(self):
         drive = self.args.list_snapshots
@@ -2426,24 +2447,3 @@ class smb(connection):
 
     def mark_guest(self):
         return highlight(f"{highlight('(Guest)')}" if self.is_guest else "")
-
-    @property
-    def dpapi_triage(self) -> DPAPITriage:
-        if self._dpapi_triage is not None:
-            return self._dpapi_triage
-        target = Target.create(
-            domain=self.domain,
-            username=self.username,
-            password=self.password,
-            address=self.remoteName,
-            lmhash=self.lmhash,
-            nthash=self.nthash,
-            do_kerberos=self.kerberos,
-            kdcHost=self.kdcHost,
-            dc_ip=self.kdcHost,
-            aesKey=self.aesKey,
-            use_kcache=self.use_kcache,
-        )
-
-        self._dpapi_triage = DPAPITriage(self, target)
-        return self._dpapi_triage
