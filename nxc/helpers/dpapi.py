@@ -111,7 +111,7 @@ class DPAPITriage:
     def write_to_output_file(self, line):
         # If self.output_file is not already initialized, it means it is the first time we need to write secrets in it
         if self.output_file is None:
-            self.output_file = self.context.output_file_template.format(output_folder="dpapi")  # ruff: ignore[open-file-with-context-handler]
+            self.output_file = self.context.output_file_template.format(output_folder="dpapi")
 
         # Handle the secret counter here, avoid to handle it in multiple places
         with open(self.output_file, "w", encoding="utf-8") as fd:
@@ -275,7 +275,6 @@ class DPAPITriage:
             browser_triage.triage_browsers(gather_cookies=self.dump_cookies, cng_chromekey=cng_chromekey)
         except Exception as e:
             self.context.logger.debug(f"Error while looting browsers: {e}")
-
 
     def triage_vaults(self, masterkeys: list[Masterkey]):
         def vault_callback(secret):
@@ -442,7 +441,7 @@ class DPAPITriage:
                     domain=self.context.domain,
                     username=self.context.username,
                     password=self.context.password,
-                    address=self.context.kdcHost, # querying DNS server for domain will return DC
+                    address=self.context.kdcHost,  # querying DNS server for domain will return DC
                     lmhash=self.context.lmhash,
                     nthash=self.context.nthash,
                     do_kerberos=self.context.kerberos,
