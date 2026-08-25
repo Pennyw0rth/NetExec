@@ -420,7 +420,7 @@ class DPAPITriage:
         pvkbytes = None
 
         # First check the pvk argument and handle it
-        if hasattr(self.context.args, "pvk") and self.context.args.pvk is not None:
+        if self.context.args.pvk is not None:
             try:
                 with open(self.context.args.pvk, "rb") as fd:
                     pvkbytes = fd.read()
