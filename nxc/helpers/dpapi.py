@@ -114,7 +114,7 @@ class DPAPITriage:
             self.output_file = self.context.output_file_template.format(output_folder="dpapi")
 
         # Handle the secret counter here, avoid to handle it in multiple places
-        with open(self.output_file, "w", encoding="utf-8") as fd:
+        with open(self.output_file, "a", encoding="utf-8") as fd:
             self.secrets_counter += 1
             fd.write(line + "\n")
 
