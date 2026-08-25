@@ -1817,10 +1817,13 @@ class ldap(connection):
                 domain_sid=self.sid_domain,
             )
 
+            # PKI objects live in the forest root's Configuration NC, which is not the
+            # target domain's in a multi-domain forest. certihound issue: PR #1374
             collector = ADCSCollector.from_external(
                 ldap_connection=adapter,
                 domain=self.targetDomain,
                 domain_sid=self.sid_domain,
+                base_dn=self.forestDN or None,
             )
             data = collector.collect_all()
 
