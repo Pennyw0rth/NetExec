@@ -1095,7 +1095,7 @@ all = ["mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2)"]
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20260810.134619.243d64a6"
+version = "0.14.0.dev0+20260826.175120.d480b3e5"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -1117,9 +1117,9 @@ six = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/fortra/impacket"
-reference = "HEAD"
-resolved_reference = "243d64a67599e24a1c5dd7eb3ff8667d2d5bc2fc"
+url = "https://github.com/Pennyw0rth/impacket"
+reference = "wmi_update"
+resolved_reference = "d480b3e52c2de68c8835131c76709cf44867119f"
 
 [[package]]
 name = "iniconfig"
@@ -2953,4 +2953,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "56b728355fe920630c713760332f0af9f33297a02c524a6ed304384a4d62c78f"
+content-hash = "c2b865eafd644e9fda7d043fe4b53ea5e71ca8e4dafa1f4c91c27ee74a1de155"
