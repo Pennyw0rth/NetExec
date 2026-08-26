@@ -1,4 +1,5 @@
 import os
+import struct
 from io import StringIO
 
 from nxc.helpers.negotiate_parser import parse_challenge
@@ -14,7 +15,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
+from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login, DCERPCSessionError
 
 MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.0"))
 
@@ -364,6 +365,62 @@ class wmi(connection):
                     out += "(Default allow anonymous login)"
                 self.logger.success(out)
                 return True
+
+    def read_file(self, remote_path):
+        escaped_path = remote_path.replace("\\","\\\\")
+        
+        # Load the Namespace
+        try:
+            powershellv3_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/Microsoft/Windows/Powershellv3", NULL, NULL)
+            self.iWbemLevel1Login.RemRelease()
+        except Exception as e:
+            logging.debug(f"Cannot load WMI Namespace {namespace_name}: {e}")
+            return None
+
+        # Read the file
+        try: 
+            object_path = f'PS_ModuleFile.InstanceID="{remote_path}"'
+            iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
+        except DCERPCSessionError as e:
+                if e.error_code == 0x80041002:
+                    logging.debug(f"Cannot find {fullpath} file")
+                return None
+
+        obj = iWbemClassObject.getProperties()
+
+        file_data = None
+        for prop_name, prop_value in obj.items():
+            if prop_name == "FileData":
+                file_data = prop_value["value"]
+                break
+        
+        if len(file_data) < 4:
+            return None
+        
+        # Unpack it
+        file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
+        file_content = bytes(file_data[4:4 + file_length])
+
+        return file_content
+
+    def get_file_single(self, remote_path, download_path):        
+        self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
+
+        if self.args.append_host:
+            download_path = f"{self.hostname}-{remote_path}"
+
+        file_data = self.read_file(remote_path)
+        if file_data is None:
+            self.logger.fail(f'Could not get file "{remote_path}"')
+        else:
+            self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
+            with open(download_path, "wb+") as file:
+                file.write(file_data)  
+
+    @requires_admin
+    def get_file(self):
+        for src, dest in self.args.get_file:
+            self.get_file_single(src, dest)
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None):

@@ -16,6 +16,10 @@ def proto_args(parser, parents):
     egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
     egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
+    files_group = wmi_parser.add_argument_group("File Operations")
+    files_group.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
+    files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
+
     cgroup = wmi_parser.add_argument_group("Command Execution")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", type=str, help="Creates a new cmd process and executes the specified command with output")
