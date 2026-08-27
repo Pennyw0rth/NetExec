@@ -4,7 +4,7 @@ from impacket.examples.secretsdump import LocalOperations
 
 
 class RemoteOperations:
-    def __init__(self, context, shadow_id: None):
+    def __init__(self, context, shadow_id=None):
         self.context = context
 
         self.cimv2_namespace = self.context.get_namespace("//./root/cimv2")
@@ -44,7 +44,7 @@ class RemoteOperations:
             self.context.logger.debug(f"Cannot create ShadowCopy: {e}")
         return shadow_id
 
-    def get_shadowcopy_path(self, shadow_id: None) -> str:
+    def get_shadowcopy_path(self, shadow_id=None) -> str:
         if shadow_id is None:
             shadow_id = self.shadow_id
         device_object = None
