@@ -16,7 +16,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login, DCERPCSessionError
+from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login, DCERPCSessionError, IWbemServices
 
 MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.0"))
 
@@ -49,6 +49,8 @@ class wmi(connection):
         }
         self.iWbemLevel1Login = None
         self.dcom_conn = None
+
+        self.namespaces = {}
 
         connection.__init__(self, args, db, host)
 
@@ -175,8 +177,7 @@ class wmi(connection):
             else:
                 try:
                     self.iWbemLevel1Login = IWbemLevel1Login(iInterface)
-                    _ = self.iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-                    self.iWbemLevel1Login.RemRelease()
+                    self.get_namespace("//./root/cimv2")
                 except Exception as e:
                     if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
@@ -367,16 +368,13 @@ class wmi(connection):
                 self.logger.success(out)
                 return True
 
-    def read_file(self, remote_path):
+    def read_file(self, remote_path) -> "None | bytes":
         self.logger.debug(f"Try reading file {remote_path}")
         escaped_path = remote_path.replace("\\", "\\\\")
 
         # Load the Namespace
-        try:
-            powershellv3_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/Microsoft/Windows/Powershellv3", NULL, NULL)
-            self.iWbemLevel1Login.RemRelease()
-        except Exception as e:
-            self.logger.debug(f"Cannot load WMI Namespace //./root/Microsoft/Windows/Powershellv3: {e}")
+        powershellv3_namespace = self.get_namespace("//./root/Microsoft/Windows/Powershellv3")
+        if powershellv3_namespace is None:
             return None
 
         # Read the file
@@ -431,13 +429,9 @@ class wmi(connection):
         output_filename = self.output_file_template.format(output_folder="sam")
 
         # Get the Namespace
-        try:
-            cimv2_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-            self.iWbemLevel1Login.RemRelease()
-        except Exception as e:
+        cimv2_namespace = self.get_namespace("//./root/cimv2")
+        if cimv2_namespace is None:
             self.logger.fail("Could not dump SAM")
-            self.logger.debug(f"Cannot load WMI Namespace //./root/cimv2: {e}")
-            return
 
         # Creating Shadow Volumes
         try:
@@ -490,6 +484,7 @@ class wmi(connection):
                 isRemote=None,
                 perSecretCallback=lambda secret: self.logger.highlight(secret),
             )
+        self.logger.display("Dumping SAM hashes")
         SAM.dump()
         SAM.export(output_filename)
 
@@ -498,13 +493,9 @@ class wmi(connection):
         output_filename = self.output_file_template.format(output_folder="lsa")
 
         # Get the Namespace
-        try:
-            cimv2_namespace = self.iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-            self.iWbemLevel1Login.RemRelease()
-        except Exception as e:
-            self.logger.fail("Could not dump LSA")
-            self.logger.debug(f"Cannot load WMI Namespace //./root/cimv2: {e}")
-            return
+        cimv2_namespace = self.get_namespace("//./root/cimv2")
+        if cimv2_namespace is None:
+            self.logger.fail("Could not dump SAM")
 
         # Creating Shadow Volumes
         try:
@@ -558,6 +549,7 @@ class wmi(connection):
             isRemote=None,
             perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
         )
+        self.logger.display("Dumping LSA secrets")
         LSA.dumpCachedHashes()
         LSA.dumpSecrets()
 
@@ -571,8 +563,7 @@ class wmi(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
-            self.iWbemLevel1Login.RemRelease()
+            iWbemServices = self.get_namespace(namespace)
             iEnumWbemClassObject = iWbemServices.ExecQuery(wql)
         except Exception as e:
             self.logger.debug(str(e))
@@ -680,3 +671,19 @@ class wmi(connection):
             return output
         else:
             return output
+
+    def get_namespace(self, namespace:str) -> IWbemServices:
+        """
+        Load WMI namespaces and place them in cache. If a namespace is already loaded in cache, return the namespace in cache
+        """
+        if namespace in self.namespaces:
+            return self.namespaces[namespace]
+        self.logger.debug(f"Getting namespace {namespace}")
+        try: 
+            iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
+            self.iWbemLevel1Login.RemRelease()
+        except Exception as e:
+            self.logger.debug(f"Cannot load WMI Namespace {namespace}: {e}")
+            return None
+        self.namespaces[namespace] = iWbemServices
+        return self.namespaces[namespace]
