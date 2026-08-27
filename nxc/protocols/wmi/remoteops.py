@@ -1,3 +1,5 @@
+from binascii import hexlify
+
 from impacket.examples.secretsdump import LocalOperations
 
 class RemoteOperations:
@@ -74,7 +76,9 @@ class RemoteOperations:
         system_hive_recovered = self.context.get_file_single(system_hive_path, f"{output_filename}.system")
         if system_hive_recovered:
             self.context.logger.debug("Got SYSTEM hive")
-        
-        local_operations = LocalOperations(f"{output_filename}.system")
-        self.bootkey = local_operations.getBootKey()
+            local_operations = LocalOperations(f"{output_filename}.system")
+            self.bootkey = local_operations.getBootKey()
+            self.context.logger.debug(f"Got bootkey: 0x{hexlify(self.bootkey).decode('utf-8')}")
+        else:
+            self.context.logger.fail("Could not get bootkey")
         return self.bootkey
