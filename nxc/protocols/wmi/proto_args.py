@@ -1,6 +1,7 @@
 from argparse import _StoreTrueAction
 from nxc.helpers.args import get_conditional_action
 
+
 def proto_args(parser, parents):
     wmi_parser = parser.add_parser("wmi", help="own stuff using WMI", conflict_handler="resolve", parents=parents)
     wmi_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")

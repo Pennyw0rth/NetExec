@@ -374,7 +374,7 @@ class wmi(connection):
                 self.logger.success(out)
                 return True
 
-    def read_file(self, remote_path) -> "None | bytes":
+    def read_file(self, remote_path) -> "bytes | None":
         self.logger.debug(f"Try reading file {remote_path}")
         escaped_path = remote_path.replace("\\", "\\\\")
 
@@ -537,9 +537,8 @@ class wmi(connection):
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
             if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
                 if secret.find("\\") != -1:
-                    domain, clean_hash = secret.split("\\")
+                    _, clean_hash = secret.split("\\")
                 else:
-                    domain = self.domain
                     clean_hash = secret
 
                 try:
@@ -718,14 +717,12 @@ class wmi(connection):
         else:
             return output
 
-    def get_namespace(self, namespace:str) -> IWbemServices:
-        """
-        Load WMI namespaces and place them in cache. If a namespace is already loaded in cache, return the namespace in cache
-        """
+    def get_namespace(self, namespace: str) -> IWbemServices:
+        """Load WMI namespaces and place them in cache. If a namespace is already loaded in cache, return the namespace in cache"""
         if namespace in self.namespaces:
             return self.namespaces[namespace]
         self.logger.debug(f"Getting namespace {namespace}")
-        try: 
+        try:
             iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
             self.iWbemLevel1Login.RemRelease()
         except Exception as e:

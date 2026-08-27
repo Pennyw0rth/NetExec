@@ -2,12 +2,13 @@ from binascii import hexlify
 
 from impacket.examples.secretsdump import LocalOperations
 
+
 class RemoteOperations:
-    def __init__(self, context, shadow_id:str = None):
+    def __init__(self, context, shadow_id: None):
         self.context = context
 
         self.cimv2_namespace = self.context.get_namespace("//./root/cimv2")
-        
+
         # Cached variables
         self.bootkey = None
         if shadow_id is not None:
@@ -43,7 +44,7 @@ class RemoteOperations:
             self.context.logger.debug(f"Cannot create ShadowCopy: {e}")
         return shadow_id
 
-    def get_shadowcopy_path(self, shadow_id: str = None) -> str:
+    def get_shadowcopy_path(self, shadow_id: None) -> str:
         if shadow_id is None:
             shadow_id = self.shadow_id
         device_object = None
@@ -52,7 +53,7 @@ class RemoteOperations:
             obj = iEnum_shadow_copies.Next(0xffffffff, 1)[0]
             props = obj.getProperties()
             shadow_copy = {k: v["value"] for k, v in props.items()}
-            device_object = shadow_copy['DeviceObject']
+            device_object = shadow_copy["DeviceObject"]
             self.context.logger.debug(f"Found ShadowCopy at {device_object}")
         except Exception as e:
             self.context.logger.debug(f"Cannot found ShadowCopy with ID {shadow_id} :{e}")
