@@ -10,6 +10,8 @@ class RemoteOperations:
         
         # Cached variables
         self.bootkey = None
+        if shadow_id is not None:
+            self.context.logger.display(f"Using existing VSS Snapshot ID: {shadow_id}")
         self._shadow_id = shadow_id
         self._shadow_copy_path = None
 

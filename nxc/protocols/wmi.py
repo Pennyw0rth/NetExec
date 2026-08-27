@@ -737,5 +737,5 @@ class wmi(connection):
     @property
     def remote_ops(self):
         if self._remote_ops is None:
-            self._remote_ops = RemoteOperations(self)
+            self._remote_ops = RemoteOperations(self, shadow_id=self.args.shadow_id)
         return self._remote_ops
