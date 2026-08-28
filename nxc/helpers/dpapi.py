@@ -168,6 +168,11 @@ class DPAPITriage:
             # But first, just making sure the protocol supports LSA dump :)
             self.context.logger.display("Dumping LSA secrets to get DPAPI SYSTEM keys")
             self.context.lsa(quiet=True)
+            if self.context.dpapi_system_key is not None:
+                self.context.logger.highlight(f"dpapi_machinekey:{self.context.dpapi_system_key['MachineKey'].hex()}")
+                self.context.logger.highlight(f"dpapi_userkey:{self.context.dpapi_system_key['UserKey'].hex()}")
+            else:
+                self.context.logger.fail("Could not get DPAPI SYSTEM keys")
 
         # Invoke MasterkeyTriage class
         try:
