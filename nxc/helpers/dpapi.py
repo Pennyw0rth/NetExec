@@ -166,6 +166,7 @@ class DPAPITriage:
             and callable(self.context.lsa)):
             # We can use the protocol specific LSA dump if not already dumped.
             # But first, just making sure the protocol supports LSA dump :)
+            self.context.logger.display("Dumping LSA secrets to get DPAPI SYSTEM keys")
             self.context.lsa(quiet=True)
 
         # Invoke MasterkeyTriage class
