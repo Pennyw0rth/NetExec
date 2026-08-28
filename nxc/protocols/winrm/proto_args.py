@@ -2,7 +2,7 @@ from nxc.helpers.args import DisplayDefaultsNotNone
 
 
 def proto_args(parser, parents):
-    winrm_parser = parser.add_parser("winrm", help="own stuff using WINRM", parents=parents, formatter_class=DisplayDefaultsNotNone, epilog="[!] Account lockout is NOT detected over WINRM, so the lockout-abort safety will not trigger on this protocol. Use SMB or LDAP for lockout-aware password spraying.")
+    winrm_parser = parser.add_parser("winrm", help="own stuff using WINRM", parents=parents, formatter_class=DisplayDefaultsNotNone)
     winrm_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     winrm_parser.add_argument("--port", nargs="+", default=["5985", "5986"], help="WinRM port - format: 'http-port https-port' (with space separated) or 'single-port' (http & https will use same port when given single port)")
     winrm_parser.add_argument("--check-proto", nargs="+", default=["http", "https"], help="Choose what protocol you want to check - format: 'http https' (with space separated) or 'single-protocol'")

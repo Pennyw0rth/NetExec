@@ -34,6 +34,10 @@ global_lockouts = 0
 spray_abort_all = False
 
 
+class SprayAbort(Exception):
+    pass
+
+
 def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
     result = {
         "host": "",
@@ -158,7 +162,6 @@ class connection:
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
         self.failed_logins = 0
-        self.spray_aborted = False
 
         # Network info
         self.domain = None
@@ -186,6 +189,8 @@ class connection:
             self.proto_flow()
         except FileNotFoundError as e:
             self.logger.error(f"File not found error on target {target}: {e}")
+        except SprayAbort:
+            self.logger.debug("Spray aborted on lockout")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
@@ -260,14 +265,16 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
-                self.logger.debug("Calling command arguments")
-                self.call_cmd_args()
-                if self.args.module:
-                    self.load_modules()
-                    self.logger.debug("Calling modules")
-                    self.call_modules()
-            self.disconnect()
+            try:
+                if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+                    self.logger.debug("Calling command arguments")
+                    self.call_cmd_args()
+                    if self.args.module:
+                        self.load_modules()
+                        self.logger.debug("Calling modules")
+                        self.call_modules()
+            finally:
+                self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments
@@ -353,8 +360,7 @@ class connection:
 
         with lockout_lock:
             if spray_abort_all:
-                self.spray_aborted = True
-                return
+                raise SprayAbort
 
             global_lockouts += 1
             if global_lockouts < abort_on_lockout:
@@ -363,9 +369,8 @@ class connection:
             answer = nxc_console.input(f"[bold red]\\[!] {global_lockouts} lockout responses detected, would you like to quit? \\[Y/n] [/]")
             if answer.strip().lower() in ("y", "yes", ""):
                 spray_abort_all = True
-                self.spray_aborted = True
-            else:
-                global_lockouts = 0
+                raise SprayAbort
+            global_lockouts = 0
 
     def query_db_creds(self):
         """Queries the database for credentials to be used for authentication.
@@ -515,9 +520,6 @@ class connection:
         if self.args.continue_on_success and owned:
             return False
 
-        if self.spray_aborted or spray_abort_all:
-            return False
-
         if self.over_fail_limit(username):
             return False
 
@@ -611,42 +613,44 @@ class connection:
             if not (username[0] or secret[0] or domain[0]):
                 return False
 
+        # Spray pacing is only exposed by protocols that support it (SMB/LDAP)
+        spray_window = getattr(self.args, "spray_window", 0)
+        spray_attempts = getattr(self.args, "spray_attempts", 1)
+
         if not self.args.no_bruteforce:
             for secr_index, secr in enumerate(secret):
-                if self.spray_aborted or spray_abort_all:
-                    return False
+                if spray_abort_all:
+                    raise SprayAbort
                 for user_index, user in enumerate(username):
-                    if self.spray_aborted or spray_abort_all:
-                        return False
+                    if spray_abort_all:
+                        raise SprayAbort
                     if self.try_credentials(domain[user_index], user, owned[user_index], secr, cred_type[secr_index], data[secr_index]):
                         owned[user_index] = True
                         if not self.args.continue_on_success:
                             return True
-                spray_attempts = max(1, self.args.spray_attempts)
-                if self.args.spray_window and not (self.spray_aborted or spray_abort_all) and secr_index < len(secret) - 1 and (secr_index + 1) % spray_attempts == 0:
-                    self.logger.info(
-                        f"Completed {secr_index + 1} password round(s); sleeping {self.args.spray_window} "
-                        f"second(s) so the lockout counter resets before the next round"
-                    )
-                    sleep(self.args.spray_window)
+                # Pause between rounds so badPwdCount resets before the next batch can trip a lockout
+                completed_batch = (secr_index + 1) % spray_attempts == 0
+                is_last_round = secr_index == len(secret) - 1
+                if spray_window and completed_batch and not is_last_round:
+                    self.logger.info(f"Completed {secr_index + 1} password round(s); sleeping {spray_window} second(s) so the lockout counter resets before the next round")
+                    sleep(spray_window)
         else:
             if len(username) != len(secret):
                 self.logger.error("Number provided of usernames and passwords/hashes do not match!")
                 return False
-            spray_attempts = max(1, self.args.spray_attempts)
             for user_index, user in enumerate(username):
-                if self.spray_aborted or spray_abort_all:
-                    return False
+                if spray_abort_all:
+                    raise SprayAbort
                 if self.try_credentials(domain[user_index], user, owned[user_index], secret[user_index], cred_type[user_index], data[user_index]) and not self.args.continue_on_success:
                     owned[user_index] = True
                     if not self.args.continue_on_success:
                         return True
-                if self.args.spray_window and not (self.spray_aborted or spray_abort_all) and user_index < len(username) - 1 and (user_index + 1) % spray_attempts == 0:
-                    self.logger.info(
-                        f"Completed {user_index + 1} attempt(s); sleeping {self.args.spray_window} "
-                        f"second(s) so the lockout counter resets before the next attempt"
-                    )
-                    sleep(self.args.spray_window)
+                # Pause between attempts so badPwdCount resets before the next batch can trip a lockout
+                completed_batch = (user_index + 1) % spray_attempts == 0
+                is_last_attempt = user_index == len(username) - 1
+                if spray_window and completed_batch and not is_last_attempt:
+                    self.logger.info(f"Completed {user_index + 1} attempt(s); sleeping {spray_window} second(s) so the lockout counter resets before the next attempt")
+                    sleep(spray_window)
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
