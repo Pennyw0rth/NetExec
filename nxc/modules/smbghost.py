@@ -4,6 +4,7 @@
 import socket
 import struct
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.opengraph import opengraph
 
 # Constants
 MAX_ATTEMPTS = 2000  # False negative chance: 0.04%
@@ -30,6 +31,7 @@ class NXCModule:
         self.context = context
         if self.perform_attack(connection.host):
             self.context.log.highlight("Potentially vulnerable to SMBGhost (CVE-2020-0796)")
+            opengraph.add_tag(connection.hostname, ["Computer"], "smbghost", True)
 
     def perform_attack(self, target_ip):
         self.context.log.debug("Performing SMBGhost check...")

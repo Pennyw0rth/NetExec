@@ -9,6 +9,8 @@ from impacket.krb5.ccache import CCache
 
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import detect_if_ip
+from nxc.helpers.opengraph import opengraph
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
 from nxc.paths import NXC_PATH
@@ -102,6 +104,13 @@ class rdp(connection):
                 "hostname": self.hostname,
             }
         )
+
+    def opengraph_host_info(self):
+        if detect_if_ip(self.host):
+            opengraph.add_tag(self.hostname, ["Computer"], "IP_Address", self.host)
+        opengraph.add_tag(self.hostname, ["Computer"], "rdp_nla", self.nla)
+        if self.admin_privs and self.username:
+            opengraph.add_local_group_membership(self.username, self.hostname, 555, ura_edge="RemoteInteractiveLogonRight")
 
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
@@ -217,6 +226,7 @@ class rdp(connection):
             await self.terminate_conn()
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        self.username = username
         try:
             lmhash = ""
             nthash = ""
@@ -317,6 +327,7 @@ class rdp(connection):
             return False
 
     def plaintext_login(self, domain, username, password):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=password,
@@ -351,6 +362,7 @@ class rdp(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=ntlm_hash,
