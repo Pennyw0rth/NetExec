@@ -744,12 +744,12 @@ class ldap(connection):
         self.users()
 
     def groups(self):
-        # Building the search filter
+        # Group specific member search
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
-            # Resolve group DN and primaryGroupID (objectSid)
-            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid"])
+            # Resolve group DN and primaryGroupID (objectSid) and member attribute
+            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid", "member"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
@@ -757,29 +757,63 @@ class ldap(connection):
                 return
             else:
                 group = group_parsed[0]
+                direct_group_members = group.get("member", [])
+                if not isinstance(direct_group_members, list):
+                    direct_group_members = [direct_group_members]
 
-            # Search filter: user must have membership OR primaryGroupID
+            # Get all group members: user must have membership OR primaryGroupID
             search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
             attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
+            resp = self.search(search_filter, attributes)
+            group_members = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(group_members)}")
 
-        else:
-            search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member", "description"]
+            # Resolve any missing group members that the memberOf/primaryGroupID search above didn't already return
+            if len(group_members) < len(direct_group_members):
+                for member_dn in direct_group_members:
+                    member_resp = self.search(f"(distinguishedName={member_dn})", ["sAMAccountName", "distinguishedName", "cn", "objectClass"])
+                    member_parsed = parse_result_attributes(member_resp)
 
-        resp = self.search(search_filter, attributes)
-        resp_parsed = parse_result_attributes(resp)
-        self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+                    if member_parsed:
+                        group_members.append(member_parsed[0])
+                    else:
+                        self.logger.debug(f"Failed to resolve group member DN '{member_dn}' for group '{self.args.groups}'")
+                        group_members.append({"distinguishedName": member_dn})
 
-        if self.args.groups:
+            # Deduplicate group members by distinguishedName or cn
+            deduped = {}
+            for item in group_members:
+                key = item.get("distinguishedName", item.get("cn", "")).lower()
+                deduped.setdefault(key, item)
+            resp_parsed = list(deduped.values())
+
             # Display group members
             if not resp_parsed:
                 self.logger.fail(f"Group '{self.args.groups}' has no members")
             else:
                 for item in resp_parsed:
-                    # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
-                    # Fallback to cn should sAMAccountName not be present (e.g. Service Principal Names)
-                    self.logger.highlight(item.get("sAMAccountName", item["cn"]) if "group" not in item["objectClass"] else item["cn"])
+                    # Display cn if it is a group
+                    # Otherwise display sAMAccountName and fall back to cn if sAMAccountName is not present
+                    # If nothing is present, display Distinguished Name
+                    if "group" in item.get("objectClass", []):
+                        out = item["cn"]
+                    elif "sAMAccountName" in item:
+                        out = item["sAMAccountName"]
+                    elif "cn" in item:
+                        out = item["cn"]
+                    else:
+                        out = item["distinguishedName"]
+                    self.logger.highlight(out)
+
+        # List all groups
         else:
+            search_filter = "(objectCategory=group)"
+            attributes = ["cn", "member", "description"]
+
+            resp = self.search(search_filter, attributes)
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
