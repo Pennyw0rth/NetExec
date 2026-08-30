@@ -132,9 +132,6 @@ def gen_cli_args():
     if getattr(args, "spray_attempts", 1) < 1:
         parser.error("--spray-attempts must be at least 1")
 
-    if getattr(args, "spray_attempts_explicitly_set", False) and not getattr(args, "spray_window", 0):
-        parser.error("--spray-attempts has no effect without --spray-window; add --spray-window <seconds> (at least the lockout observation window) so attempts are actually paced")
-
     # Multiply output_tries by 10 to enable more fine granural control, see exec methods
     if hasattr(args, "get_output_tries"):
         args.get_output_tries = args.get_output_tries * 10

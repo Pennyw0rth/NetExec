@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction
+from argparse import _StoreTrueAction, _StoreAction
 from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction, get_conditional_action
 
 
@@ -17,8 +17,8 @@ def proto_args(parser, parents):
     dgroup.add_argument("--local-auth", action="store_true", help="authenticate locally to each target")
 
     smb_parser.add_argument("--port", type=int, default=445, help="SMB port")
-    smb_parser.add_argument("--spray-window", metavar="SECONDS", dest="spray_window", type=float, default=0, action=DefaultTrackingAction, help="seconds to wait between password rounds so the domain badPwdCount resets; set to at least the lockout Observation Window")
-    smb_parser.add_argument("--spray-attempts", metavar="N", dest="spray_attempts", type=int, default=1, action=DefaultTrackingAction, help="passwords to try per user before waiting --spray-window (MUST stay below the lockout threshold; default 1 = wait after every password)")
+    spray_window_arg = smb_parser.add_argument("--spray-window", metavar="SECONDS", dest="spray_window", type=float, default=0, help="seconds to wait between password rounds so the domain badPwdCount resets; set to at least the lockout Observation Window")
+    smb_parser.add_argument("--spray-attempts", metavar="N", dest="spray_attempts", type=int, default=1, action=get_conditional_action(_StoreAction), make_required=[spray_window_arg], help="passwords to try per user before waiting --spray-window (MUST stay below the lockout threshold; default 1 = wait after every password)")
     smb_parser.add_argument("--share", metavar="SHARE", default="C$", help="specify a share")
     smb_parser.add_argument("--smb-server-port", default="445", help="specify a server port for SMB", type=int)
     smb_parser.add_argument("--no-smbv1", action="store_true", help="Force to disable SMBv1 in connection")

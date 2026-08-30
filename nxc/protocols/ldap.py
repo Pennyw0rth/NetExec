@@ -439,7 +439,7 @@ class ldap(connection):
                         f"{self.domain}\\{self.username}:{process_secret(self.password)} {ldap_error_status.get(error_code, '')}",
                         color="magenta" if error_code in ldap_error_status else "red",
                     )
-                    if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+                    if error_code == "775":
                         self.inc_failed_login(self.username)
                         self.register_lockout(self.username)
                     elif error_code not in ldap_error_status:
@@ -452,7 +452,7 @@ class ldap(connection):
                     color="magenta" if error_code in ldap_error_status else "red",
                 )
                 self.inc_failed_login(self.username)
-                if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+                if error_code == "775":
                     self.register_lockout(self.username)
                 return False
 
@@ -532,7 +532,7 @@ class ldap(connection):
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             self.inc_failed_login(self.username)
-            if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+            if error_code == "775":
                 self.register_lockout(self.username)
             return False
         except OSError as e:
@@ -629,7 +629,7 @@ class ldap(connection):
                     color="magenta" if (error_code in ldap_error_status and error_code != 1) else "red",
                 )
             self.inc_failed_login(self.username)
-            if error_code in ("775", "KDC_ERR_CLIENT_REVOKED"):
+            if error_code == "775":
                 self.register_lockout(self.username)
             return False
         except OSError as e:

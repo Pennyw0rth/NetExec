@@ -7,7 +7,7 @@ import contextlib
 from os.path import isfile
 from threading import BoundedSemaphore, Lock
 from functools import wraps
-from time import sleep
+from time import sleep, monotonic
 from ipaddress import ip_address
 from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
@@ -520,9 +520,6 @@ class connection:
         if self.args.continue_on_success and owned:
             return False
 
-        if self.over_fail_limit(username):
-            return False
-
         if self.args.jitter:
             jitter = self.args.jitter
             if "-" in jitter:
@@ -535,6 +532,8 @@ class connection:
             sleep(value)
 
         with sem:
+            if spray_abort_all:
+                raise SprayAbort
             if self.over_fail_limit(username):
                 return False
             if cred_type == "plaintext":
@@ -618,39 +617,30 @@ class connection:
         spray_attempts = getattr(self.args, "spray_attempts", 1)
 
         if not self.args.no_bruteforce:
+            round_start = monotonic()
             for secr_index, secr in enumerate(secret):
-                if spray_abort_all:
-                    raise SprayAbort
+                # Pause between password batches so badPwdCount resets before we risk a lockout.
+                # Sleep only what's left of the window - spraying every user already consumed part of it.
+                if spray_window and secr_index and secr_index % spray_attempts == 0:
+                    remaining = spray_window - (monotonic() - round_start)
+                    if remaining > 0:
+                        self.logger.info(f"Sleeping {remaining:.0f}s so the lockout counter resets before the next round")
+                        sleep(remaining)
+                    round_start = monotonic()
                 for user_index, user in enumerate(username):
-                    if spray_abort_all:
-                        raise SprayAbort
                     if self.try_credentials(domain[user_index], user, owned[user_index], secr, cred_type[secr_index], data[secr_index]):
                         owned[user_index] = True
                         if not self.args.continue_on_success:
                             return True
-                # Pause between rounds so badPwdCount resets before the next batch can trip a lockout
-                completed_batch = (secr_index + 1) % spray_attempts == 0
-                is_last_round = secr_index == len(secret) - 1
-                if spray_window and completed_batch and not is_last_round:
-                    self.logger.info(f"Completed {secr_index + 1} password round(s); sleeping {spray_window} second(s) so the lockout counter resets before the next round")
-                    sleep(spray_window)
         else:
             if len(username) != len(secret):
                 self.logger.error("Number provided of usernames and passwords/hashes do not match!")
                 return False
             for user_index, user in enumerate(username):
-                if spray_abort_all:
-                    raise SprayAbort
                 if self.try_credentials(domain[user_index], user, owned[user_index], secret[user_index], cred_type[user_index], data[user_index]) and not self.args.continue_on_success:
                     owned[user_index] = True
                     if not self.args.continue_on_success:
                         return True
-                # Pause between attempts so badPwdCount resets before the next batch can trip a lockout
-                completed_batch = (user_index + 1) % spray_attempts == 0
-                is_last_attempt = user_index == len(username) - 1
-                if spray_window and completed_batch and not is_last_attempt:
-                    self.logger.info(f"Completed {user_index + 1} attempt(s); sleeping {spray_window} second(s) so the lockout counter resets before the next attempt")
-                    sleep(spray_window)
 
     def mark_pwned(self):
         return highlight(f"({pwned_label})" if self.admin_privs else "")
