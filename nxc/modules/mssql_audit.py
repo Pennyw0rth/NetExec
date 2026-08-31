@@ -148,17 +148,19 @@ class NXCModule:
     def check_linked_sa(self, link_name):
         """Check if we have SA on linked server"""
         try:
-            result = self.conn.sql_query(f"EXEC ('SELECT IS_SRVROLEMEMBER(''sysadmin'')') AT [{link_name}]")
+            safe_name = link_name.replace("]", "]]")
+            result = self.conn.sql_query(f"EXEC ('SELECT IS_SRVROLEMEMBER(''sysadmin'')') AT [{safe_name}]")
             return result and next(iter(result[0].values())) == 1
         except Exception:
             return False
 
     def get_linked_login(self, link_name):
         """Get remote login for linked server"""
+        safe_name = link_name.replace("'", "''")
         query = f"""SELECT uses_self_credential, remote_name, local_principal_id
         FROM sys.linked_logins ll
         JOIN sys.servers s ON ll.server_id = s.server_id
-        WHERE s.name = '{link_name}'
+        WHERE s.name = '{safe_name}'
         ORDER BY local_principal_id"""
 
         try:
@@ -181,7 +183,9 @@ class NXCModule:
         """Print formatted report"""
         # Service Account
         svc = findings["service_account"]
-        svc_str = f"{svc['name']} {colored(f'({svc['type']})', 'red')}" if svc["type"] == "Domain Account" else f"{svc['name']} ({svc['type']})"
+        svc_type = svc["type"]
+        svc_name = svc["name"]
+        svc_str = f"{svc_name} {colored('(' + svc_type + ')', 'red')}" if svc_type == "Domain Account" else f"{svc_name} ({svc_type})"
         self.context.log.highlight(f"Service Account:          {svc_str}")
 
         # Sysadmin
@@ -212,11 +216,10 @@ class NXCModule:
 
         # Impersonation
         if findings["impersonation"]:
-            self.context.log.display(f"Impersonation:            {colored(f'{len(findings['impersonation'])} user(s) can impersonate', 'red')}")
+            imp_count = len(findings["impersonation"])
+            self.context.log.display(f"Impersonation:            {colored(str(imp_count) + ' user(s) can impersonate', 'red')}")
             for imp in findings["impersonation"]:
                 self.context.log.highlight(f"  → {imp['grantee']} can impersonate {imp['grantor']}")
-        elif not findings["is_sysadmin"]:
-            self.context.log.display("Impersonation:            Cannot check (requires sysadmin)")
         else:
             self.context.log.display("Impersonation:            No privileges found")
 
