@@ -1,6 +1,6 @@
 import base64
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, select, func, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, select, func, delete, and_, or_
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import declarative_base
 
@@ -306,16 +306,16 @@ class database(BaseDB):
 
         return self.db_execute(q).all()
 
-    def get_credentials_for_users(self, usernames:List[str], cred_type:str=None):
+    def get_credentials_for_users(self, usernames: list[str], cred_type: str | None = None):
         """Return credentials for a list of users from the database."""
         if cred_type:
             q = select(self.UsersTable).filter(
                 self.UsersTable.c.credtype == cred_type,
-                and_(or_(*[self.UsersTable.c.username.like(f'%{name.lower()}%') for name in usernames]))
+                and_(or_(*[self.UsersTable.c.username.like(f"%{name.lower()}%") for name in usernames]))
             )
         else:
             q = select(self.UsersTable).filter(
-                or_(*[self.UsersTable.c.username.like(f'%{name.lower()}%') for name in usernames])
+                or_(*[self.UsersTable.c.username.like(f"%{name.lower()}%") for name in usernames])
             )
 
         return self.db_execute(q).all()
