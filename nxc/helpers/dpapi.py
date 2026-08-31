@@ -51,7 +51,7 @@ def upgrade_to_dploot_connection(target, context=None):
                 if context is not None:
                     conn.conn = context.conn
     except Exception as e:
-        print(e)
+        self.context.logger.debug(e)
         return None
 
     return conn
