@@ -133,11 +133,14 @@ def main():
     # Handle exclusions from config
     excluded_ips = set()
 
-    # Process exclude_hosts from config
-    # Important, we are reusing the parse_targets because it already provides the code necessary for
-    # parsing all provided inputs
+    # Process exclude_hosts from config. Important, we are reusing the parse_targets because it
+    # already provides the code necessary for parsing all provided inputs
+    # Providing --exclude-hosts overwrite the configuration file
+    if args.exclude_hosts is not None:
+        exclude_hosts.clear()
+        exclude_hosts.extend(args.exclude_hosts)
+
     if exclude_hosts:
-        nxc_logger.debug(f"Processing exclusions from config: {exclude_hosts}")
         for excluded in exclude_hosts:
             if Path(excluded).is_file():
                 with open(excluded) as excluded_file_handler:
@@ -147,6 +150,10 @@ def main():
                 excluded_ips.update(parse_targets(excluded))
 
     # Process skip_self from config
+    # Providing --skip-self overwrite the configuration file
+    if args.skip_self is not None:
+        skip_self = args.skip_self
+
     if skip_self:
         local_ips = get_local_ips()
         if local_ips:
