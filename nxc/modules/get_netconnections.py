@@ -22,7 +22,7 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         data = []
-        cards = connection.wmi("select DNSDomainSuffixSearchOrder, IPAddress from win32_networkadapterconfiguration")
+        cards = connection.wmi_query("select DNSDomainSuffixSearchOrder, IPAddress from win32_networkadapterconfiguration")
         if cards:
             for c in cards:
                 if c["IPAddress"].get("value"):

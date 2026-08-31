@@ -446,7 +446,7 @@ class NXCModule:
         res = self.query_and_get_output(f"SELECT IS_SRVROLEMEMBER('sysadmin', '{username}')")
         is_admin = res[0][""]
         try:
-            if is_admin != "NULL" and int(is_admin):
+            if is_admin is not None and int(is_admin):
                 self.admin_privs = True
                 self.context.log.debug(f"Updated: {username} is admin!")
                 return True

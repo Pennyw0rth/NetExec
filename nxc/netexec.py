@@ -1,4 +1,5 @@
 # PYTHON_ARGCOMPLETE_OK
+import contextlib
 import sys
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file, display_modules
@@ -7,7 +8,7 @@ from nxc.parsers.nmap import parse_nmap_xml
 from nxc.parsers.nessus import parse_nessus_file
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
-from nxc.loaders.moduleloader import ModuleLoader
+from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.first_run import first_run_setup
 from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
@@ -17,6 +18,7 @@ from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from nxc.helpers import powershell
+import signal
 import shutil
 import os
 from os.path import exists
@@ -40,7 +42,7 @@ if platform.system() != "Windows":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
-async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
+async def start_run(protocol_obj, args, db, targets):  # ruff: ignore[unused-async]
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
@@ -58,7 +60,7 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
             for _ in as_completed(futures):
-                current += 1  # noqa: SIM113
+                current += 1  # ruff: ignore[enumerate-for-loop]
                 progress.update(tasks, completed=current)
     for future in as_completed(futures):
         try:
@@ -67,7 +69,19 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
             nxc_logger.exception(f"Exception for target {targets[futures.index(future)]}: {future.exception()}")
 
 
+def ctrl_c(sig, frame):
+    nxc_logger.debug("Got keyboard interrupt")
+    with contextlib.suppress(Exception):
+        if hasattr(nxc_console, "_live_stack") and nxc_console._live_stack:
+            for live in nxc_console._live_stack:
+                live.stop()
+        nxc_console.show_cursor(True)
+    nxc_logger.highlight("[!] Interrupted, exiting.")
+    os._exit(0)
+
+
 def main():
+    signal.signal(signal.SIGINT, ctrl_c)
     first_run_setup(nxc_logger)
     args, version_info = gen_cli_args()
 
@@ -104,8 +118,8 @@ def main():
                 start_id, end_id = cred_id.split("-")
                 try:
                     for n in range(int(start_id), int(end_id) + 1):
-                        args.cred_id.append(n)    # noqa: B909
-                    args.cred_id.remove(cred_id)  # noqa: B909
+                        args.cred_id.append(n)    # ruff: ignore[loop-iterator-mutation]
+                    args.cred_id.remove(cred_id)  # ruff: ignore[loop-iterator-mutation]
                 except Exception as e:
                     nxc_logger.error(f"Error parsing database credential id: {e}")
                     exit(1)
@@ -193,7 +207,11 @@ def main():
                 exit(1)
 
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
-            module = loader.init_module(modules[m]["path"])
+            try:
+                loader.init_module(modules[m]["path"])
+            except ModuleOptionsError as e:
+                nxc_logger.debug(f"Aborting run: {e}")
+                exit(1)
 
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
@@ -209,8 +227,6 @@ def main():
 
     try:
         asyncio.run(start_run(protocol_object, args, db, targets))
-    except KeyboardInterrupt:
-        nxc_logger.debug("Got keyboard interrupt")
     finally:
         db_engine.dispose()
 
