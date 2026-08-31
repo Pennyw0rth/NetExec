@@ -38,6 +38,7 @@ reveal_chars_of_pwd = int(nxc_config.get("nxc", "reveal_chars_of_pwd", fallback=
 config_log = nxc_config.getboolean("nxc", "log_mode", fallback=False)
 host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallback=["green", "red", "yellow", "cyan"]))
 check_guest_account = nxc_config.getboolean("nxc", "check_guest_account", fallback=False)
+display_dc = nxc_config.getboolean("nxc", "display_dc", fallback=True)
 
 exclude_hosts = literal_eval(nxc_config.get("nxc", "exclude_hosts", fallback=[]))
 if not isinstance(exclude_hosts, list):

@@ -7,21 +7,10 @@ from datetime import datetime
 from struct import unpack
 
 from impacket.structure import Structure
-from ldap3 import LEVEL
 from os.path import expanduser
 from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 from nxc.parsers.ldap_results import parse_result_attributes
-
-
-def get_dns_zones(connection, root, debug=False):
-    connection.search(root, "(objectClass=dnsZone)", search_scope=LEVEL, attributes=["dc"])
-    zones = []
-    for entry in connection.response:
-        if entry["type"] != "searchResEntry":
-            continue
-        zones.append(entry["attributes"]["dc"])
-    return zones
 
 
 def ldap2domain(baseDN):

@@ -30,7 +30,7 @@ def gen_cli_args():
     generic_group = generic_parser.add_argument_group("Generic Options")
     generic_group.add_argument("--version", action="store_true", help="Display nxc version")
     generic_group.add_argument("-t", "--threads", type=int, dest="threads", default=256, help="set how many concurrent threads to use")
-    generic_group.add_argument("--timeout", default=None, type=int, help="max timeout in seconds of each thread")
+    generic_group.add_argument("--timeout", default=None, type=int, help="[DEPRECATED] no longer used, replaced by per-protocol timeouts (--smb-timeout, --ldap-timeout, --dcom-timeout)")
     generic_group.add_argument("--jitter", metavar="INTERVAL", type=str, help="sets a random delay between each authentication")
     generic_group.add_argument("--exclude-hosts", nargs="+", default=None, metavar="HOST", help="Exclude one or more hosts, IPs, CIDRs or hostnames from the scan")
     generic_group.add_argument("--skip-self", action="store_true", default=False, help="Exclude the local machine from the scan")

@@ -14,7 +14,7 @@ from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
-from nxc.loaders.moduleloader import ModuleLoader
+from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.paths import NXC_PATH
@@ -139,6 +139,7 @@ class connection:
         self.conn = None
         self.output_file_template = None
         self.output_filename = None
+        self.protocol = args.protocol
 
         # Authentication info
         self.password = ""
@@ -147,6 +148,7 @@ class connection:
                              self.args.use_kcache or
                              self.args.aesKey or
                              (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "generate_st") and self.args.generate_st) or
                              (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
@@ -253,14 +255,13 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == ""):
-                if hasattr(self.args, "module") and self.args.module:
+            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+                self.logger.debug("Calling command arguments")
+                self.call_cmd_args()
+                if self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
                     self.call_modules()
-                else:
-                    self.logger.debug("Calling command arguments")
-                    self.call_cmd_args()
             self.disconnect()
 
     def call_cmd_args(self):
@@ -334,7 +335,7 @@ class connection:
             if self.failed_logins == self.args.fail_limit:
                 return True
 
-            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
+            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # ruff: ignore[needless-bool]
                 return True
 
             return False
@@ -603,5 +604,9 @@ class connection:
         self.modules = []
 
         for module_path in self.module_paths:
-            module = loader.init_module(module_path)
+            try:
+                module = loader.init_module(module_path)
+            except ModuleOptionsError as e:
+                self.logger.debug(f"Skipping module: {e}")
+                continue
             self.modules.append(module)
