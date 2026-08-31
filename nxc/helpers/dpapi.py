@@ -13,7 +13,7 @@ from nxc.helpers.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.helpers.logger import highlight
 
 
-def upgrade_to_dploot_connection(target, context=None):
+def upgrade_to_dploot_connection(target, context):
     """
     DPLootConnection classes implements a whole lot of stuff to handle the DPAPI part.
     This function gets the calling NXC protocol and tries reuse the already opened connection
@@ -51,7 +51,7 @@ def upgrade_to_dploot_connection(target, context=None):
                 if context is not None:
                     conn.conn = context.conn
     except Exception as e:
-        self.context.logger.debug(e)
+        context.logger.debug(e)
         return None
 
     return conn
