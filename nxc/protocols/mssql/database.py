@@ -310,6 +310,20 @@ class database(BaseDB):
 
         return self.db_execute(q).all()
 
+    def get_credentials_for_users(self, usernames:List[str], cred_type:str=None):
+        """Return credentials for a list of users from the database."""
+        if cred_type:
+            q = select(self.UsersTable).filter(
+                self.UsersTable.c.credtype == cred_type,
+                and_(or_(*[self.UsersTable.c.username.like(f'%{name.lower()}%') for name in usernames]))
+            )
+        else:
+            q = select(self.UsersTable).filter(
+                or_(*[self.UsersTable.c.username.like(f'%{name.lower()}%') for name in usernames])
+            )
+
+        return self.db_execute(q).all()
+
     def get_credential(self, cred_type, domain, username, password):
         q = select(self.UsersTable).filter(
             self.UsersTable.c.domain == domain,

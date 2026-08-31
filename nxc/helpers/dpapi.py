@@ -148,8 +148,9 @@ class DPAPITriage:
 
         # Then, use nxcdb to fill wordlists, this can help to decrypt some masterkeys
         if dump_users:
-            plaintexts = {username: password for _, _, username, password, _, _ in self.context.db.get_credentials(cred_type="plaintext")}
-            nthashes = {username: nt.split(":")[1] if ":" in nt else nt for _, _, username, nt, _, _ in self.context.db.get_credentials(cred_type="hash")}
+            users = self.conn.list_users()
+            plaintexts = {username: password for _, _, username, password, _, _ in self.context.db.get_credentials_for_users(usernames=users, cred_type="plaintext")}
+            nthashes = {username: nt.split(":")[1] if ":" in nt else nt for _, _, username, nt, _, _ in self.context.db.get_credentials_for_users(usernames=users, cred_type="hash")}
             # dploot matches user.lower()
             if self.context.password != "":
                 plaintexts[self.context.username.lower()] = self.context.password
