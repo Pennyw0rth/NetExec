@@ -42,7 +42,7 @@ def proto_args(parser, parents):
     kerb_keys_arg.make_required = [ntds_arg]
     enabled_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
-    trust_keys_arg = cred_gathering_group.add_argument("--trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Trusted Domain Object (TDO) secrets and derive inter-realm Kerberos/RC4 keys (NTDS.dit)")
+    trust_keys_arg = cred_gathering_group.add_argument("--trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], default=True, help="Dump Trusted Domain Object (TDO) secrets and derive inter-realm Kerberos/RC4 keys (NTDS.dit), default True")
     just_trust_keys_arg = cred_gathering_group.add_argument("--just-trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Like --trust-keys but dump ONLY the trust keys, skipping every account secret (NTDS.dit)")
     trust_keys_arg.make_required = [ntds_arg]
     just_trust_keys_arg.make_required = [ntds_arg]
