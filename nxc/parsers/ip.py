@@ -26,18 +26,21 @@ def parse_targets(target):
     try:
         if "-" in target:
             start_ip, end_ip = target.split("-")
+            start = ip_address(start_ip)
             try:
-                end_ip = ip_address(end_ip)
+                end = ip_address(end_ip)
             except ValueError:
-                first_three_octets = start_ip.split(".")[:-1]
-                first_three_octets.append(end_ip)
-                end_ip = ip_address(".".join(first_three_octets))
+                sep = ":" if start.version == 6 else "."
+                prefix = start_ip.split(sep)[:-1]
+                prefix.append(end_ip)
+                end = ip_address(sep.join(prefix))
 
-            for ip_range in summarize_address_range(ip_address(start_ip), end_ip):
+            for ip_range in summarize_address_range(start, end):
                 for ip in ip_range:
                     yield str(ip)
         else:
-            if ip_interface(target).ip.version == 6 and ip_address(target).is_link_local:
+            ip = ip_interface(target).ip
+            if ip.version == 6 and ip.is_link_local:
                 yield str(target)
             else:
                 for ip in ip_network(target, strict=False):
