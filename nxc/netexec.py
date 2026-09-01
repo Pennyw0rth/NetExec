@@ -160,6 +160,7 @@ def main():
         else:
             excluded_ips.update(parse_targets(excluded))
 
+    # Process skip_self from config and cli argument
     if skip_self or args.skip_self:
         local_ips = get_local_ips()
         if local_ips:
