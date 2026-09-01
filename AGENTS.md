@@ -7,6 +7,7 @@
 
 # Coding style
 
+- Never add a comment or docstring at the top of a Python file unless that file already has a top-of-file comment or docstring.
 - Assume ordinary LDAP searches and LDAP response parsing do not raise exceptions; do not wrap them in `try`/`except`.
 - Always bind caught exceptions as `e`, not `error` or another name.
 - Do not prefix function or method names with underscores; preserve required Python special methods such as `__init__`.
