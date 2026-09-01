@@ -334,8 +334,21 @@ netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
 netexec ftp TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
 ##### NFS
-netexec nfs TARGET_HOST -u "" -p "" --shares
-netexec nfs TARGET_HOST -u "" -p "" --enum-shares
-netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
-netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
-netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth none --shares
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth sys --shares
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth sys --enum-shares
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth krb5 --use-kcache --shares
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth krb5i --use-kcache --shares
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth krb5p --use-kcache --shares
+netexec nfs TARGET_HOST --nfs-auth sys --shares
+netexec nfs TARGET_HOST --nfs-auth sys --enum-shares
+netexec nfs TARGET_HOST --nfs-auth krb5 --use-kcache --shares
+netexec nfs TARGET_HOST --nfs-auth krb5i --use-kcache --shares
+netexec nfs TARGET_HOST --nfs-auth krb5p --use-kcache --shares
+netexec nfs TARGET_HOST --nfs-version 3 --nfs-auth sys --get-file /NFStest/test/test.txt ../test.txt
+netexec nfs TARGET_HOST --nfs-version 3 --nfs-auth sys --put-file ../test.txt /NFStest/test
+netexec nfs TARGET_HOST --nfs-version 3 --nfs-auth sys --chmod 666 /NFStest/test/test.txt
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth sys --share / --ls /
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth sys --share / --get-file /test.txt ../test.txt
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth sys --share / --put-file ../test.txt /test.txt
+netexec nfs TARGET_HOST --nfs-version 4 --nfs-auth sys --share / --chmod 666 /test.txt
