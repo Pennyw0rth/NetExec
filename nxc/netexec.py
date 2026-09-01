@@ -149,9 +149,7 @@ def main():
 
     # Process exclude_hosts from config. Important, we are reusing the parse_targets because it
     # already provides the code necessary for parsing all provided inputs
-    # Providing --exclude-hosts overwrite the configuration file
     if args.exclude_hosts is not None:
-        exclude_hosts.clear()
         exclude_hosts.extend(args.exclude_hosts)
 
     if exclude_hosts:
