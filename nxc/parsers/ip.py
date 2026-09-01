@@ -8,6 +8,7 @@ from nxc.parsers.nessus import parse_nessus_file
 
 from os.path import exists, isfile
 from pathlib import Path
+from sys import exit
 
 
 def process_targets(args):
@@ -54,6 +55,14 @@ def process_targets(args):
             excluded_ips.update(local_ips)
         else:
             nxc_logger.error("Could not determine local IP address for skip_self")
+
+    # Validate that all objects to be excluded are valid IP addresses
+    try:
+        for ip in excluded_ips:
+            ip_address(ip)
+    except ValueError as e:
+        nxc_logger.error(f"Invalid IP address in excluded hosts: {e}")
+        exit(1)
 
     # Filter out excluded targets
     if excluded_ips:
