@@ -19,6 +19,12 @@ def get_local_ips():
                 # Skip localhost and link-local addresses
                 if ip and not ip.startswith("127.") and not ip.startswith("169.254."):
                     ips.add(ip)
+        if netifaces.AF_INET6 in addresses:
+            for addr_info in addresses[netifaces.AF_INET6]:
+                ip = addr_info.get("addr")
+                # Skip localhost and link-local addresses
+                if ip and not ip.startswith("::1") and not ip.startswith("fe80::"):
+                    ips.add(ip)
     return ips
 
 

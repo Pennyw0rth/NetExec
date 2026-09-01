@@ -163,7 +163,7 @@ def main():
     if skip_self or args.skip_self:
         local_ips = get_local_ips()
         if local_ips:
-            nxc_logger.debug(f"Local IPs detected: {local_ips}")
+            nxc_logger.debug(f"Local IP addresses detected: {local_ips}")
             excluded_ips.update(local_ips)
         else:
             nxc_logger.error("Could not determine local IP address for skip_self")
