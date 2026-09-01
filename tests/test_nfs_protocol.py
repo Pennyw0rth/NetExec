@@ -46,15 +46,16 @@ class Database:
         self.hosts.append(host)
 
 
-def make_protocol(version=4, auth="sys", port=None, share=None):
+def make_protocol(version="4.0", auth="sys", port=None, share=None):
     protocol = object.__new__(nfs)
-    protocol.args = SimpleNamespace(nfs_version=version, nfs_auth=auth, nfs_timeout=5, port=port, share=share, use_kcache=False, domain=None, username=[], kdcHost=None)
+    protocol.args = SimpleNamespace(nfs_version=version, nfs_auth=auth, nfs_timeout=2, port=port, share=share, use_kcache=False, domain=None, username=[], kdcHost=None)
     protocol.host = "192.0.2.1"
     protocol.hostname = "server.example"
-    protocol.port = port or (2049 if version == 4 else 111)
-    protocol.portmap = None
-    protocol.mount = None
+    protocol.port = port or 2049
     protocol.nfs = None
+    protocol.nfs_version = version
+    protocol.nfs_versions = () if version is None else (version,)
+    protocol.discovery = None
     protocol.auth = {
         "flavor": 1,
         "machine_name": "NXC123",
@@ -65,7 +66,6 @@ def make_protocol(version=4, auth="sys", port=None, share=None):
     protocol.rpc_auth = protocol.auth if auth == "sys" else None
     protocol.logger = Logger()
     protocol.db = Database()
-    protocol.nfs_versions = {version}
     protocol.root_escape = None
     protocol.escape_share = None
     protocol.escape_fh = b""
@@ -75,315 +75,242 @@ def make_protocol(version=4, auth="sys", port=None, share=None):
     return protocol
 
 
-def test_argument_defaults_select_nfsv3_discovery():
+def discovery(*versions, nfs3_port=None, inconclusive=()):
+    return SimpleNamespace(supported=versions, nfs3_port=nfs3_port, inconclusive=inconclusive)
+
+
+def client_class(calls):
+    class Client:
+        def __init__(self, host, version, port, timeout, auth):
+            calls.append(("init", host, version, port, timeout, auth))
+            self.version = version
+            self.port = port or 2049
+            self.auth = auth
+            self.connected = False
+
+        def connect(self):
+            self.connected = True
+            calls.append(("connect", self.version))
+            return self
+
+        def disconnect(self):
+            self.connected = False
+            calls.append(("disconnect", self.version))
+
+    return Client
+
+
+def test_argument_defaults_use_auto_discovery():
     parser = ArgumentParser()
     proto_args(parser.add_subparsers(dest="protocol"), [])
     args = parser.parse_args(["nfs", "--shares"])
-    assert args.nfs_version == 3
+    assert args.nfs_version is None
     assert args.nfs_auth == "sys"
     assert args.port is None
+    assert args.nfs_timeout == 2
 
 
-def test_nfsv4_constructs_raw_backend_without_portmapper(monkeypatch):
+@pytest.mark.parametrize("version", ["3", "4.0", "4.1", "4.2"])
+def test_argument_parser_accepts_exact_versions(version):
+    parser = ArgumentParser()
+    proto_args(parser.add_subparsers(dest="protocol"), [])
+    assert parser.parse_args(["nfs", "--nfs-version", version]).nfs_version == version
+
+
+def test_argument_parser_rejects_legacy_nfsv4_value():
+    parser = ArgumentParser()
+    proto_args(parser.add_subparsers(dest="protocol"), [])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["nfs", "--nfs-version", "4"])
+
+
+def test_auto_discovery_prefers_nfsv3(monkeypatch):
+    calls = []
+    discovered = discovery("3", "4.0", "4.1", "4.2", nfs3_port=2050)
+
+    def discover(*args):
+        calls.append(("discover", args))
+        return discovered
+
+    monkeypatch.setattr(PROTOCOL_MODULE, "discover_nfs_versions", discover)
+    monkeypatch.setattr(PROTOCOL_MODULE, "NFSClient", client_class(calls))
+    protocol = make_protocol(None)
+
+    assert protocol.create_conn_obj()
+    assert protocol.nfs_version == "3"
+    assert protocol.nfs_versions == discovered.supported
+    assert calls[0] == ("discover", ("192.0.2.1", protocol.rpc_auth, 2049, 2, 111))
+    assert calls[1] == ("init", "192.0.2.1", "3", 2050, 2, protocol.rpc_auth)
+
+
+def test_auto_discovery_uses_latest_supported_nfsv4(monkeypatch):
+    calls = []
+    monkeypatch.setattr(PROTOCOL_MODULE, "discover_nfs_versions", lambda *args: discovery("4.0", "4.2"))
+    monkeypatch.setattr(PROTOCOL_MODULE, "NFSClient", client_class(calls))
+    protocol = make_protocol(None)
+
+    assert protocol.create_conn_obj()
+    assert protocol.nfs_version == "4.2"
+    assert calls[0] == ("init", "192.0.2.1", "4.2", None, 2, protocol.rpc_auth)
+
+
+def test_conclusively_unsupported_explicit_version_fails_without_fallback(monkeypatch):
+    monkeypatch.setattr(PROTOCOL_MODULE, "discover_nfs_versions", lambda *args: discovery("4.1", "4.2"))
+    monkeypatch.setattr(PROTOCOL_MODULE, "NFSClient", lambda *args: (_ for _ in ()).throw(AssertionError("client constructed")))
+    protocol = make_protocol("3")
+
+    assert not protocol.create_conn_obj()
+    assert protocol.nfs_version == "3"
+    assert "NFSv3 is not supported by the target" in protocol.logger.messages[-1]
+
+
+@pytest.mark.parametrize(("version", "label"), [("3", "rpcbind"), ("3", "3@2049"), ("4.0", "4.0")])
+def test_inconclusive_explicit_version_is_still_attempted(monkeypatch, version, label):
+    calls = []
+    monkeypatch.setattr(PROTOCOL_MODULE, "discover_nfs_versions", lambda *args: discovery("4.2", inconclusive=((label, TimeoutError()),)))
+    monkeypatch.setattr(PROTOCOL_MODULE, "NFSClient", client_class(calls))
+    protocol = make_protocol(version)
+
+    assert protocol.create_conn_obj()
+    assert protocol.nfs_version == version
+    assert calls[0][2] == version
+
+
+def test_custom_port_is_used_for_discovery_and_client(monkeypatch):
     calls = []
 
-    class RawNFSv4:
-        def __init__(self, *args):
-            calls.append(args)
-            self.client = None
-            self.port = args[1]
+    def discover(*args):
+        calls.append(("discover", args))
+        return discovery("4.1")
 
-        def connect(self):
-            self.client = object()
+    monkeypatch.setattr(PROTOCOL_MODULE, "discover_nfs_versions", discover)
+    monkeypatch.setattr(PROTOCOL_MODULE, "NFSClient", client_class(calls))
+    protocol = make_protocol("4.1", port=3049)
 
-    monkeypatch.setattr(PROTOCOL_MODULE, "NFSv4", RawNFSv4)
-    monkeypatch.setattr(PROTOCOL_MODULE, "Portmap", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rpcbind used")))
-    protocol = make_protocol()
-    assert protocol.connect_nfs() is protocol.nfs
-    assert calls == [("192.0.2.1", 2049, 5, protocol.auth)]
-    assert protocol.port == 2049
-
-
-def test_nfsv4_full_connection_skips_rpcbind_and_mount(monkeypatch):
-    class RawNFSv4:
-        def __init__(self, *args):
-            self.client = None
-            self.port = args[1]
-
-        def connect(self):
-            self.client = object()
-
-    monkeypatch.setattr(PROTOCOL_MODULE, "NFSv4", RawNFSv4)
-    monkeypatch.setattr(PROTOCOL_MODULE, "Portmap", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rpcbind used")))
-    monkeypatch.setattr(PROTOCOL_MODULE, "Mount", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("MOUNT used")))
-    protocol = make_protocol()
     assert protocol.create_conn_obj()
-    assert protocol.nfs.client is not None
+    assert calls[0] == ("discover", ("192.0.2.1", protocol.rpc_auth, 3049, 2, 111))
+    assert calls[1] == ("init", "192.0.2.1", "4.1", 3049, 2, protocol.rpc_auth)
 
 
-def test_nfsv3_discovers_raw_backend_through_rpcbind(monkeypatch):
-    class Portmap:
-        def getport(self, program, version):
-            return 2049
-
-    calls = []
-
-    class RawNFSv3:
-        def __init__(self, *args):
-            calls.append(args)
-            self.client = None
-            self.port = args[1]
-
-        def connect(self):
-            self.client = object()
-
-    monkeypatch.setattr(PROTOCOL_MODULE, "NFSv3", RawNFSv3)
-    protocol = make_protocol(version=3)
-    protocol.portmap = Portmap()
-    protocol.connect_nfs()
-    assert calls == [("192.0.2.1", 2049, 5, protocol.auth)]
+def test_auto_discovery_rejects_hosts_without_a_supported_version(monkeypatch):
+    monkeypatch.setattr(PROTOCOL_MODULE, "discover_nfs_versions", lambda *args: discovery())
+    monkeypatch.setattr(PROTOCOL_MODULE, "NFSClient", lambda *args: (_ for _ in ()).throw(AssertionError("client constructed")))
+    protocol = make_protocol(None)
+    assert not protocol.create_conn_obj()
+    assert "No supported NFS version discovered" in protocol.logger.messages[-1]
 
 
-def test_nfsv3_enumerates_all_rpcbind_nfs_versions():
-    class Portmap:
-        @staticmethod
-        def dump():
-            return (
-                {"program": PROTOCOL_MODULE.NFS_PROGRAM, "version": 3},
-                {"program": PROTOCOL_MODULE.NFS_PROGRAM, "version": 4},
-                {"program": 100005, "version": 3},
-            )
-
-    protocol = make_protocol(version=3)
-    protocol.portmap = Portmap()
-    protocol.try_root_escape = lambda: False
-    protocol.enum_host_info()
-    assert protocol.nfs_versions == {3, 4}
-    assert protocol.db.hosts[-1][3] == {3, 4}
-
-
-def test_nfsv3_enumeration_survives_unavailable_data_and_mount_services(monkeypatch):
-    class RawPortmap:
-        def __init__(self, *args, **kwargs):
-            self.client = None
-
-        def connect(self):
-            self.client = object()
-
-        @staticmethod
-        def dump():
-            return (
-                {"program": PROTOCOL_MODULE.NFS_PROGRAM, "version": 3},
-                {"program": PROTOCOL_MODULE.NFS_PROGRAM, "version": 4},
-            )
-
-        @staticmethod
-        def getport(program, version):
-            return 2049
-
-    monkeypatch.setattr(PROTOCOL_MODULE, "Portmap", RawPortmap)
-    monkeypatch.setattr(PROTOCOL_MODULE, "Mount", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("MOUNT used")))
-    monkeypatch.setattr(PROTOCOL_MODULE, "NFSv3", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("NFSv3 unavailable")))
-    protocol = make_protocol(version=3)
-    protocol.port = None
-    assert protocol.create_conn_obj()
-    assert protocol.port == 111
-    protocol.enum_host_info()
-    assert protocol.nfs_versions == {3, 4}
-    assert protocol.db.hosts[-1][3] == {3, 4}
-
-
-def test_host_output_includes_enumerated_and_selected_versions():
-    protocol = make_protocol(version=3)
-    protocol.nfs_versions = {4, 3}
+def test_host_output_includes_discovered_and_selected_versions():
+    protocol = make_protocol("3")
+    protocol.nfs_versions = ("3", "4.0", "4.1", "4.2")
     protocol.print_host_info()
-    assert "Supported NFS versions: (3, 4) NFSv3 sys" in protocol.logger.messages[-1]
+    assert "Supported NFS versions: (3, 4.0, 4.1, 4.2) NFSv3 sys" in protocol.logger.messages[-1]
 
 
-def test_nfsv3_auth_none_is_used_for_mount_and_nfs(monkeypatch):
-    class RawPortmap:
-        def __init__(self, *args, **kwargs):
-            pass
+def test_enum_host_info_uses_the_selected_generic_client():
+    protocol = make_protocol("4.2")
+    protocol.nfs_versions = ("4.1", "4.2")
+    protocol.nfs = object()
+    protocol.try_root_escape = lambda: True
+    protocol.enum_host_info()
+    assert protocol.root_escape is True
+    assert protocol.db.hosts[-1][2:] == (2049, ("4.1", "4.2"), True)
 
-        def connect(self):
-            pass
 
-        def getport(self, program, version):
-            return 2049 if program == PROTOCOL_MODULE.NFS_PROGRAM else 20048
+def test_kerberos_rebuilds_the_selected_generic_client(monkeypatch):
+    events = []
 
-    class RawMount:
-        program = 100005
-        program_version = 3
-
-        def __init__(self, host, port, timeout, auth):
+    class Client:
+        def __init__(self, host, version, port, timeout, auth):
+            self.port = port or 2049
             self.auth = auth
-            self.client = None
+            events.append(("init", version, auth))
 
         def connect(self):
-            self.client = object()
-
-        def mnt(self, share):
-            assert self.auth is None
-            return {"status": 0, "mountinfo": {"fhandle": b"root"}}
-
-    class RawNFSv3:
-        def __init__(self, host, port, timeout, auth):
-            assert auth is None
-            self.client = None
-            self.port = port
-
-        def connect(self):
-            self.client = object()
-
-    monkeypatch.setattr(PROTOCOL_MODULE, "Portmap", RawPortmap)
-    monkeypatch.setattr(PROTOCOL_MODULE, "Mount", RawMount)
-    monkeypatch.setattr(PROTOCOL_MODULE, "NFSv3", RawNFSv3)
-    protocol = make_protocol(version=3, auth="none")
-    assert protocol.create_conn_obj()
-    protocol.connect_nfs()
-    assert protocol.root_handle("/export")["mountinfo"]["fhandle"] == b"root"
-
-
-def test_kerberos_is_established_on_the_raw_backend(monkeypatch):
-    calls = []
-
-    class RawNFSv4:
-        def __init__(self, host, port, timeout, auth):
-            self.auth = auth
-            self.client = None
-            self.port = port
-
-        def connect(self):
-            self.client = object()
+            events.append(("connect",))
 
         def disconnect(self):
-            self.client = None
+            events.append(("disconnect",))
+
+        def establish_gss(self, initiator, service):
+            events.append(("gss", initiator.host, service))
+            self.auth = "rpcsec-gss"
 
     class Initiator:
         def __init__(self, host, credentials):
             self.host = host
             self.credentials = credentials
 
-    class Authentication:
-        @staticmethod
-        def establish(rpc, program, version, initiator, service):
-            calls.append((rpc, program, version, initiator, service))
-            return "rpcsec-gss"
-
-    monkeypatch.setattr(PROTOCOL_MODULE, "NFSv4", RawNFSv4)
-    monkeypatch.setattr(PROTOCOL_MODULE, "RPCSECGSSAuth", Authentication)
+    monkeypatch.setattr(PROTOCOL_MODULE, "NFSClient", Client)
     monkeypatch.setitem(sys.modules, "pyNfsClient.kerberos", SimpleNamespace(KerberosInitiator=Initiator))
-    protocol = make_protocol(auth="krb5p")
-    protocol.try_root_escape = lambda: True
+    protocol = make_protocol("4.1", auth="krb5p")
+    protocol.discovery = discovery("4.1")
+    protocol.try_root_escape = lambda: False
+
     assert protocol.kerberos_login("NFS.TEST", "nfsclient", password="secret", kdcHost="192.0.2.2")
-    assert calls[0][:3] == (protocol.nfs, PROTOCOL_MODULE.NFS_PROGRAM, 4)
-    assert calls[0][3].credentials["realm"] == "NFS.TEST"
-    assert calls[0][4] == "krb5p"
-    assert protocol.nfs.auth == "rpcsec-gss"
+    assert ("init", "4.1", protocol.auth) in events
+    assert ("gss", "192.0.2.1", "krb5p") in events
+    assert protocol.rpc_auth == "rpcsec-gss"
 
 
-def test_nfsv4_share_path_resolves_through_raw_lookup():
-    class RawNFS:
-        def root_filehandle(self, auth=None):
-            assert auth is protocol.rpc_auth
-            return b"root"
-
-        def lookup(self, file_handle, component, auth=None):
-            assert auth is protocol.rpc_auth
-            return {
-                "status": 0,
-                "resok": {"object": {"data": file_handle + b"/" + component.encode()}},
-            }
-
-    protocol = make_protocol(share="/export/data")
-    protocol.nfs = RawNFS()
-    assert protocol.root_handle("/export/data") == {
-        "status": 0,
-        "mountinfo": {"fhandle": b"root/export/data"},
-    }
+def test_selected_root_handle_delegates_to_generic_client():
+    protocol = make_protocol("4.2", share="/export")
+    protocol.nfs = SimpleNamespace(
+        root_handle=lambda share: {"status": 0, "mountinfo": {"fhandle": b"root"}},
+        status_name=lambda status: str(status),
+    )
+    assert protocol.selected_root_handle() == b"root"
 
 
-def test_root_escape_validation_uses_the_shared_raw_backend():
-    class RawNFS:
-        def getattr(self, file_handle, auth=None):
-            assert auth is protocol.rpc_auth
-            return {"status": 0, "attributes": {"type": 2}}
+def test_nfsv3_without_share_still_requires_root_escape():
+    protocol = make_protocol("3")
+    protocol.nfs = SimpleNamespace()
+    assert protocol.selected_root_handle() is None
+    assert "please specify a share" in protocol.logger.messages[-1]
 
-        def readdir(self, file_handle, auth=None):
-            assert auth is protocol.rpc_auth
-            return {"status": 0, "resok": {}}
 
+def test_root_escape_validation_uses_the_generic_client():
     protocol = make_protocol()
-    protocol.nfs = RawNFS()
-    protocol.exports = lambda: [("/", ["Everyone"])]
-    protocol.root_handle = lambda share: {"status": 0, "mountinfo": {"fhandle": b"export"}}
+    protocol.nfs = SimpleNamespace(
+        getattr=lambda file_handle, auth=None: {"status": 0, "attributes": {"type": 2}},
+        readdir=lambda file_handle, auth=None: {"status": 0, "resok": {}},
+        exports=lambda: [("/", ["Everyone"])],
+        root_handle=lambda share: {"status": 0, "mountinfo": {"fhandle": b"export"}},
+        unmount=lambda: None,
+    )
     protocol.get_root_handles = lambda file_handle: [b"forged"]
     assert protocol.try_root_escape() is True
     assert protocol.escape_share == "/"
     assert protocol.escape_fh == b"forged"
 
 
-def test_nfsv4_named_owner_does_not_replace_auth_sys_numeric_uid():
-    class RawNFS:
-        def getattr(self, file_handle, auth=None):
-            assert auth is protocol.rpc_auth
-            return {
-                "status": 0,
-                "attributes": {"uid": "root@nfs.test", "gid": "root@nfs.test"},
-            }
-
-        def access(self, file_handle, access, auth=None):
-            assert auth is protocol.rpc_auth
-            return {"status": 0, "resok": {"access": access}}
-
+def test_named_owner_does_not_replace_auth_sys_numeric_uid():
     protocol = make_protocol()
-    protocol.nfs = RawNFS()
+    protocol.nfs = SimpleNamespace(
+        getattr=lambda file_handle, auth=None: {"status": 0, "attributes": {"uid": "root@nfs.test", "gid": "root@nfs.test"}},
+        access=lambda file_handle, access, auth=None: {"status": 0, "resok": {"access": access}},
+    )
     assert protocol.list_dir(b"root", "/", recurse=0)[0]["uid"] == "root@nfs.test"
     assert protocol.auth["uid"] == 0
     assert protocol.auth["gid"] == 0
 
 
-def test_nfsv4_named_owner_is_separated_from_permissions_in_output():
-    protocol = make_protocol()
-    protocol.update_auth = lambda file_handle: None
-    protocol.get_permissions = lambda file_handle: (True, True, False)
-    protocol.print_directory(
-        [
-            {
-                "name": b"readme.txt",
-                "name_attributes": {
-                    "present": True,
-                    "attributes": {"uid": "nfsclient@nfs.test", "type": 1, "size": 0},
-                },
-                "name_handle": {
-                    "present": True,
-                    "handle": {"data": b"file"},
-                },
-            }
-        ],
-        "/nfsclient",
-    )
-    assert "nfsclient@nfs.test -rw-" in protocol.logger.messages[-1]
-    assert protocol.logger.messages[-1].endswith("/nfsclient/readme.txt")
-
-
 def test_print_directory_restores_directory_identity_between_entries():
-    class RawNFS:
-        calls = []
-        owners = {b"one": (1000, 100), b"two": (2000, 200)}
-
-        def getattr(self, file_handle, auth=None):
-            self.calls.append(("getattr", file_handle, auth["uid"], auth["gid"]))
-            uid, gid = self.owners[file_handle]
-            return {"status": 0, "attributes": {"uid": uid, "gid": gid}}
-
-        def access(self, file_handle, access, auth=None):
-            self.calls.append(("access", file_handle, auth["uid"], auth["gid"]))
-            return {"status": 0, "resok": {"access": access}}
-
+    calls = []
+    owners = {b"one": (1000, 100), b"two": (2000, 200)}
     protocol = make_protocol()
     protocol.auth.update({"uid": 500, "gid": 50})
-    protocol.nfs = RawNFS()
+
+    def get_attributes(file_handle, auth=None):
+        calls.append(("getattr", file_handle, auth["uid"], auth["gid"]))
+        uid, gid = owners[file_handle]
+        return {"status": 0, "attributes": {"uid": uid, "gid": gid}}
+
+    def access(file_handle, requested, auth=None):
+        calls.append(("access", file_handle, auth["uid"], auth["gid"]))
+        return {"status": 0, "resok": {"access": requested}}
+
+    protocol.nfs = SimpleNamespace(getattr=get_attributes, access=access)
     protocol.print_directory(
         [
             {
@@ -400,7 +327,7 @@ def test_print_directory_restores_directory_identity_between_entries():
         "/",
     )
 
-    assert RawNFS.calls == [
+    assert calls == [
         ("getattr", b"one", 500, 50),
         ("access", b"one", 1000, 100),
         ("access", b"one", 1000, 100),
@@ -416,51 +343,45 @@ def test_print_directory_restores_directory_identity_between_entries():
 
 def test_btrfs_root_escape_handles_are_python_310_compatible(monkeypatch):
     protocol = make_protocol()
-    monkeypatch.setattr(protocol, "format_directory", lambda response: [])
     protocol.nfs = SimpleNamespace(readdirplus=lambda file_handle, auth=None: {})
+    monkeypatch.setattr(protocol, "format_directory", lambda response: [])
     handles = protocol.get_root_handles(b"\x01\x00\x00\x4d" + b"12345678")
     assert len(handles) == 18
     assert handles[2][20:24] == b"\x00\x01\x00\x00"
     assert handles[-1][20:24] == b"\x0f\x01\x00\x00"
 
 
-def test_netexec_contains_no_facade_or_protocol_adapter():
+def test_netexec_uses_only_the_generic_client_api():
     source = PROTOCOL_PATH.read_text()
-    assert "NFSClient" not in source
-    assert "NFSProtocolClient" not in source
-    assert not (Path(__file__).parents[1] / "nxc" / "protocols" / "nfs" / "client.py").exists()
+    assert "NFSClient" in source
+    assert ".compound(" not in source
+    assert "NFSv40" not in source
+    assert "NFSv41" not in source
+    assert "NFSv42" not in source
 
 
-@pytest.mark.parametrize("version", [3, 4])
-def test_uid_and_gid_changes_are_passed_to_each_raw_call(version):
+@pytest.mark.parametrize("version", ["3", "4.0", "4.1", "4.2"])
+def test_uid_and_gid_changes_are_passed_to_each_generic_call(version):
     calls = []
-
-    class RawNFS:
-        def getattr(self, file_handle, auth=None):
-            calls.append(("getattr", file_handle, auth["uid"], auth["gid"]))
-            uid, gid = (1000, 100) if file_handle == b"root" else (2000, 200)
-            return {"status": 0, "attributes": {"uid": uid, "gid": gid}}
-
-        def lookup(self, file_handle, name, auth=None):
-            calls.append(("lookup", file_handle, auth["uid"], auth["gid"]))
-            return {
-                "status": 0,
-                "resok": {
-                    "object": {"data": b"file"},
-                    "obj_attributes": {"attributes": {"type": PROTOCOL_MODULE.NF3REG}},
-                },
-            }
-
-        def read(self, file_handle, offset, auth=None):
-            calls.append(("read", file_handle, auth["uid"], auth["gid"]))
-            return {"status": 0, "resok": {"data": b"data", "eof": True}}
-
     protocol = make_protocol(version=version)
     protocol.args.cat = "file"
-    protocol.nfs = RawNFS()
     protocol.connect_nfs = lambda: protocol.nfs
     protocol.selected_root_handle = lambda: b"root"
 
+    def get_attributes(file_handle, auth=None):
+        calls.append(("getattr", file_handle, auth["uid"], auth["gid"]))
+        uid, gid = (1000, 100) if file_handle == b"root" else (2000, 200)
+        return {"status": 0, "attributes": {"uid": uid, "gid": gid}}
+
+    def lookup(file_handle, name, auth=None):
+        calls.append(("lookup", file_handle, auth["uid"], auth["gid"]))
+        return {"status": 0, "resok": {"object": {"data": b"file"}, "obj_attributes": {"attributes": {"type": PROTOCOL_MODULE.NF3REG}}}}
+
+    def read(file_handle, offset, auth=None):
+        calls.append(("read", file_handle, auth["uid"], auth["gid"]))
+        return {"status": 0, "resok": {"data": b"data", "eof": True}}
+
+    protocol.nfs = SimpleNamespace(getattr=get_attributes, lookup=lookup, read=read)
     protocol.cat()
 
     assert calls == [
@@ -471,49 +392,65 @@ def test_uid_and_gid_changes_are_passed_to_each_raw_call(version):
     ]
 
 
-def test_auth_sys_disconnect_delegates_all_state_cleanup_to_raw_client():
-    class RawNFS:
-        @property
-        def opened(self):
-            raise AssertionError("current-principal state inspected")
+def test_put_file_reuses_open_auth_snapshot_after_uid_detection(tmp_path):
+    local_file = tmp_path / "upload.txt"
+    local_file.write_bytes(b"payload")
+    protocol = make_protocol("4.0")
+    protocol.args.put_file = [str(local_file), "upload.txt"]
+    protocol.selected_root_handle = lambda: b"root"
+    events = []
 
+    def update_auth(file_handle):
+        if file_handle == b"root":
+            protocol.auth.update({"uid": 1000, "gid": 100})
+        else:
+            protocol.auth.update({"uid": 2000, "gid": 200})
+        return {"status": 0, "attributes": {"uid": protocol.auth["uid"], "gid": protocol.auth["gid"]}}
+
+    class Client:
+        def lookup(self, *args, **kwargs):
+            return {"status": PROTOCOL_MODULE.NFS3ERR_NOENT, "resok": None, "resfail": {}}
+
+        def create(self, dir_handle, name, create_mode, mode=None, auth=None):
+            events.append(("create", auth))
+            return {"status": 0, "resok": {"obj": {"handle": {"data": b"file"}}}}
+
+        def fsinfo(self, *args, **kwargs):
+            return {"status": 0, "resok": {"wtpref": 1024}}
+
+        def write(self, file_handle, offset, count, content, stable_how, auth=None):
+            events.append(("write", auth, content))
+            return {"status": 0, "resok": {"count": count}}
+
+        def close(self, file_handle, auth=None):
+            events.append(("close", auth))
+            return {"status": 0}
+
+        def unmount(self):
+            pass
+
+        @staticmethod
+        def status_name(status):
+            return str(status)
+
+    protocol.nfs = Client()
+    protocol.update_auth = update_auth
+    protocol.put_file()
+
+    assert protocol.auth["uid"] == 2000
+    assert events[0][1]["uid"] == 1000
+    assert events[1][1] is events[0][1]
+    assert events[2][1] is events[0][1]
+    assert events[1][2] == b"payload"
+
+
+def test_disconnect_delegates_all_cleanup_to_generic_client():
+    class Client:
         def disconnect(self):
             self.disconnected = True
 
     protocol = make_protocol()
-    protocol.nfs = RawNFS()
+    protocol.nfs = Client()
     protocol.nfs.disconnected = False
-
     protocol.disconnect()
-
     assert protocol.nfs.disconnected
-
-
-def test_gss_disconnect_closes_state_before_destroying_context(monkeypatch):
-    events = []
-
-    class Authentication:
-        def destroy(self, rpc, program, version):
-            events.append(("destroy", rpc, program, version))
-
-    class RawNFS:
-        opened = {b"file": object()}
-
-        def close_handle(self, file_handle, auth=None):
-            events.append(("close", file_handle, auth))
-
-        def disconnect(self):
-            events.append(("disconnect",))
-
-    monkeypatch.setattr(PROTOCOL_MODULE, "RPCSECGSSAuth", Authentication)
-    protocol = make_protocol(auth="krb5")
-    protocol.rpc_auth = Authentication()
-    protocol.nfs = RawNFS()
-
-    protocol.disconnect()
-
-    assert events == [
-        ("close", b"file", protocol.rpc_auth),
-        ("destroy", protocol.nfs, PROTOCOL_MODULE.NFS_PROGRAM, 4),
-        ("disconnect",),
-    ]
