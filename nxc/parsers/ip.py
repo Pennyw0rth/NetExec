@@ -1,5 +1,6 @@
 import netifaces
 from ipaddress import ip_address, ip_network, summarize_address_range, ip_interface
+from nxc.helpers.logger import highlight
 from nxc.helpers.misc import identify_target_file
 from nxc.config import exclude_hosts, skip_self
 from nxc.logger import nxc_logger
@@ -66,6 +67,17 @@ def process_targets(args):
 
     # Filter out excluded targets
     if excluded_ips:
+        ignore_target_warning = False
+        for target in targets:
+            try:
+                ip_address(target)
+            except ValueError:
+                if not ignore_target_warning:
+                    ans = input(highlight("[!] Target is not an IP address, but exclusion list detected. Hostnames will not be filtered. Do you want to continue? [Y/n] ", "red"))
+                    if ans.lower() not in ["y", "yes", ""]:
+                        exit(1)
+                    ignore_target_warning = True
+
         original_count = len(targets)
         excluded_targets = [target for target in targets if target in excluded_ips]
         targets = [target for target in targets if target not in excluded_ips]
