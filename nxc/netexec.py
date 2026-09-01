@@ -3,18 +3,16 @@ import contextlib
 import sys
 
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import identify_target_file, display_modules
-from nxc.parsers.ip import parse_targets, get_local_ips
-from nxc.parsers.nmap import parse_nmap_xml
-from nxc.parsers.nessus import parse_nessus_file
+from nxc.helpers.misc import display_modules
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.first_run import first_run_setup
+from nxc.parsers.ip import process_targets
 from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
-from nxc.config import nxc_config, nxc_workspace, config_log, exclude_hosts, skip_self
+from nxc.config import nxc_config, nxc_workspace, config_log
 from nxc.database import create_db_engine
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -22,11 +20,9 @@ from nxc.helpers import powershell
 import signal
 import shutil
 import os
-from os.path import exists
 from os.path import join as path_join
 from sys import exit
 from rich.progress import Progress
-from pathlib import Path
 import platform
 if sys.stdout.encoding == "cp1252":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -112,8 +108,6 @@ def main():
         nxc_logger.error("KRB5CCNAME environment variable is not set")
         exit(1)
 
-    targets = []
-
     if hasattr(args, "cred_id") and args.cred_id:
         for cred_id in args.cred_id:
             if "-" in str(cred_id):
@@ -126,59 +120,11 @@ def main():
                     nxc_logger.error(f"Error parsing database credential id: {e}")
                     exit(1)
 
-    if hasattr(args, "target") and args.target:
-        for target in args.target:
-            try:
-                if exists(target) and os.path.isfile(target):
-                    target_file_type = identify_target_file(target)
-                    if target_file_type == "nmap":
-                        targets.extend(parse_nmap_xml(target, args.protocol))
-                    elif target_file_type == "nessus":
-                        targets.extend(parse_nessus_file(target, args.protocol))
-                    else:
-                        with open(target) as target_file:
-                            for target_entry in target_file:
-                                targets.extend(parse_targets(target_entry.strip()))
-                else:
-                    targets.extend(parse_targets(target))
-            except Exception as e:
-                nxc_logger.fail(f"Failed to parse target '{target}': {e}")
-
-    # Handle exclusions from config
-    excluded_ips = set()
-
-    # Process exclude_hosts from config. Important, we are reusing the parse_targets because it
-    # already provides the code necessary for parsing all provided inputs
-    if args.exclude_hosts is not None:
-        exclude_hosts.extend(args.exclude_hosts)
-
-    for excluded in exclude_hosts:
-        if Path(excluded).is_file():
-            with open(excluded) as excluded_file:
-                for line in excluded_file.readlines():
-                    excluded_ips.update(parse_targets(line.strip()))
-        else:
-            excluded_ips.update(parse_targets(excluded))
-
-    # Process skip_self from config and cli argument
-    if skip_self or args.skip_self:
-        local_ips = get_local_ips()
-        if local_ips:
-            nxc_logger.debug(f"Local IP addresses detected: {local_ips}")
-            excluded_ips.update(local_ips)
-        else:
-            nxc_logger.error("Could not determine local IP address for skip_self")
-
-    # Filter out excluded targets
-    if excluded_ips:
-        original_count = len(targets)
-        excluded_targets = [target for target in targets if target in excluded_ips]
-        targets = [target for target in targets if target not in excluded_ips]
-        nxc_logger.debug(f"Excluding {original_count - len(targets)} hosts from scan: {excluded_targets}")
+    targets = process_targets(args)
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
-        obfuscated_dir = os.path.join(NXC_PATH, "obfuscated_scripts")
+        obfuscated_dir = path_join(NXC_PATH, "obfuscated_scripts")
         shutil.rmtree(obfuscated_dir)
         os.mkdir(obfuscated_dir)
         nxc_logger.success("Cleared cached obfuscated PowerShell scripts")

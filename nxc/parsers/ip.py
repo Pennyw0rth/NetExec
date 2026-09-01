@@ -1,5 +1,67 @@
 import netifaces
 from ipaddress import ip_address, ip_network, summarize_address_range, ip_interface
+from nxc.helpers.misc import identify_target_file
+from nxc.config import exclude_hosts, skip_self
+from nxc.logger import nxc_logger
+from nxc.parsers.nmap import parse_nmap_xml
+from nxc.parsers.nessus import parse_nessus_file
+
+from os.path import exists, isfile
+from pathlib import Path
+
+
+def process_targets(args):
+    targets = []
+    if hasattr(args, "target") and args.target:
+        for target in args.target:
+            try:
+                if exists(target) and isfile(target):
+                    target_file_type = identify_target_file(target)
+                    if target_file_type == "nmap":
+                        targets.extend(parse_nmap_xml(target, args.protocol))
+                    elif target_file_type == "nessus":
+                        targets.extend(parse_nessus_file(target, args.protocol))
+                    else:
+                        with open(target) as target_file:
+                            for target_entry in target_file:
+                                targets.extend(parse_targets(target_entry.strip()))
+                else:
+                    targets.extend(parse_targets(target))
+            except Exception as e:
+                nxc_logger.fail(f"Failed to parse target '{target}': {e}")
+
+    # Handle exclusions from config
+    excluded_ips = set()
+
+    # Process exclude_hosts from config. Important, we are reusing the parse_targets because it
+    # already provides the code necessary for parsing all provided inputs
+    if args.exclude_hosts is not None:
+        exclude_hosts.extend(args.exclude_hosts)
+
+    for excluded in exclude_hosts:
+        if Path(excluded).is_file():
+            with open(excluded) as excluded_file:
+                for line in excluded_file.readlines():
+                    excluded_ips.update(parse_targets(line.strip()))
+        else:
+            excluded_ips.update(parse_targets(excluded))
+
+    # Process skip_self from config and cli argument
+    if skip_self or args.skip_self:
+        local_ips = get_local_ips()
+        if local_ips:
+            nxc_logger.debug(f"Local IP addresses detected: {local_ips}")
+            excluded_ips.update(local_ips)
+        else:
+            nxc_logger.error("Could not determine local IP address for skip_self")
+
+    # Filter out excluded targets
+    if excluded_ips:
+        original_count = len(targets)
+        excluded_targets = [target for target in targets if target in excluded_ips]
+        targets = [target for target in targets if target not in excluded_ips]
+        nxc_logger.debug(f"Excluding {original_count - len(targets)} hosts from scan: {excluded_targets}")
+    return targets
 
 
 def get_local_ips():
