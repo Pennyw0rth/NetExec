@@ -245,6 +245,7 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M whoami
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dump-computers
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M raisechild
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M get-scriptpath
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M certighost -o L=127.0.0.1
 # resetnightmare resets a real account password with no restore and needs a controlled account with GenericWrite on its UPN + an unpatched DC, run manually, not in CI
 #netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M resetnightmare -o TARGET=TARGET_ACCOUNT NEW_PASSWORD=Password123! UPN_USER=CONTROLLED_ACCOUNT UPN_PASSWORD=Password1
 ##### WINRM
