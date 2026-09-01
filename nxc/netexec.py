@@ -152,21 +152,15 @@ def main():
     if args.exclude_hosts is not None:
         exclude_hosts.extend(args.exclude_hosts)
 
-    if exclude_hosts:
-        for excluded in exclude_hosts:
-            if Path(excluded).is_file():
-                with open(excluded) as excluded_file_handler:
-                    for line in excluded_file_handler.readlines():
-                        excluded_ips.update(parse_targets(line.strip()))
-            else:
-                excluded_ips.update(parse_targets(excluded))
+    for excluded in exclude_hosts:
+        if Path(excluded).is_file():
+            with open(excluded) as excluded_file:
+                for line in excluded_file.readlines():
+                    excluded_ips.update(parse_targets(line.strip()))
+        else:
+            excluded_ips.update(parse_targets(excluded))
 
-    # Process skip_self from config
-    # Providing --skip-self overwrite the configuration file
-    if args.skip_self is not None:
-        skip_self = args.skip_self
-
-    if skip_self:
+    if skip_self or args.skip_self:
         local_ips = get_local_ips()
         if local_ips:
             nxc_logger.debug(f"Local IPs detected: {local_ips}")
