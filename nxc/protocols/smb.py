@@ -64,6 +64,7 @@ from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altserv
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
+from nxc.protocols.smb.sipexec import SIPEXEC
 from nxc.protocols.smb.mmcexec import MMCEXEC
 from nxc.protocols.smb.smbspider import SMBSpider
 from nxc.protocols.smb.passpol import PassPolDump
@@ -1125,6 +1126,31 @@ class smb(connection):
                     break
                 except Exception:
                     self.logger.debug("Error executing command via smbexec, traceback:")
+                    self.logger.debug(format_exc())
+                    continue
+            elif method == "sipexec":
+                try:
+                    exec_method = SIPEXEC(
+                        self.remoteName,
+                        self.smb_share_name,
+                        self.username,
+                        self.password,
+                        self.domain,
+                        self.conn,
+                        self.kerberos,
+                        self.aesKey,
+                        self.kdcHost,
+                        self.host,
+                        self.hash,
+                        self.args.share,
+                        logger=self.logger,
+                        timeout=self.args.dcom_timeout,
+                        tries=self.args.get_output_tries
+                    )
+                    self.logger.info("Executed command via sipexec")
+                    break
+                except Exception:
+                    self.logger.debug("Error executing command via sipexec, traceback:")
                     self.logger.debug(format_exc())
                     continue
 
