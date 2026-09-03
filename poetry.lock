@@ -834,21 +834,26 @@ wmi = ["wmi (>=1.5.1)"]
 
 [[package]]
 name = "dploot"
-version = "3.2.2"
+version = "4.0.0"
 description = "DPAPI looting remotely in Python"
 optional = false
-python-versions = "*"
+python-versions = ">=3.10,<4.0"
 groups = ["main"]
-files = [
-    {file = "dploot-3.2.2-py2.py3-none-any.whl", hash = "sha256:8c7e436f382af7ae46642b8dbb91a4aa0818a2556c3ef802197ffd95ba9c8ea9"},
-    {file = "dploot-3.2.2.tar.gz", hash = "sha256:3f6acf90113ad076be9b59ea4142d0de4d910d4ae8f99a744d47cf010352d3a8"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 cryptography = ">=40.0.1"
-impacket = ">=0.12.0"
+impacket = ">=0.13.0"
 lxml = ">=5.0"
 pyasn1 = ">=0.4.8"
+pypsrp = ">=0.9.1,<0.10.0"
+
+[package.source]
+type = "git"
+url = "https://github.com/zblurx/dploot.git"
+reference = "network_proto_upgrade"
+resolved_reference = "291d79d087a7eae99126688d35ed4f766b7ba80e"
 
 [[package]]
 name = "dsinternals"
@@ -2953,4 +2958,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "56b728355fe920630c713760332f0af9f33297a02c524a6ed304384a4d62c78f"
+content-hash = "30dc20bd419b68e80450d70f66b68f526e3808464cba8b56416fa4437fcd7ef4"
