@@ -7,15 +7,16 @@ import contextlib
 from os.path import isfile
 from threading import BoundedSemaphore, Lock
 from functools import wraps
-from time import sleep
+from time import sleep, monotonic
 from ipaddress import ip_address
 from dns import resolver, rdatatype
 from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
-from nxc.config import pwned_label
+from nxc.config import pwned_label, abort_on_lockout
 from nxc.helpers.logger import highlight
 from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
+from nxc.console import nxc_console
 from nxc.context import Context
 from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
@@ -28,6 +29,13 @@ sem = BoundedSemaphore(1)
 fail_lock = Lock()
 global_failed_logins = 0
 user_failed_logins = {}
+lockout_lock = Lock()
+global_lockouts = 0
+spray_abort_all = False
+
+
+class SprayAbort(Exception):
+    pass
 
 
 def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
@@ -181,6 +189,8 @@ class connection:
             self.proto_flow()
         except FileNotFoundError as e:
             self.logger.error(f"File not found error on target {target}: {e}")
+        except SprayAbort:
+            self.logger.debug("Spray aborted on lockout")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
@@ -255,14 +265,16 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
-                self.logger.debug("Calling command arguments")
-                self.call_cmd_args()
-                if self.args.module:
-                    self.load_modules()
-                    self.logger.debug("Calling modules")
-                    self.call_modules()
-            self.disconnect()
+            try:
+                if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+                    self.logger.debug("Calling command arguments")
+                    self.call_cmd_args()
+                    if self.args.module:
+                        self.load_modules()
+                        self.logger.debug("Calling modules")
+                        self.call_modules()
+            finally:
+                self.disconnect()
 
     def call_cmd_args(self):
         """Calls all the methods specified by the command line arguments
@@ -339,6 +351,26 @@ class connection:
                 return True
 
             return False
+
+    def register_lockout(self, username):
+        global global_lockouts, spray_abort_all
+
+        if not abort_on_lockout:
+            return
+
+        with lockout_lock:
+            if spray_abort_all:
+                raise SprayAbort
+
+            global_lockouts += 1
+            if global_lockouts < abort_on_lockout:
+                return
+
+            answer = nxc_console.input(f"[bold red]\\[!] {global_lockouts} lockout responses detected, would you like to quit? \\[Y/n] [/]")
+            if answer.strip().lower() in ("y", "yes", ""):
+                spray_abort_all = True
+                raise SprayAbort
+            global_lockouts = 0
 
     def query_db_creds(self):
         """Queries the database for credentials to be used for authentication.
@@ -500,6 +532,8 @@ class connection:
             sleep(value)
 
         with sem:
+            if spray_abort_all:
+                raise SprayAbort
             if self.over_fail_limit(username):
                 return False
             if cred_type == "plaintext":
@@ -578,8 +612,21 @@ class connection:
             if not (username[0] or secret[0] or domain[0]):
                 return False
 
+        # Spray pacing is only exposed by protocols that support it (SMB/LDAP)
+        spray_window = getattr(self.args, "spray_window", 0)
+        spray_attempts = getattr(self.args, "spray_attempts", 1)
+
         if not self.args.no_bruteforce:
+            round_start = monotonic()
             for secr_index, secr in enumerate(secret):
+                # Pause between password batches so badPwdCount resets before we risk a lockout.
+                # Sleep only what's left of the window - spraying every user already consumed part of it.
+                if spray_window and secr_index and secr_index % spray_attempts == 0:
+                    remaining = spray_window - (monotonic() - round_start)
+                    if remaining > 0:
+                        self.logger.info(f"Sleeping {remaining:.0f}s so the lockout counter resets before the next round")
+                        sleep(remaining)
+                    round_start = monotonic()
                 for user_index, user in enumerate(username):
                     if self.try_credentials(domain[user_index], user, owned[user_index], secr, cred_type[secr_index], data[secr_index]):
                         owned[user_index] = True

@@ -103,6 +103,7 @@ smb_error_status = [
     "STATUS_PASSWORD_MUST_CHANGE",
     "STATUS_ACCESS_DENIED",
     "STATUS_NO_SUCH_FILE",
+    "STATUS_ACCOUNT_LOCKED_OUT",
     "KDC_ERR_CLIENT_REVOKED",
     "KDC_ERR_PREAUTH_FAILED",
 ]
@@ -491,6 +492,10 @@ class smb(connection):
                 f"{domain}\\{self.username}{used_ccache} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
+            if error == "KDC_ERR_CLIENT_REVOKED":
+                self.inc_failed_login(username)
+                self.register_lockout(username)
+                return False
             if error not in smb_error_status:
                 self.inc_failed_login(username)
             return False
@@ -546,6 +551,10 @@ class smb(connection):
                 f'{domain}\\{self.username}:{process_secret(self.password)} {error} {f"({desc})" if self.args.verbose else ""}',
                 color="magenta" if error in smb_error_status else "red",
             )
+            if error == "STATUS_ACCOUNT_LOCKED_OUT":
+                self.inc_failed_login(username)
+                self.register_lockout(username)
+                return False
             if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:
@@ -613,6 +622,10 @@ class smb(connection):
                 f"{domain}\\{self.username}:{process_secret(self.hash)} {error} {f'({desc})' if self.args.verbose else ''}",
                 color="magenta" if error in smb_error_status else "red",
             )
+            if error == "STATUS_ACCOUNT_LOCKED_OUT":
+                self.inc_failed_login(self.username)
+                self.register_lockout(self.username)
+                return False
             if error in ["STATUS_PASSWORD_MUST_CHANGE", "STATUS_PASSWORD_EXPIRED", "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT"] and self.args.module == ["change-password"]:
                 return True
             if error not in smb_error_status:

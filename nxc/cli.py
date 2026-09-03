@@ -129,6 +129,9 @@ def gen_cli_args():
         print(f"{VERSION} - {CODENAME} - {COMMIT} - {DISTANCE}")
         sys.exit(1)
 
+    if getattr(args, "spray_attempts", 1) < 1:
+        parser.error("--spray-attempts must be at least 1")
+
     # Multiply output_tries by 10 to enable more fine granural control, see exec methods
     if hasattr(args, "get_output_tries"):
         args.get_output_tries = args.get_output_tries * 10
