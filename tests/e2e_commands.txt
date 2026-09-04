@@ -245,6 +245,14 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M whoami
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dump-computers
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M raisechild
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M get-scriptpath
+# Backup followed by revert restores the same Shadow Credentials state on the disposable test computer.
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=CASTELBLACK$ ACTION=list
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=CASTELBLACK$ ACTION=backup JSONFILE=nxc-shadow-creds-castelblack.json
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=CASTELBLACK$ ACTION=revert JSONFILE=nxc-shadow-creds-castelblack.json
+# These actions require the generated device ID for an automated round trip.
+#netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=add
+#netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=info DEVICE_ID=SHADOW_CREDS_DEVICE_ID
+#netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=remove DEVICE_ID=SHADOW_CREDS_DEVICE_ID
 # resetnightmare resets a real account password with no restore and needs a controlled account with GenericWrite on its UPN + an unpatched DC, run manually, not in CI
 #netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M resetnightmare -o TARGET=TARGET_ACCOUNT NEW_PASSWORD=Password123! UPN_USER=CONTROLLED_ACCOUNT UPN_PASSWORD=Password1
 ##### WINRM
