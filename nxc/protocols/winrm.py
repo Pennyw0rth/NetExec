@@ -18,7 +18,7 @@ from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 from impacket.uuid import bin_to_string
 
 from nxc.config import process_secret, host_info_colors
-from nxc.connection import connection
+from nxc.connection import connection, requires_admin
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
@@ -247,6 +247,100 @@ class winrm(connection):
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
+
+    @requires_admin
+    def wmi_query(self, wql=None, namespace=None):
+        """Run a WQL query natively over WS-Management.
+
+        The query is sent as a wsman:Filter with the Microsoft WQL dialect and
+        executed server-side (projection and WHERE included) - no PowerShell
+        process is spawned on the target and no DCOM access is needed,
+        matching the smb/wmi protocols --wmi-query behavior.
+
+        Permissions: WinRM authentication creates a network-type logon
+        session, and two layers gate WMI over WS-Management for it: the
+        WinRM service WMI plugin only serves Administrators, Interactive
+        and Remote Management Users (network logons lack the Interactive
+        group), and the namespace itself requires Remote Enable for
+        network contexts (Administrators by default) - hence the
+        requires_admin gate.
+        """
+        records = []
+        if not wql:
+            wql = self.args.wmi_query.strip("\n")
+        if not namespace:
+            namespace = self.args.wmi_namespace
+
+        wsen, wsmn = NAMESPACES["wsen"], NAMESPACES["wsman"]
+        namespace_path = namespace.replace("\\", "/")
+        resource_uri = f"http://schemas.microsoft.com/wbem/wsman/1/wmi/{namespace_path}/*"
+        # https://learn.microsoft.com/en-us/windows/winrm/winrm-scripting-shell?tabs=filter-1
+        wql_dialect = "http://schemas.microsoft.com/wbem/wsman/1/WQL"
+
+        def parse_items(res):
+            items = []
+            for element in res.iter():
+                if not element.tag.endswith("}Items"):
+                    continue
+                for instance in element:
+                    props = {}
+                    for prop in instance:
+                        name = prop.tag.split("}")[-1]
+                        if name in props:
+                            # multi-valued WMI property arrives as repeated elements
+                            if not isinstance(props[name], list):
+                                props[name] = [props[name]]
+                            props[name].append(prop.text)
+                        else:
+                            props[name] = prop.text
+                    items.append(props)
+            return items
+
+        def find_context(res):
+            for element in res.iter():
+                if element.tag.endswith("}EnumerationContext") and element.text and element.text.strip():
+                    return element.text.strip()
+            return None
+
+        enum_msg = ET.Element(f"{{{wsen}}}Enumerate")
+        wql_filter = ET.SubElement(enum_msg, f"{{{wsmn}}}Filter")
+        wql_filter.set("Dialect", wql_dialect)
+        wql_filter.text = wql
+        ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
+        ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
+
+        self.logger.info(f"Executing WQL syntax: {wql}")
+        try:
+            res = self.conn.wsman.enumerate(resource_uri=resource_uri, resource=enum_msg)
+        except Exception as e:
+            self.logger.fail(f"Failed to execute the WMI query: {e}")
+            return records
+
+        records.extend(parse_items(res))
+
+        # Pull the remaining pages until the server sends EndOfSequence
+        context = find_context(res)
+        while context:
+            pull_msg = ET.Element(f"{{{wsen}}}Pull")
+            context_element = ET.SubElement(pull_msg, f"{{{wsen}}}EnumerationContext")
+            context_element.text = context
+            ET.SubElement(pull_msg, f"{{{wsen}}}MaxElements").text = "32000"
+            try:
+                res = self.conn.wsman.pull(resource_uri, pull_msg)
+            except Exception as e:
+                self.logger.fail(f"Failed to pull the WMI query results: {e}")
+                break
+            records.extend(parse_items(res))
+            if any(element.tag.endswith("}EndOfSequence") for element in res.iter()):
+                break
+            context = find_context(res)
+
+        for record in records:
+            for k, v in record.items():
+                self.logger.highlight(f"{k} => {v}")
+        if not records:
+            self.logger.highlight("No entries found")
+        return records
 
     def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:

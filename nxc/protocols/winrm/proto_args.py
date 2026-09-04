@@ -19,6 +19,10 @@ def proto_args(parser, parents):
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
     cgroup.add_argument("--dpapi", action="store_true", help="dump user's Credential Manager secrets from target systems")
 
+    wmi_group = winrm_parser.add_argument_group("WMI Queries")
+    wmi_group.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query via PowerShell CIM cmdlets")
+    wmi_group.add_argument("--wmi-namespace", metavar="NAMESPACE", default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
+
     mapping_enum_group = winrm_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
 
