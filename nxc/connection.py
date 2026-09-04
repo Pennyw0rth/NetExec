@@ -10,7 +10,7 @@ from functools import wraps
 from time import sleep
 from ipaddress import ip_address
 from dns import resolver, rdatatype
-from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
+from socket import AF_INET, AF_INET6, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
@@ -30,6 +30,26 @@ global_failed_logins = 0
 user_failed_logins = {}
 
 
+def getaddrinfo_by_family(target, families):
+    """Resolve target with getaddrinfo, keeping the first address of each family."""
+    addresses = {"AF_INET": "", "AF_INET6": ""}
+    canonname = ""
+
+    for family in families:
+        try:
+            results = getaddrinfo(target, None, family, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME)
+        except OSError:
+            continue
+
+        for af, _, _, name, sa in results:
+            if not canonname:
+                canonname = name
+            if not addresses[af.name]:
+                addresses[af.name] = sa[0]
+
+    return addresses, canonname
+
+
 def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
     result = {
         "host": "",
@@ -46,9 +66,12 @@ def get_host_addr_info(target, force_ipv6, dns_server, dns_tcp, dns_timeout):
     except Exception:
         # If the target is not an IP address, we need to resolve it
         if not (dns_server or dns_tcp):
-            for res in getaddrinfo(target, None, AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME):
-                af, _, _, canonname, sa = res
-                address_info[af.name] = sa[0]
+            # glibc fails an AF_UNSPEC lookup outright when one family's UDP answer is
+            # truncated, so retry each family on its own before giving up.
+            addresses, canonname = getaddrinfo_by_family(target, (AF_UNSPEC,))
+            if not (addresses["AF_INET"] or addresses["AF_INET6"]):
+                addresses, canonname = getaddrinfo_by_family(target, (AF_INET, AF_INET6))
+            address_info.update(addresses)
 
             if address_info["AF_INET6"] and ip_address(address_info["AF_INET6"]).is_link_local:
                 address_info["AF_INET6"] = canonname
