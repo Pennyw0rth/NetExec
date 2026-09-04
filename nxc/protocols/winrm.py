@@ -1,5 +1,6 @@
 import os
 import base64
+import contextlib
 import traceback
 import requests
 import urllib3
@@ -7,9 +8,12 @@ import logging
 import ntpath
 import xml.etree.ElementTree as ET
 
+from pypsrp.exceptions import WSManFaultError
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
-from pypsrp.powershell import PSDataStreams
+
+from pypsrp.powershell import PSDataStreams, RunspacePool
+from pypsrp.shell import WinRS
 from termcolor import colored
 
 from dploot.lib.utils import is_guid, is_credfile
@@ -41,6 +45,7 @@ class winrm(connection):
         self.challenge_header = None
         self.targetDomain = None
         self.no_ntlm = False
+        self.shell_types = []
 
         connection.__init__(self, args, db, host)
 
@@ -141,17 +146,61 @@ class winrm(connection):
         return False
 
     def check_if_admin(self):
-        wsman = self.conn.wsman
-        wsen = NAMESPACES["wsen"]
-        wsmn = NAMESPACES["wsman"]
+        """Set admin_privs from a WinRM service configuration read.
 
-        enum_msg = ET.Element(f"{{{wsen}}}Enumerate")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
+        Only administrators can read the WinRM configuration, and the
+        request answers in milliseconds on both paths. It doubles as the
+        first authenticated WSMan request of the session, so an
+        authentication error here fails the login.
+        """
+        try:
+            self.conn.wsman.get("http://schemas.microsoft.com/wbem/wsman/1/config")
+            self.admin_privs = True
+        except WSManFaultError:
+            self.admin_privs = False
 
-        wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
-        self.admin_privs = True
-        return True
+        # A shell type requested on the command line (-x runs a cmd shell,
+        # -X a PowerShell runspace) is counted as working without probing:
+        # the execution itself confirms it, and a failure is reported loudly.
+        shell_checks = {
+            "cmd": not getattr(self.args, "execute", None),
+            "powershell": not getattr(self.args, "ps_execute", None),
+        }
+        self.shell_types = [t for t in ("cmd", "powershell") if not shell_checks[t] or self.probe_shell(t)]
+        return self.admin_privs
+
+    def probe_shell(self, shell_type):
+        """Open and immediately close a shell to check the endpoint access.
+
+        No command is executed: the shell create alone is denied when the
+        account lacks the right. Authentication errors still fail the login,
+        only a WSMan fault counts as no access.
+        """
+        shell = None
+        try:
+            if shell_type == "cmd":
+                shell = WinRS(self.conn.wsman)
+            else:
+                shell = RunspacePool(self.conn.wsman)
+            shell.open()
+            return True
+        except WSManFaultError as e:
+            self.logger.debug(f"{shell_type} shell not accessible: {e}")
+            return False
+        finally:
+            if shell is not None:
+                with contextlib.suppress(Exception):
+                    shell.close()
+
+    def mark_shell_access(self):
+        if not self.shell_types:
+            return ""
+        if len(self.shell_types) == 2:
+            shell_type = "all"
+        else:
+            shell_type = f"{self.shell_types[0]} only"
+        prefix = " - " if self.admin_privs else " "
+        return f"{prefix}{highlight(f'Shell access! ({shell_type})')}"
 
     def plaintext_login(self, domain, username, password):
         # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
@@ -173,7 +222,7 @@ class winrm(connection):
             )
 
             self.check_if_admin()
-            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}{self.mark_shell_access()}")
 
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
@@ -226,7 +275,7 @@ class winrm(connection):
             )
 
             self.check_if_admin()
-            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}{self.mark_shell_access()}")
 
             self.db.add_credential("hash", domain, self.username, ntlm_hash)
             user_id = self.db.get_credential("hash", domain, self.username, ntlm_hash)
@@ -250,7 +299,7 @@ class winrm(connection):
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None):
-        """Run a WQL query natively over WS-Management.
+        """Run a WQL query natively over WS-Management and print the results.
 
         The query is sent as a wsman:Filter with the Microsoft WQL dialect and
         executed server-side (projection and WHERE included) - no PowerShell
@@ -265,12 +314,27 @@ class winrm(connection):
         network contexts (Administrators by default) - hence the
         requires_admin gate.
         """
-        records = []
         if not wql:
             wql = self.args.wmi_query.strip("\n")
         if not namespace:
             namespace = self.args.wmi_namespace
 
+        records = self.wql_enumerate(wql, namespace)
+        for record in records:
+            for k, v in record.items():
+                self.logger.highlight(f"{k} => {v}")
+        if not records:
+            self.logger.highlight("No entries found")
+        return records
+
+    @requires_admin
+    def wql_enumerate(self, wql, namespace):
+        """Run a WQL query natively over WS-Management, returning the records.
+
+        Raises WSManFaultError when the server rejects the query (e.g. access
+        denied) and authentication/transport errors as-is.
+        """
+        records = []
         wsen, wsmn = NAMESPACES["wsen"], NAMESPACES["wsman"]
         namespace_path = namespace.replace("\\", "/")
         resource_uri = f"http://schemas.microsoft.com/wbem/wsman/1/wmi/{namespace_path}/*"
@@ -310,11 +374,7 @@ class winrm(connection):
         ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
 
         self.logger.info(f"Executing WQL syntax: {wql}")
-        try:
-            res = self.conn.wsman.enumerate(resource_uri=resource_uri, resource=enum_msg)
-        except Exception as e:
-            self.logger.fail(f"Failed to execute the WMI query: {e}")
-            return records
+        res = self.conn.wsman.enumerate(resource_uri=resource_uri, resource=enum_msg)
 
         records.extend(parse_items(res))
 
@@ -325,21 +385,12 @@ class winrm(connection):
             context_element = ET.SubElement(pull_msg, f"{{{wsen}}}EnumerationContext")
             context_element.text = context
             ET.SubElement(pull_msg, f"{{{wsen}}}MaxElements").text = "32000"
-            try:
-                res = self.conn.wsman.pull(resource_uri, pull_msg)
-            except Exception as e:
-                self.logger.fail(f"Failed to pull the WMI query results: {e}")
-                break
+            res = self.conn.wsman.pull(resource_uri, pull_msg)
             records.extend(parse_items(res))
             if any(element.tag.endswith("}EndOfSequence") for element in res.iter()):
                 break
             context = find_context(res)
 
-        for record in records:
-            for k, v in record.items():
-                self.logger.highlight(f"{k} => {v}")
-        if not records:
-            self.logger.highlight("No entries found")
         return records
 
     def execute(self, payload=None, get_output=False, shell_type="cmd"):
