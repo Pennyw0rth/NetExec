@@ -15,7 +15,7 @@ import contextlib
 class NXCModule:
     name = "rdp"
     description = "Enables/Disables RDP"
-    supported_protocols = ["smb", "wmi"]
+    supported_protocols = ["smb", "wmi", "winrm"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
@@ -32,6 +32,7 @@ class NXCModule:
         nxc smb 192.168.1.1 -u {user} -p {password} -M rdp -o ACTION={enable, disable, enable-ram, disable-ram} {OLD=true} {DCOM-TIMEOUT=5}
         nxc smb 192.168.1.1 -u {user} -p {password} -M rdp -o METHOD=smb ACTION={enable, disable, enable-ram, disable-ram}
         nxc smb 192.168.1.1 -u {user} -p {password} -M rdp -o METHOD=wmi ACTION={enable, disable, enable-ram, disable-ram} {OLD=true} {DCOM-TIMEOUT=5}
+        nxc winrm 192.168.1.1 -u {user} -p {password} -M rdp -o ACTION={enable, disable, enable-ram, disable-ram}
         """
         if "ACTION" not in module_options:
             context.log.fail("ACTION option not specified!")
@@ -67,6 +68,17 @@ class NXCModule:
             self.oldSystem = True
 
     def on_admin_login(self, context, connection):
+        if context.protocol == "winrm":
+            winrm_rdp = RdpWinrm(context, connection)
+            try:
+                if "ram" in self.action:
+                    winrm_rdp.rdp_ram_wrapper(self.action)
+                else:
+                    winrm_rdp.rdp_wrapper(self.action)
+            except Exception as e:
+                context.log.fail(f"Enable RDP via winrm error: {e!s}")
+            return
+
         # Preparation for wmi protocol
         if self.method == "smb":
             context.log.info("Executing over SMB(ncacn_np)")
@@ -345,3 +357,77 @@ class RdpWmi:
             self.logger.success("Enable RDP Restricted Admin Mode via WMI(ncacn_ip_tcp) successfully")
         elif out.uValue is None:
             self.logger.success("Disable RDP Restricted Admin Mode via WMI(ncacn_ip_tcp) successfully")
+
+
+class RdpWinrm:
+    def __init__(self, context, connection):
+        self.context = context
+        self.connection = connection
+        self.logger = context.log
+
+    def query_server_name(self):
+        records = self.connection.wql_enumerate(
+            "SELECT ServerName, AllowTSConnections FROM Win32_TerminalServiceSetting",
+            "root\\cimv2\\TerminalServices",
+        )
+        if records:
+            return records[0]
+        return None
+
+    def rdp_wrapper(self, action):
+        record = self.query_server_name()
+        if not record:
+            self.logger.fail("Could not find Win32_TerminalServiceSetting over WinRM")
+            return
+        allow = 1 if action == "enable" else 0
+        self.logger.info(f"{'Enabled' if allow else 'Disabled'} RDP services and setting up firewall.")
+        output = self.connection.wmi_invoke(
+            "root\\cimv2\\TerminalServices",
+            "Win32_TerminalServiceSetting",
+            "SetAllowTSConnections",
+            {"AllowTSConnections": allow, "ModifyFirewallException": 1},
+            selector={"ServerName": record["ServerName"]},
+        )
+        if output.get("ReturnValue") == "0":
+            self.logger.success(f"{'Enable' if allow else 'Disable'} RDP via WinRM(WSMan) successfully")
+        else:
+            self.logger.fail(f"SetAllowTSConnections returned {output.get('ReturnValue')}")
+
+        if action == "enable":
+            self.query_rdp_port()
+
+    def query_rdp_port(self):
+        output = self.connection.wmi_invoke(
+            "root\\default",
+            "StdRegProv",
+            "GetDWORDValue",
+            {"hDefKey": 2147483650, "sSubKeyName": "SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp", "sValueName": "PortNumber"},
+        )
+        if output.get("ReturnValue") == "0":
+            self.logger.success(f"RDP Port: {output.get('uValue')}")
+
+    def rdp_ram_wrapper(self, action):
+        subkey = "SYSTEM\\CurrentControlSet\\Control\\Lsa"
+        if "enable" in action:
+            self.logger.info("Enabling Restricted Admin Mode.")
+            output = self.connection.wmi_invoke(
+                "root\\default", "StdRegProv", "SetDWORDValue",
+                {"hDefKey": 2147483650, "sSubKeyName": subkey, "sValueName": "DisableRestrictedAdmin", "uValue": 0},
+            )
+        else:
+            self.logger.info("Disabling Restricted Admin Mode (Clear).")
+            output = self.connection.wmi_invoke(
+                "root\\default", "StdRegProv", "DeleteValue",
+                {"hDefKey": 2147483650, "sSubKeyName": subkey, "sValueName": "DisableRestrictedAdmin"},
+            )
+
+        result = self.connection.wmi_invoke(
+            "root\\default", "StdRegProv", "GetDWORDValue",
+            {"hDefKey": 2147483650, "sSubKeyName": subkey, "sValueName": "DisableRestrictedAdmin"},
+        )
+        if result.get("uValue") == "0":
+            self.logger.success("Enable RDP Restricted Admin Mode via WinRM(WSMan) successfully")
+        elif result.get("uValue") is None:
+            self.logger.success("Disable RDP Restricted Admin Mode via WinRM(WSMan) successfully")
+        else:
+            self.logger.fail(f"DisableRestrictedAdmin is {result.get('uValue')}, action may have failed (ReturnValue {output.get('ReturnValue')})")

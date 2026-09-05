@@ -9,7 +9,7 @@ import ntpath
 import xml.etree.ElementTree as ET
 
 from pypsrp.exceptions import WSManFaultError
-from pypsrp.wsman import NAMESPACES
+from pypsrp.wsman import NAMESPACES, SelectorSet
 from pypsrp.client import Client
 
 from pypsrp.powershell import PSDataStreams, RunspacePool
@@ -296,6 +296,42 @@ class winrm(connection):
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
+
+    def wmi_invoke(self, namespace, class_name, method, params=None, selector=None):
+        """Invoke a WMI method natively over WS-Management (ExecMethod).
+
+        The method INPUT body is sent in the class resource URI namespace with
+        the parameters as child elements, and the target instance is addressed
+        by a selector on the class key property - the WinRM-equivalent of the
+        smb/wmi protocols calling WMI methods over DCOM. Parameter names must
+        match the class schema (not always the MSDN documentation, e.g.
+        Win32_TerminalServiceSetting.SetAllowTSConnections takes
+        AllowTSConnections, not Allow). No PowerShell process is involved.
+        """
+        namespace_path = namespace.replace("\\", "/")
+        class_uri = f"http://schemas.microsoft.com/wbem/wsman/1/wmi/{namespace_path}/{class_name}"
+        body = ET.Element(f"{{{class_uri}}}{method}_INPUT")
+        for name, value in (params or {}).items():
+            ET.SubElement(body, f"{{{class_uri}}}{name}").text = str(value)
+
+        selector_set = None
+        if selector:
+            selector_set = SelectorSet()
+            for key, value in selector.items():
+                selector_set.add_option(key, value)
+
+        res = self.conn.wsman.invoke(f"{class_uri}/{method}", class_uri, body, selector_set=selector_set)
+        return self.parse_method_output(res)
+
+    @staticmethod
+    def parse_method_output(res):
+        """Flatten a WSMan method output body into a {property: text} dict."""
+        output = {}
+        for element in res.iter():
+            if element.tag.endswith("_OUTPUT"):
+                for prop in element:
+                    output[prop.tag.split("}")[-1]] = prop.text
+        return output
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None):
