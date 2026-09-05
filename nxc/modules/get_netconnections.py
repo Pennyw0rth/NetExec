@@ -14,7 +14,7 @@ class NXCModule:
 
     name = "get_netconnections"
     description = "Uses WMI to query network connections."
-    supported_protocols = ["smb", "wmi"]
+    supported_protocols = ["smb", "wmi", "winrm"]
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
@@ -25,7 +25,7 @@ class NXCModule:
         cards = connection.wmi_query("select DNSDomainSuffixSearchOrder, IPAddress from win32_networkadapterconfiguration")
         if cards:
             for c in cards:
-                if c["IPAddress"].get("value"):
+                if c.get("IPAddress", {}).get("value"):
                     context.log.success(f"IP Address: {c['IPAddress']['value']}\tSearch Domain: {c['DNSDomainSuffixSearchOrder']['value']}")
 
             data.append(cards)
