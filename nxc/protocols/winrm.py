@@ -361,7 +361,9 @@ class winrm(connection):
                 self.logger.highlight(f"{k} => {v}")
         if not records:
             self.logger.highlight("No entries found")
-        return records
+        # Same record format the smb/wmi protocols return ({prop: {"value": ...}})
+        # so modules built on connection.wmi_query work unchanged over winrm
+        return [{k: {"value": v} for k, v in record.items()} for record in records]
 
     @requires_admin
     def wql_enumerate(self, wql, namespace):

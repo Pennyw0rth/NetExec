@@ -12,7 +12,7 @@ class NXCModule:
 
     name = "enum_dns"
     description = "Uses WMI to dump DNS from an AD DNS Server"
-    supported_protocols = ["smb", "wmi"]
+    supported_protocols = ["smb", "wmi", "winrm"]
     category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
