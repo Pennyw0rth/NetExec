@@ -2,12 +2,13 @@ import re
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from nxc.helpers.misc import CATEGORY
+from nxc.protocols.winrm.faults import FAULT_DESTINATION_UNREACHABLE, is_fault
 
 
 class NXCModule:
     name = "bitlocker"
     description = "Enumerating BitLocker Status on target(s) If it is enabled or disabled."
-    supported_protocols = ["smb", "wmi"]
+    supported_protocols = ["smb", "wmi", "winrm"]
     category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
@@ -23,7 +24,9 @@ class NXCModule:
         """
 
     def on_admin_login(self, context, connection):
-        if context.protocol == "smb":
+        if context.protocol == "winrm":
+            BitLockerWinRM(context, connection).check_bitlocker_status()
+        elif context.protocol == "smb":
             bitlocker_smb = BitLockerSMB(context, connection)
             bitlocker_smb.check_bitlocker_status()
         elif context.protocol == "wmi":
@@ -111,6 +114,41 @@ class BitLockerWMI:
             iWbemServices.RemRelease()
         except Exception as e:
             if "WBEM_E_INVALID_NAMESPACE" in str(e):
+                self.context.log.fail("BitLockerNamespace not found on target.")
+            else:
+                self.context.log.exception(f"Exception occurred: {e}")
+
+
+class BitLockerWinRM:
+    def __init__(self, context, connection):
+        self.context = context
+        self.connection = connection
+
+    def check_bitlocker_status(self):
+        try:
+            records = self.connection.wql_enumerate(
+                "SELECT DriveLetter, ProtectionStatus, EncryptionMethod FROM Win32_EncryptableVolume",
+                "root\\CIMv2\\Security\\MicrosoftVolumeEncryption",
+            )
+            encryptionTypeMapping = {
+                0: "None",
+                1: "AES_128_WITH_DIFFUSER",
+                2: "AES_256_WITH_DIFFUSER",
+                3: "AES_128",
+                4: "AES_256",
+                5: "HARDWARE_ENCRYPTION",
+                6: "XTS_AES_128",
+                7: "XTS_AES_256_WITH_DIFFUSER",
+            }
+            for record in records:
+                drive_letter = record.get("DriveLetter")
+                if int(record.get("ProtectionStatus", 0)) == 1:
+                    method = int(record.get("EncryptionMethod", 0))
+                    self.context.log.highlight(f"BitLocker is enabled on drive {drive_letter} (Encryption Method: {encryptionTypeMapping.get(method, 'Unknown')})")
+                elif int(record.get("EncryptionMethod", 0)) == 0:
+                    self.context.log.highlight(f"BitLocker is disabled on drive {drive_letter}")
+        except Exception as e:
+            if "WBEM_E_INVALID_NAMESPACE" in str(e) or "InvalidNamespace" in str(e) or is_fault(e, FAULT_DESTINATION_UNREACHABLE):
                 self.context.log.fail("BitLockerNamespace not found on target.")
             else:
                 self.context.log.exception(f"Exception occurred: {e}")
