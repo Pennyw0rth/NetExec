@@ -318,7 +318,7 @@ class smb(connection):
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
-            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+            self.logger.debug(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -646,7 +646,7 @@ class smb(connection):
         return self.conn.isSigningRequired()
 
     def create_smbv1_conn(self, check=False):
-        self.logger.info(f"Creating SMBv1 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv1 connection to {self.host}")
         try:
             conn = SMBConnection(
                 self.remoteName,
@@ -661,26 +661,26 @@ class smb(connection):
                 self.conn = conn
         except OSError as e:
             if "Connection reset by peer" in str(e):
-                self.logger.info(f"SMBv1 might be disabled on {self.host}")
+                self.logger.debug(f"SMBv1 might be disabled on {self.host}")
             elif "timed out" in str(e):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         except NetBIOSError:
-            self.logger.info(f"SMBv1 disabled on {self.host}")
+            self.logger.debug(f"SMBv1 disabled on {self.host}")
             self.smbv1 = False
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         return True
 
     def create_smbv3_conn(self):
-        self.logger.info(f"Creating SMBv3 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv3 connection to {self.host}")
         try:
             self.conn = SMBConnection(
                 self.remoteName,
@@ -695,7 +695,7 @@ class smb(connection):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv3 connection to {self.host}: {e}")
             self.smbv3 = False
             return False
         return True
