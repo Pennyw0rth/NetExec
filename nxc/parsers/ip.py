@@ -81,7 +81,7 @@ def process_targets(args):
         original_count = len(targets)
         excluded_targets = [target for target in targets if target in excluded_ips]
         targets = [target for target in targets if target not in excluded_ips]
-        nxc_logger.debug(f"Excluding {original_count - len(targets)} hosts from scan: {excluded_targets}")
+        nxc_logger.info(f"Excluding {original_count - len(targets)} hosts from scan: {excluded_targets}")
     return targets
 
 
