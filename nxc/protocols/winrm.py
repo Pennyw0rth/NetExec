@@ -355,7 +355,14 @@ class winrm(connection):
         if not namespace:
             namespace = self.args.wmi_namespace
 
-        records = self.wql_enumerate(wql, namespace)
+        try:
+            records = self.wql_enumerate(wql, namespace)
+        except WSManFaultError as e:
+            # a missing namespace or class, a bad WQL syntax, or access
+            # denied: the fault carries the reason, print it instead of
+            # dumping a traceback through the module layer
+            self.logger.fail(f"WMI query fault (code {e.code}): {e}")
+            return []
         for record in records:
             for k, v in record.items():
                 self.logger.highlight(f"{k} => {v}")

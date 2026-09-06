@@ -31,6 +31,9 @@ class NXCModule:
             domains = []
             output = connection.wmi_query("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
             domains = [result["Name"]["value"] for result in output] if output else []
+            if not domains:
+                context.log.fail("No DNS zones found (is this a DNS server?)")
+                return
             context.log.success(f"Domains retrieved: {domains}")
         else:
             domains = [self.domains]
