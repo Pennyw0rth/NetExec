@@ -22,6 +22,8 @@ from dploot.lib.utils import is_guid, is_credfile
 from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
 from impacket.examples.secretsdump import LSASecrets, SAMHashes, NTDSHashes
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
+from nxc.protocols.winrm.file_transfer import FileTransfer
+from nxc.protocols.winrm.remoteops import RemoteOperations
 from impacket.uuid import bin_to_string
 
 from nxc.config import process_secret, host_info_colors
@@ -41,6 +43,8 @@ class winrm(connection):
         self.domain = ""
         self.targedDomain = ""
         self.server_os = None
+        self._remote_ops = None
+        self._file_transfer = None
         self.endpoint = None
         self.lmhash = ""
         self.nthash = ""
@@ -677,6 +681,18 @@ class winrm(connection):
         if decryptedKey:
             self.logger.debug("Decrypted Backup key with User Key (SHA1)")
             return decryptedKey
+
+    @property
+    def remote_ops(self):
+        if self._remote_ops is None:
+            self._remote_ops = RemoteOperations(self, shadow_id=self.args.use_snapshot_id)
+        return self._remote_ops
+
+    @property
+    def file_transfer(self):
+        if self._file_transfer is None:
+            self._file_transfer = FileTransfer(self)
+        return self._file_transfer
 
     @requires_admin
     def sam(self):
