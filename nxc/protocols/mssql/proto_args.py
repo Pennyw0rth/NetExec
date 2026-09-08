@@ -8,6 +8,7 @@ def proto_args(parser, parents):
     mssql_parser.add_argument("--mssql-timeout", help="SQL server connection timeout", type=int, default=5)
     mssql_parser.add_argument("-q", "--query", metavar="QUERY", type=str, help="execute the specified query against the mssql db")
     mssql_parser.add_argument("--database", nargs="?", const=True, metavar="NAME", help="list databases or list tables for NAME")
+    mssql_parser.add_argument("--on-linked-server", nargs="?", const=True, metavar="NAME", help="Linked server on which execute the query")
 
     dgroup = mssql_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain name")
@@ -36,4 +37,6 @@ def proto_args(parser, parents):
 
     mapping_enum_group = mssql_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
+    mapping_enum_group.add_argument("--links", action="store_true", default=False, help="List linked servers and their credentials")
+
     return parser
