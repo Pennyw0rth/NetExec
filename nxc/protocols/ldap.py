@@ -1662,6 +1662,33 @@ class ldap(connection):
 
             break  # Only process first policy result
 
+    # These objects live at the naming context root, not under a scoped OU. PR #1374
+    BLOODHOUND_ROOT_SCOPED_FILTERS = (
+        "(objectClass=domain)",
+        "(objectClass=trustedDomain)",
+        "userAccountControl:1.2.840.113556.1.4.803:=8192",
+    )
+
+    def scope_bloodhound_collection(self, ad, base_dn):
+        """Collect objects from *base_dn*, leaving root-scoped queries at the root.
+
+        ADDC.search() falls back to ad.baseDN when a caller passes no search_base, so
+        the fallback is chosen per query here rather than by narrowing ad.baseDN.
+        """
+        from bloodhound.ad.domain import ADDC
+
+        root_dn = ad.baseDN
+        original_search = ADDC.search
+
+        def search(dc, search_filter="(objectClass=*)", *args, **kwargs):
+            explicit = kwargs.get("search_base") or (len(args) >= 2 and args[1])
+            if not explicit and not any(f in search_filter for f in self.BLOODHOUND_ROOT_SCOPED_FILTERS):
+                kwargs["search_base"] = base_dn
+            return original_search(dc, search_filter, *args, **kwargs)
+
+        ADDC.search = search
+        ad.baseDN = root_dn
+
     def bloodhound(self):
         collect, excluded = resolve_collection_methods("Default" if not self.args.collection else self.args.collection, self.logger)
         if not collect:
@@ -1727,7 +1754,11 @@ class ldap(connection):
             ad = AD(
                 auth=auth,
                 domain=self.targetDomain,
-                nameserver=self.args.dns_server,
+                # Same default as every other DNS lookup in this protocol (see the
+                # resolver setup in dns_query): without it an unset --dns-server
+                # leaves bloodhound on the operator's system resolver, which
+                # cannot answer the _ldap._tcp and _gc._tcp SRV records it needs.
+                nameserver=self.args.dns_server or self.host,
                 dns_tcp=self.args.dns_tcp,
                 dns_timeout=self.args.dns_timeout,
             )
@@ -1738,6 +1769,25 @@ class ldap(connection):
             except (resolver.LifetimeTimeout, resolver.NoNameservers):
                 self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
                 return
+
+            # bloodhound falls back to treating the domain controllers as Global
+            # Catalogs when _gc._tcp.<domain> does not resolve, but that fallback
+            # sits behind "if options and not options.global_catalog" and we do
+            # not pass options, so it never runs. Without it every lookup logs
+            # "Could not find a Global Catalog in this domain!" and cross-domain
+            # references go unresolved. Applying it here keeps that behavior
+            # without threading an argparse namespace into the collector.
+            if not ad.gcs():
+                ad._gcs = ad.dcs()
+                if ad._gcs:
+                    self.logger.display(
+                        "No _gc._tcp SRV record; assuming the domain controllers hold the Global Catalog role"
+                    )
+
+            # Applied after dns_resolve(), which sets baseDN from the domain name. PR #1374
+            if self.args.base_dn:
+                self.scope_bloodhound_collection(ad, self.args.base_dn)
+                self.logger.display(f"Scoping BloodHound collection to {self.args.base_dn}")
 
             if self.args.kerberos:
                 self.logger.highlight("Using kerberos auth without ccache, getting TGT")
@@ -1801,10 +1851,13 @@ class ldap(connection):
                 domain_sid=self.sid_domain,
             )
 
+            # PKI objects live in the forest root's Configuration NC, which is not the
+            # target domain's in a multi-domain forest. certihound issue: PR #1374
             collector = ADCSCollector.from_external(
                 ldap_connection=adapter,
                 domain=self.targetDomain,
                 domain_sid=self.sid_domain,
+                base_dn=self.forestDN or None,
             )
             data = collector.collect_all()
 
