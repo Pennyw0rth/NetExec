@@ -132,7 +132,7 @@ def parse_targets(target):
             if ip.version == 6 and ip.is_link_local:
                 yield str(target)
             else:
-                for ip in ip_network(target, strict=False):
+                for ip in ip_network(target, strict=False).hosts():
                     yield str(ip)
     except ValueError:
         yield str(target)
