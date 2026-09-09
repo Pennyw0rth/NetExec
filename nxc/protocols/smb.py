@@ -322,7 +322,7 @@ class smb(connection):
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
-            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+            self.logger.debug(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -650,7 +650,7 @@ class smb(connection):
         return self.conn.isSigningRequired()
 
     def create_smbv1_conn(self, check=False):
-        self.logger.info(f"Creating SMBv1 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv1 connection to {self.host}")
         try:
             conn = SMBConnection(
                 self.remoteName,
@@ -665,26 +665,26 @@ class smb(connection):
                 self.conn = conn
         except OSError as e:
             if "Connection reset by peer" in str(e):
-                self.logger.info(f"SMBv1 might be disabled on {self.host}")
+                self.logger.debug(f"SMBv1 might be disabled on {self.host}")
             elif "timed out" in str(e):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         except NetBIOSError:
-            self.logger.info(f"SMBv1 disabled on {self.host}")
+            self.logger.debug(f"SMBv1 disabled on {self.host}")
             self.smbv1 = False
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         return True
 
     def create_smbv3_conn(self):
-        self.logger.info(f"Creating SMBv3 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv3 connection to {self.host}")
         try:
             self.conn = SMBConnection(
                 self.remoteName,
@@ -699,7 +699,7 @@ class smb(connection):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv3 connection to {self.host}: {e}")
             self.smbv3 = False
             return False
         return True
@@ -2192,9 +2192,9 @@ class smb(connection):
             self.get_file_single(src, dest)
 
     def download_folder(self, folder, dest, recursive=False, silent=False, base_dir=None, ignore_empty=False):
+        folder = ntpath.normpath(folder)
         self.logger.debug(f"Downloading folder with args: {folder}, {dest}, Recursive: {recursive}, Silent: {silent}, Base dir: {base_dir}, Ignore empty: {ignore_empty}")
-        normalized_folder = ntpath.normpath(folder)
-        base_folder = os.path.basename(normalized_folder)
+        base_folder = os.path.basename(folder)
         self.logger.debug(f"Base folder: {base_folder}")
 
         try:
@@ -2225,7 +2225,7 @@ class smb(connection):
             if not item_name:
                 self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
                 continue
-            dir_path = ntpath.normpath(ntpath.join(normalized_folder, item_name))
+            dir_path = ntpath.normpath(ntpath.join(folder, item_name))
             self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
 
             if item.is_directory() and recursive:
@@ -2248,11 +2248,11 @@ class smb(connection):
 
     def get_folder(self):
         recursive = self.args.recursive
-        ignore_empty = getattr(self.args, "ignore_empty_folders", False)
+        ignore_empty = self.args.ignore_empty_folders
         self.logger.debug(f"Recursive option set to {recursive}")
         self.logger.debug(f"Ignore empty folders option set to {ignore_empty}")
         for folder, dest in self.args.get_folder:
-            self.download_folder(folder, dest, recursive, False, None, ignore_empty)
+            self.download_folder(folder, dest, recursive, self.args.silent, None, ignore_empty)
             self.logger.success(f"Folder '{folder}' was downloaded to '{dest}'")
 
     def enable_remoteops(self, regsecret=False):

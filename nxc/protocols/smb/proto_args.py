@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction
+from argparse import BooleanOptionalAction, _StoreTrueAction
 from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction, get_conditional_action
 
 
@@ -23,7 +23,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--no-admin-check", action="store_true", help="Avoid checking admin which queries the Service Control Manager")
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
-    smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
+    smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentication", nargs="?", const="administrator")
     smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
@@ -92,7 +92,7 @@ def proto_args(parser, parents):
     files_group.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")
     files_group.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
     files_group.add_argument("--get-folder", action="append", nargs=2, metavar="DIR", help="Get a remote directory, ex: \\\\Windows\\\\Temp\\\\testing testing")
-    files_group.add_argument("--recursive", default=False, action="store_true", help="Recursively get a folder")
+    files_group.add_argument("--recursive", default=True, action=BooleanOptionalAction, help="Recursively get a folder")
     files_group.add_argument("--ignore-empty-folders", default=False, action="store_true", help="Ignore empty folders when downloading")
     files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
