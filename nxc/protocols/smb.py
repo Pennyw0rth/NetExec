@@ -4,6 +4,9 @@ import os
 import re
 import struct
 import ipaddress
+from pathlib import Path
+
+from nxc.helpers.path import sanitize_filename
 from Cryptodome.Hash import MD4
 from textwrap import dedent
 
@@ -42,16 +45,17 @@ from impacket.smb3structs import (
     FILE_ADD_SUBDIRECTORY,
     FILE_DIRECTORY_FILE,
     FILE_OPEN,
+    FILE_READ_DATA,
     FILE_SHARE_DELETE,
     FILE_SHARE_READ,
     FILE_SHARE_WRITE,
     FILE_SYNCHRONOUS_IO_NONALERT,
+    FILE_WRITE_DATA,
     GENERIC_WRITE,
     SMB2_0_IOCTL_IS_FSCTL,
     WRITE_DAC,
     WRITE_OWNER,
 )
-
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
@@ -318,7 +322,7 @@ class smb(connection):
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
-            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+            self.logger.debug(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -646,7 +650,7 @@ class smb(connection):
         return self.conn.isSigningRequired()
 
     def create_smbv1_conn(self, check=False):
-        self.logger.info(f"Creating SMBv1 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv1 connection to {self.host}")
         try:
             conn = SMBConnection(
                 self.remoteName,
@@ -661,26 +665,26 @@ class smb(connection):
                 self.conn = conn
         except OSError as e:
             if "Connection reset by peer" in str(e):
-                self.logger.info(f"SMBv1 might be disabled on {self.host}")
+                self.logger.debug(f"SMBv1 might be disabled on {self.host}")
             elif "timed out" in str(e):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         except NetBIOSError:
-            self.logger.info(f"SMBv1 disabled on {self.host}")
+            self.logger.debug(f"SMBv1 disabled on {self.host}")
             self.smbv1 = False
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         return True
 
     def create_smbv3_conn(self):
-        self.logger.info(f"Creating SMBv3 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv3 connection to {self.host}")
         try:
             self.conn = SMBConnection(
                 self.remoteName,
@@ -695,7 +699,7 @@ class smb(connection):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv3 connection to {self.host}: {e}")
             self.smbv3 = False
             return False
         return True
@@ -2149,23 +2153,107 @@ class smb(connection):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
 
-    def get_file_single(self, remote_path, download_path):
+    def download_file(self, share_name, remote_path, dest_file, access_mode=FILE_READ_DATA):
+        try:
+            self.logger.debug(f"Getting file from {share_name}:{remote_path} with access mode {access_mode}")
+            self.conn.getFile(share_name, remote_path, dest_file, shareAccessMode=access_mode)
+            return True
+        except SessionError as e:
+            if "STATUS_SHARING_VIOLATION" in str(e):
+                self.logger.debug(f"Sharing violation on {remote_path}: {e}")
+            else:
+                self.logger.debug(f"SessionError when attempting to download file {remote_path}: {e}")
+            return False
+        except Exception as e:
+            self.logger.debug(f"Other error when attempting to download file {remote_path}: {e}")
+            return False
+
+    def get_file_single(self, remote_path, download_path, silent=False):
         share_name = self.args.share
-        self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
+        if not silent:
+            self.logger.display(f"Copying '{remote_path}' to '{download_path}'")
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
-            try:
-                self.conn.getFile(share_name, remote_path, file.write)
-                self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
-            except Exception as e:
-                self.logger.fail(f'Error writing file "{remote_path}" from share "{share_name}": {e}')
-                if os.path.getsize(download_path) == 0:
-                    os.remove(download_path)
+            if self.download_file(share_name, remote_path, file.write):
+                if not silent:
+                    self.logger.success(f"File '{remote_path}' was downloaded to '{download_path}'")
+            else:
+                self.logger.debug("Opening with READ alone failed, trying to open file with READ/WRITE access")
+                if self.download_file(share_name, remote_path, file.write, FILE_READ_DATA | FILE_WRITE_DATA):
+                    if not silent:
+                        self.logger.success(f"File '{remote_path}' was downloaded to '{download_path}'")
+                else:
+                    if not silent:
+                        self.logger.fail(f"Error downloading file '{remote_path}' from share '{share_name}'")
 
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
+
+    def download_folder(self, folder, dest, recursive=False, silent=False, base_dir=None, ignore_empty=False):
+        folder = ntpath.normpath(folder)
+        self.logger.debug(f"Downloading folder with args: {folder}, {dest}, Recursive: {recursive}, Silent: {silent}, Base dir: {base_dir}, Ignore empty: {ignore_empty}")
+        base_folder = os.path.basename(folder)
+        self.logger.debug(f"Base folder: {base_folder}")
+
+        try:
+            items = self.conn.listPath(self.args.share, ntpath.join(folder, "*"))
+        except SessionError as e:
+            self.logger.error(f"Error listing folder '{folder}': {e}")
+            return
+        self.logger.debug(f"{len(items)} items in folder: {items}")
+
+        filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
+
+        # create local directory structure regardless of content; download empty folders by default
+        # change the Windows path to Linux and then join it with the base directory to get our actual save path
+        relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
+        local_folder_path = os.path.join(dest, relative_path)
+
+        if not filtered_items and ignore_empty:
+            self.logger.debug(f"Skipping empty folder '{folder}'")
+            return
+
+        # create the directory for this folder
+        os.makedirs(local_folder_path, exist_ok=True)
+        if not filtered_items and not silent:
+            self.logger.display(f"Created empty directory '{local_folder_path}'")
+
+        for item in filtered_items:
+            item_name = sanitize_filename(item.get_longname())
+            if not item_name:
+                self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
+                continue
+            dir_path = ntpath.normpath(ntpath.join(folder, item_name))
+            self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
+
+            if item.is_directory() and recursive:
+                self.logger.debug(f"Found new directory to parse: {dir_path}")
+                self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
+            elif not item.is_directory():
+                remote_file_path = ntpath.join(folder, item_name)
+                local_file_path = os.path.join(local_folder_path, item_name)
+                # Defense-in-depth: verify path stays under destination
+                resolved = Path(local_file_path).resolve()
+                if not str(resolved).startswith(str(Path(dest).resolve()) + os.sep):
+                    self.logger.fail(f"Path traversal detected in '{item_name}', skipping")
+                    continue
+                self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
+
+                try:
+                    self.get_file_single(remote_file_path, local_file_path, silent)
+                except FileNotFoundError:
+                    self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+
+    def get_folder(self):
+        recursive = self.args.recursive
+        ignore_empty = self.args.ignore_empty_folders
+        self.logger.debug(f"Recursive option set to {recursive}")
+        self.logger.debug(f"Ignore empty folders option set to {ignore_empty}")
+        for folder, dest in self.args.get_folder:
+            self.download_folder(folder, dest, recursive, self.args.silent, None, ignore_empty)
+            self.logger.success(f"Folder '{folder}' was downloaded to '{dest}'")
 
     def enable_remoteops(self, regsecret=False):
         try:
@@ -2566,9 +2654,10 @@ class smb(connection):
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
         printed_kerb_keys_banner = False
+        printed_trust_keys_banner = False
 
         def add_hash(secret_type, secret, host_id):
-            nonlocal printed_kerb_keys_banner
+            nonlocal printed_kerb_keys_banner, printed_trust_keys_banner
             if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
                 self.logger.display("Kerberos keys:")
                 printed_kerb_keys_banner = True
@@ -2579,13 +2668,15 @@ class smb(connection):
             else:
                 add_hash.nt_lm_secrets += 1
 
-            # Log the secret based on args
-            if self.args.enabled:
-                if "Enabled" in secret:
-                    secret = " ".join(secret.split(" ")[:-1])
-                    self.logger.highlight(secret)
-            else:
-                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+            is_enabled_account = secret.endswith(" (status=Enabled)")
+            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+            for status in (" (status=Enabled)", " (status=Disabled)", " (status=N/A)"):
+                secret = secret.removesuffix(status)
+
+            if not self.args.enabled or is_enabled_account or is_trust_key:
+                if is_trust_key and not printed_trust_keys_banner:
+                    self.logger.display("Trust keys:")
+                    printed_trust_keys_banner = True
                 self.logger.highlight(secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
@@ -2637,18 +2728,27 @@ class smb(connection):
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
+            trustKeys=self.args.trust_keys,
+            justTrustKeys=self.args.just_trust_keys,
+            domainFQDN=self.targetDomain,
             perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
         try:
-            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+            if self.args.just_trust_keys:
+                self.logger.success("Dumping the trust keys, this could take a while so go grab a redbull...")
+            else:
+                self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
-            if self.args.kerberos_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            if self.args.just_trust_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}.trustkeys")
+            else:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+                if self.args.kerberos_keys:
+                    self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
             # We don't store the resume file if this error happened, since this error is related to lack
