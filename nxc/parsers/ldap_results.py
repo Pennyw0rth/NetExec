@@ -1,5 +1,12 @@
+import re
+
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from uuid import UUID
+
+# AD returns ranged attribute names (e.g. "member;range=0-1499") when a
+# multi-valued attribute exceeds MaxValRange (default 1500).  Group 1 is
+# the base attribute name, group 2 is the range end ("*" on the final page).
+RANGE_ATTR_RE = re.compile(r"^(.+);range=\d+-(\d+|\*)$")
 
 
 def parse_result_attributes(ldap_response):
@@ -8,16 +15,21 @@ def parse_result_attributes(ldap_response):
         # SearchResultReferences may be returned
         if not isinstance(entry, ldapasn1_impacket.SearchResultEntry):
             continue
-        attribute_map = {}
+        # Strip ";range=X-Y" suffixes and merge values under the base name.
+        accumulated = {}
         for attribute in entry["attributes"]:
-            val_list = []
+            raw_name = str(attribute["type"])
+            range_match = RANGE_ATTR_RE.match(raw_name)
+            attr_name = range_match.group(1) if range_match else raw_name
+
+            accumulated.setdefault(attr_name, [])
             for val in attribute["vals"].components:
                 # Typical Byte objects we know how to decode
-                if str(attribute["type"]) == "objectGUID":
+                if attr_name == "objectGUID":
                     val_decoded = UUID(bytes=val.__bytes__())
-                elif str(attribute["type"]) == "objectSid":
+                elif attr_name == "objectSid":
                     val_decoded = sid_to_str(val.__bytes__())
-                elif str(attribute["type"]) == "dNSProperty":
+                elif attr_name == "dNSProperty":
                     val_decoded = val.__bytes__()
                 else:
                     # For the rest we try to decode the value with its encoding
@@ -27,11 +39,10 @@ def parse_result_attributes(ldap_response):
                     except UnicodeDecodeError:
                         # If we can't decode the value, we'll just return the bytes
                         val_decoded = val.__bytes__()
-                val_list.append(val_decoded)
-            if len(val_list) == 1:
-                attribute_map[str(attribute["type"])] = val_list[0]
-            else:
-                attribute_map[str(attribute["type"])] = val_list
+                accumulated[attr_name].append(val_decoded)
+
+        # Unwrap single-value attributes to match the original API contract
+        attribute_map = {name: (vals[0] if len(vals) == 1 else vals) for name, vals in accumulated.items()}
         parsed_response.append(attribute_map)
     return parsed_response
 

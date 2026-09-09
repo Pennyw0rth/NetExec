@@ -46,7 +46,7 @@ from nxc.logger import NXCAdapter
 from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.ldap.kerberos import KerberosAttacks
-from nxc.parsers.ldap_results import parse_result_attributes
+from nxc.parsers.ldap_results import RANGE_ATTR_RE, parse_result_attributes
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.paths import CONFIG_PATH
 
@@ -808,11 +808,91 @@ class ldap(connection):
         # List all groups
         else:
             search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member", "description"]
+            attributes = ["cn", "member", "description", "distinguishedName"]
 
             resp = self.search(search_filter, attributes)
+
+            # Find groups with incomplete member ranges (keyed by entry index, not DN, for non-ASCII safety).
+            incomplete_ranges = {}
+            entry_idx = 0
+            for entry in resp:
+                if not isinstance(entry, ldapasn1_impacket.SearchResultEntry):
+                    continue
+                for attribute in entry["attributes"]:
+                    range_match = RANGE_ATTR_RE.match(str(attribute["type"]))
+                    if range_match and range_match.group(1) == "member" and range_match.group(2) != "*":
+                        incomplete_ranges[entry_idx] = int(range_match.group(2))
+                entry_idx += 1
+
             resp_parsed = parse_result_attributes(resp)
             self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+
+            # Paginate remaining members via range queries on each group's DN.
+            paginated_count = 0
+            for idx, item in enumerate(resp_parsed):
+                if idx not in incomplete_ranges:
+                    continue
+
+                dn = item.get("distinguishedName")
+                if not dn:
+                    self.logger.debug(f"Group at index {idx} missing distinguishedName, skipping range retrieval")
+                    continue
+
+                members = item.get("member", [])
+                if not isinstance(members, list):
+                    members = [members]
+
+                next_start = incomplete_ranges[idx] + 1
+                while True:
+                    range_resp = self.search(
+                        "(objectClass=*)",
+                        [f"member;range={next_start}-*"],
+                        baseDN=dn,
+                    )
+                    if not range_resp:
+                        self.logger.debug(f"Range retrieval returned empty response for '{dn}' at offset {next_start}")
+                        break
+
+                    got_range = False
+                    final_page = True
+                    for range_entry in range_resp:
+                        if not isinstance(range_entry, ldapasn1_impacket.SearchResultEntry):
+                            continue
+                        for attribute in range_entry["attributes"]:
+                            rm = RANGE_ATTR_RE.match(str(attribute["type"]))
+                            if rm and rm.group(1) == "member":
+                                got_range = True
+                                if rm.group(2) != "*":
+                                    new_end = int(rm.group(2))
+                                    if new_end < next_start:
+                                        self.logger.debug(f"Range retrieval did not advance for '{dn}' (stuck at {new_end})")
+                                    else:
+                                        next_start = new_end + 1
+                                        final_page = False
+
+                    if not got_range:
+                        self.logger.debug(f"Range retrieval returned no member attribute for '{dn}' at offset {next_start}")
+                        break
+
+                    range_parsed = parse_result_attributes(range_resp)
+                    # AD group objects have no children, so the first entry
+                    # in the baseDN search is the group itself
+                    if range_parsed:
+                        new_members = range_parsed[0].get("member", [])
+                        if not isinstance(new_members, list):
+                            new_members = [new_members]
+                        members.extend(new_members)
+
+                    if final_page:
+                        break
+
+                item["member"] = members
+                paginated_count += 1
+
+            if paginated_count < len(incomplete_ranges):
+                self.logger.debug(
+                    f"Range retrieval incomplete: paginated {paginated_count} of {len(incomplete_ranges)} truncated groups"
+                )
 
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
