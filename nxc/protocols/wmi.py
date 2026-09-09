@@ -435,6 +435,7 @@ class wmi(connection):
             if "_history" in sam_hash:
                 return
             username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
+            # TODO: Implement wmi creds database
             add_sam_hash.sam_hashes += 1
 
         add_sam_hash.sam_hashes = 0
@@ -561,10 +562,10 @@ class wmi(connection):
         if bootkey is None:
             return
 
-        # Get the LSA hive
-        lsa_hive_path = f"{self.remote_ops.shadow_copy_path}\\Windows\\NTDS\\ntds.dit"
-        if not self.get_file_single(lsa_hive_path, f"{output_filename}.ntds.dit"):
-            self.logger.fail("Could not get ntds.dit")
+        # Get the NTDS.dit file
+        ntds_file = f"{self.remote_ops.shadow_copy_path}\\Windows\\NTDS\\ntds.dit"
+        if not self.get_file_single(ntds_file, f"{output_filename}.ntds.dit"):
+            self.logger.fail("Could not download NTDS.dit file")
             return
 
         NTDS = NTDSHashes(
