@@ -485,16 +485,14 @@ class NXCModule:
         If `DOWNLOAD_FLAG`=True, download files smaller then `MAX_FILE_SIZE` to the `OUTPUT_FOLDER`.
 
         DOWNLOAD_FLAG     Download all share folders/files (Default: False)
-        STATS_FLAG        Disable file/download statistics (Default: True)
+        STATS_FLAG        Show file/download statistics (Default: True)
         EXCLUDE_EXTS      Case-insensitive extension filter to exclude (Default: ico,lnk)
         EXCLUDE_FILTER    Case-insensitive filter to exclude folders/files (Default: print$,ipc$)
         MAX_FILE_SIZE     Max file size to download (Default: 51200)
         OUTPUT_FOLDER     Path of the local folder to save files (Default: NXC_PATH/nxc_spider_plus)
         """
         self.download_flag = module_options.get("DOWNLOAD_FLAG", "false").lower() in ["true", "1", "yes"]
-        self.stats_flag = True
-        if any("STATS" in key for key in module_options):
-            self.stats_flag = False
+        self.stats_flag = module_options.get("STATS_FLAG", "true").lower() in ["true", "1", "yes"]
         self.exclude_exts = get_list_from_option(module_options.get("EXCLUDE_EXTS", "ico,lnk"))
         self.exclude_exts = [d.lower() for d in self.exclude_exts]  # force case-insensitive
         self.exclude_filter = get_list_from_option(module_options.get("EXCLUDE_FILTER", "print$,ipc$"))
