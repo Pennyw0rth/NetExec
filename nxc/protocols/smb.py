@@ -2493,11 +2493,10 @@ class smb(connection):
 
             is_enabled_account = secret.endswith(" (status=Enabled)")
             is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
-            is_current_trust_key = is_trust_key and ", previous)" not in secret
             for status in (" (status=Enabled)", " (status=Disabled)", " (status=N/A)"):
                 secret = secret.removesuffix(status)
 
-            if not self.args.enabled or is_enabled_account or is_current_trust_key:
+            if not self.args.enabled or is_enabled_account or is_trust_key:
                 if is_trust_key and not printed_trust_keys_banner:
                     self.logger.display("Trust keys:")
                     printed_trust_keys_banner = True
