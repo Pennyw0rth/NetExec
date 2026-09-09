@@ -324,7 +324,7 @@ class SMBSpiderPlus:
         try:
             self.logger.info(f'Downloading file "{file_path}" => "{download_path}".')
             remote_file.open_file()
-            self.save_file(remote_file, share_name)
+            self.save_file(remote_file, share_name, file_size)
             remote_file.close()
             download_success = True
         except SessionError as e:
@@ -341,11 +341,14 @@ class SMBSpiderPlus:
         else:
             self.stats["num_get_fail"] += 1
 
-    def save_file(self, remote_file, share_name):
+    def save_file(self, remote_file, share_name, file_size):
         """Reads the `remote_file` in chunks using the `read_chunk` method.
 
         Each chunk is then written to the local file until the entire file is saved.
         It handles cases where the file remains empty due to errors.
+
+        `file_size` is the size reported by the share listing, used to detect a
+        download that produced an empty local file for a non-empty remote one.
         """
         # Reset the remote_file to point to the beginning of the file.
         remote_file.seek(0, 0)
@@ -368,7 +371,7 @@ class SMBSpiderPlus:
             self.logger.fail(f'Error writing file "{download_path}" from share "{share_name}": {e}')
 
         # Check if the file is empty and should not be.
-        if getsize(download_path) == 0 and remote_file.get_filesize() > 0:
+        if getsize(download_path) == 0 and file_size > 0:
             remove(download_path)
             remote_path = str(remote_file)[2:]
             self.logger.fail(f'Unable to download file "{remote_path}".')
@@ -488,9 +491,7 @@ class NXCModule:
         MAX_FILE_SIZE     Max file size to download (Default: 51200)
         OUTPUT_FOLDER     Path of the local folder to save files (Default: NXC_PATH/nxc_spider_plus)
         """
-        self.download_flag = False
-        if any("DOWNLOAD" in key for key in module_options):
-            self.download_flag = True
+        self.download_flag = module_options.get("DOWNLOAD_FLAG", "false").lower() in ["true", "1", "yes"]
         self.stats_flag = True
         if any("STATS" in key for key in module_options):
             self.stats_flag = False
