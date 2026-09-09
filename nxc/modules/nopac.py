@@ -7,6 +7,7 @@ from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5 import constants
 from impacket.krb5.types import Principal
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.opengraph import opengraph
 
 
 class NXCModule:
@@ -51,5 +52,6 @@ class NXCModule:
                 context.log.highlight("")
                 context.log.highlight("VULNERABLE")
                 context.log.highlight("Next step: https://github.com/Ridter/noPac")
+                opengraph.add_tag(connection.hostname, ["Computer"], "nopac", True)
         except OSError:
             context.log.debug(f"Error connecting to Kerberos (port 88) on {connection.host}")
