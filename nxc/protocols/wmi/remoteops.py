@@ -41,7 +41,7 @@ class RemoteOperations:
             shadow_id = result.ShadowID
             self.connection.logger.debug(f"Shadow Copy created at ID {shadow_id}")
         except Exception as e:
-            self.connection.logger.debug(f"Cannot create ShadowCopy: {e}")
+            self.connection.logger.fail(f"Cannot create ShadowCopy: {e}")
         return shadow_id
 
     def get_shadowcopy_path(self, shadow_id=None) -> str:
@@ -56,7 +56,7 @@ class RemoteOperations:
             device_object = shadow_copy["DeviceObject"]
             self.connection.logger.debug(f"Found ShadowCopy at {device_object}")
         except Exception as e:
-            self.connection.logger.debug(f"Cannot found ShadowCopy with ID {shadow_id} :{e}")
+            self.connection.logger.fail(f"Cannot find ShadowCopy with ID {shadow_id} :{e}")
         return device_object
 
     @property
