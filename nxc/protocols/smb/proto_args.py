@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction
+from argparse import BooleanOptionalAction, _StoreTrueAction
 from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction, get_conditional_action
 
 
@@ -42,6 +42,10 @@ def proto_args(parser, parents):
     kerb_keys_arg.make_required = [ntds_arg]
     enabled_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
+    trust_keys_arg = cred_gathering_group.add_argument("--trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], default=True, help="Dump Trusted Domain Object (TDO) secrets and derive inter-realm Kerberos/RC4 keys (NTDS.dit)")
+    just_trust_keys_arg = cred_gathering_group.add_argument("--just-trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Like --trust-keys but dump ONLY the trust keys, skipping every account secret (NTDS.dit)")
+    trust_keys_arg.make_required = [ntds_arg]
+    just_trust_keys_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
     cred_gathering_group.add_argument("--sccm", choices={"wmi", "disk"}, nargs="?", const="disk", help="dump SCCM secrets from target systems")
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
@@ -92,6 +96,9 @@ def proto_args(parser, parents):
     files_group = smb_parser.add_argument_group("File Operations")
     files_group.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")
     files_group.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
+    files_group.add_argument("--get-folder", action="append", nargs=2, metavar="DIR", help="Get a remote directory, ex: \\\\Windows\\\\Temp\\\\testing testing")
+    files_group.add_argument("--recursive", default=True, action=BooleanOptionalAction, help="Recursively get a folder")
+    files_group.add_argument("--ignore-empty-folders", default=False, action="store_true", help="Ignore empty folders when downloading")
     files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
     cmd_exec_group = smb_parser.add_argument_group("Command Execution")
