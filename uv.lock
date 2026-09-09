@@ -1374,6 +1374,7 @@ dependencies = [
     { name = "masky" },
     { name = "minikerberos" },
     { name = "neo4j" },
+    { name = "netifaces" },
     { name = "paramiko" },
     { name = "pefile" },
     { name = "pyasn1-modules" },
@@ -1417,6 +1418,7 @@ requires-dist = [
     { name = "masky", specifier = ">=0.2.1" },
     { name = "minikerberos", specifier = ">=0.4.1" },
     { name = "neo4j", specifier = ">=5.0.0" },
+    { name = "netifaces", specifier = ">=0.11.0,<0.12.0" },
     { name = "paramiko", specifier = ">=3.3.1" },
     { name = "pefile", specifier = ">=2024.8.26,<2025.0.0" },
     { name = "pyasn1-modules", specifier = ">=0.3.0" },
@@ -1441,6 +1443,12 @@ dev = [
     { name = "ruff" },
     { name = "shiv" },
 ]
+
+[[package]]
+name = "netifaces"
+version = "0.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/91/86a6eac449ddfae239e93ffc1918cf33fd9bab35c04d1e963b311e347a73/netifaces-0.11.0.tar.gz", hash = "sha256:043a79146eb2907edf439899f262b3dfe41717d34124298ed281139a8b93ca32", size = 30106, upload-time = "2021-05-31T08:33:02.506Z" }
 
 [[package]]
 name = "oscrypto"
