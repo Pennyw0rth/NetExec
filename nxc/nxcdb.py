@@ -16,10 +16,6 @@ from nxc.paths import CONFIG_PATH, WORKSPACE_DIR
 from nxc.database import create_db_engine, open_config, get_workspace, get_db, write_configfile, create_workspace, set_workspace
 
 
-class UserExitedProto(Exception):
-    pass
-
-
 def print_table(data, title=None):
     print()
     table = AsciiTable(data)
@@ -99,7 +95,16 @@ class DatabaseNavigator(cmd.Cmd):
         print_help(help_string)
 
     def do_back(self, line):
-        raise UserExitedProto
+        self.db.shutdown_db()
+        return True
+
+    def do_proto(self, line):
+        if not line:
+            self.main_menu.help_proto()
+
+        self.db.shutdown_db()
+        self.main_menu.do_proto(line)
+        return True
 
     def do_export(self, line):
         if not line:
@@ -467,17 +472,13 @@ class NXCDBMenu(cmd.Cmd):
             db_object = self.p_loader.load_protocol(self.protocols[proto]["dbpath"])
             self.config.set("nxc", "last_used_db", proto)
             write_configfile(self.config, self.config_path)
-            try:
-                proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
-                proto_menu.cmdloop()
-            except UserExitedProto:
-                pass
+            proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
+            proto_menu.cmdloop()
 
     @staticmethod
     def help_proto():
         help_string = """
-        proto [smb|mssql|winrm]
-            *unimplemented protocols: ftp, rdp, ldap, ssh
+        proto [smb|mssql|winrm|ftp|rdp|ldap|ssh]
         Changes nxcdb to the specified protocol
         """
         print_help(help_string)

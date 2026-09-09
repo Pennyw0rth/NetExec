@@ -23,7 +23,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--no-admin-check", action="store_true", help="Avoid checking admin which queries the Service Control Manager")
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
-    smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
+    smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentication", nargs="?", const="administrator")
     smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
@@ -82,16 +82,7 @@ def proto_args(parser, parents):
     spidering_group.add_argument("--content", action="store_true", help="enable file content searching")
     spidering_group.add_argument("--exclude-dirs", type=str, metavar="DIR_LIST", default="", help="directories to exclude from spidering")
     spidering_group.add_argument("--depth", type=int, help="max spider recursion depth")
-    spidering_group.add_argument(
-        "--spider-sensitive",
-        action="store_true",
-        default=False,
-        dest="spider_sensitive",
-        help=(
-            "When spidering, flag files matching sensitive extensions: "
-            ".kdbx .pfx .p12 .pem .key .ppk .ovpn .rdp .config .conf .cfg .env .xml .ini .id_rsa .vnc"
-        ),
-    )
+    spidering_group.add_argument("--spider-extensions", nargs="*", help="Spiders for defaults sensitives extensions, can specify a file containing extensions to look for")
     spidering_group.add_argument("--only-files", action="store_true", help="only spider files")
     spidering_group.add_argument("--silent", action="store_true", help="Do not print found files/directories", default=False)
     segroup = spidering_group.add_mutually_exclusive_group()
