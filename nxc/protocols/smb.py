@@ -2654,9 +2654,10 @@ class smb(connection):
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
         printed_kerb_keys_banner = False
+        printed_trust_keys_banner = False
 
         def add_hash(secret_type, secret, host_id):
-            nonlocal printed_kerb_keys_banner
+            nonlocal printed_kerb_keys_banner, printed_trust_keys_banner
             if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
                 self.logger.display("Kerberos keys:")
                 printed_kerb_keys_banner = True
@@ -2667,13 +2668,15 @@ class smb(connection):
             else:
                 add_hash.nt_lm_secrets += 1
 
-            # Log the secret based on args
-            if self.args.enabled:
-                if "Enabled" in secret:
-                    secret = " ".join(secret.split(" ")[:-1])
-                    self.logger.highlight(secret)
-            else:
-                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+            is_enabled_account = secret.endswith(" (status=Enabled)")
+            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+            for status in (" (status=Enabled)", " (status=Disabled)", " (status=N/A)"):
+                secret = secret.removesuffix(status)
+
+            if not self.args.enabled or is_enabled_account or is_trust_key:
+                if is_trust_key and not printed_trust_keys_banner:
+                    self.logger.display("Trust keys:")
+                    printed_trust_keys_banner = True
                 self.logger.highlight(secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
@@ -2725,18 +2728,27 @@ class smb(connection):
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
+            trustKeys=self.args.trust_keys,
+            justTrustKeys=self.args.just_trust_keys,
+            domainFQDN=self.targetDomain,
             perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
         try:
-            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+            if self.args.just_trust_keys:
+                self.logger.success("Dumping the trust keys, this could take a while so go grab a redbull...")
+            else:
+                self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
-            if self.args.kerberos_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            if self.args.just_trust_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}.trustkeys")
+            else:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+                if self.args.kerberos_keys:
+                    self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
             # We don't store the resume file if this error happened, since this error is related to lack
