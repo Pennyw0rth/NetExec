@@ -374,7 +374,7 @@ class wmi(connection):
                 self.logger.success(out)
                 return True
 
-    def read_file(self, remote_path) -> "bytes | None":
+    def read_file(self, remote_path) -> bytes | None:
         self.logger.debug(f"Try reading file {remote_path}")
         escaped_path = remote_path.replace("\\", "\\\\")
 
