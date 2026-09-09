@@ -1237,7 +1237,7 @@ class ldap(connection):
         def printTable(items, header):
             colLen = []
 
-            # Calculating maximum lenght before parsing CN.
+            # Calculating maximum length before parsing CN.
             for i, col in enumerate(header):
                 rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
                 colLen.append(max(rowMaxLen, len(col)))
