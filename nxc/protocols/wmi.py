@@ -389,7 +389,7 @@ class wmi(connection):
             iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
         except DCERPCSessionError as e:
             if e.error_code == 0x80041002:
-                self.logger.debug(f"Cannot find {remote_path} file")
+                self.logger.fail(f"Cannot find file '{remote_path}'")
             return None
 
         obj = iWbemClassObject.getProperties()
@@ -408,7 +408,6 @@ class wmi(connection):
         return bytes(file_data[4:4 + file_length])
 
     def get_file_single(self, remote_path, download_path):
-
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
 
@@ -416,7 +415,6 @@ class wmi(connection):
         if file_data is None:
             return False
         else:
-
             with open(download_path, "wb+") as file:
                 file.write(file_data)
             return True
