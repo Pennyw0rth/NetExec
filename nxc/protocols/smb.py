@@ -2477,9 +2477,10 @@ class smb(connection):
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
         printed_kerb_keys_banner = False
+        printed_trust_keys_banner = False
 
         def add_hash(secret_type, secret, host_id):
-            nonlocal printed_kerb_keys_banner
+            nonlocal printed_kerb_keys_banner, printed_trust_keys_banner
             if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
                 self.logger.display("Kerberos keys:")
                 printed_kerb_keys_banner = True
@@ -2497,6 +2498,9 @@ class smb(connection):
                 secret = secret.removesuffix(status)
 
             if not self.args.enabled or is_enabled_account or is_current_trust_key:
+                if is_trust_key and not printed_trust_keys_banner:
+                    self.logger.display("Trust keys:")
+                    printed_trust_keys_banner = True
                 self.logger.highlight(secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
@@ -2562,7 +2566,7 @@ class smb(connection):
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
             if self.args.just_trust_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}")
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}.trustkeys")
             else:
                 self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
                 if self.args.kerberos_keys:
