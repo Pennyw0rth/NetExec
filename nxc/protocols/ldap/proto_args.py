@@ -8,6 +8,7 @@ def proto_args(parser, parents):
     dgroup.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     dgroup.add_argument("--simple-bind", action="store_true", help="Use simple bind authentication (no signing/sealing)")
     ldap_parser.add_argument("--port", type=int, default=389, action=DefaultTrackingAction, help="LDAP port")
+    ldap_parser.add_argument("--ldap-timeout", type=int, default=3, help="LDAP connection timeout")
     ldap_parser.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
 
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
@@ -31,6 +32,7 @@ def proto_args(parser, parents):
     vgroup.add_argument("--users", nargs="*", help="Enumerate domain users")
     vgroup.add_argument("--users-export", help="Enumerate domain users and export them to the specified file")
     vgroup.add_argument("--groups", nargs="?", const="", help="Enumerate domain groups, if a group is specified than its members are enumerated")
+    vgroup.add_argument("--ous", nargs="?", const="", help="Specify OU name to query all users in that OU or list all OUs")
     vgroup.add_argument("--computers", action="store_true", help="Enumerate domain computers")
     vgroup.add_argument("--dc-list", action="store_true", help="Enumerate Domain Controllers")
     vgroup.add_argument("--get-sid", action="store_true", help="Get domain sid")
@@ -43,8 +45,8 @@ def proto_args(parser, parents):
     ggroup.add_argument("--gmsa-convert-id", help="Get the secret name of specific gmsa or all gmsa if no gmsa provided")
     ggroup.add_argument("--gmsa-decrypt-lsa", help="Decrypt the gmsa encrypted value from LSA")
 
-    bgroup = ldap_parser.add_argument_group("Bloodhound Scan", "Options to play with Bloodhoud")
-    bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan")
+    bgroup = ldap_parser.add_argument_group("Bloodhound Scan", "Options to play with Bloodhound")
+    bgroup.add_argument("--bloodhound", action="store_true", help="Perform a Bloodhound scan. Default collector: Bloodhound CE, for legacy support see config file")
     bgroup.add_argument("-c", "--collection", default="Default", help="Which information to collect. Supported: Group, LocalAdmin, Session, Trusts, Default, DCOnly, DCOM, RDP, PSRemote, LoggedOn, Container, ObjectProps, ACL, ADCS, All. You can specify more than one by separating them with a comma.")
 
     return parser

@@ -34,6 +34,8 @@ class NXCModule:
         - CVE-2025-54918 (NTLM MIC Bypass)
         - CVE-2025-53779 (BadSuccessor)
         - CVE-2024-49019 (EKUwu / ESC15)
+        - CVE-2026-54121 (Certighost)
+        - CVE-2026-27912 (ResetNightmare)
 
         CVE             Filter for specific CVE number (default: All)
         EXPLOITATION    Also provide sources for exploitation details (default: False)
@@ -188,5 +190,35 @@ class NXCModule:
             },
             "message": "If host is an AD CS / CA server, it may be vulnerable to ESC15",
             "exploitation": "https://trustedsec.com/blog/ekuwu-not-just-another-ad-cs-esc",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54121
+        "CVE-2026-54121": {
+            "alias": "Certighost",
+            "patches": {
+                (6, 2, 9200): 26226,      # Windows Server 2012
+                (6, 3, 9600): 23291,      # Windows Server 2012 R2
+                (10, 0, 14393): 9339,     # Windows Server 2016
+                (10, 0, 17763): 9020,     # Windows Server 2019
+                (10, 0, 20348): 5386,     # Windows Server 2022
+                (10, 0, 26100): 33158,    # Windows Server 2025
+            },
+            "message": "If host is an AD CS / CA server, it may be vulnerable to Certighost",
+            "exploitation": "https://gist.github.com/H0j3n/a5ef2609b5f2944ac2390a191a534c26",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-27912
+        "CVE-2026-27912": {
+            "alias": "ResetNightmare",
+            "dc_only": True,
+            "patches": {
+                (6, 2, 9200): 26026,      # Windows Server 2012
+                (6, 3, 9600): 23132,      # Windows Server 2012 R2
+                (10, 0, 14393): 9060,     # Windows Server 2016
+                (10, 0, 17763): 8644,     # Windows Server 2019
+                (10, 0, 20348): 5020,     # Windows Server 2022
+                (10, 0, 25398): 2274,     # Windows Server 2022 23H2
+                (10, 0, 26100): 32690,    # Windows Server 2025
+            },
+            "message": "Password reset of any account possible via Kerberos change password abuse",
+            "exploitation": "https://www.semperis.com/blog/identity-crisis-novel-vulnerabilities-leading-to-kerberos-downgrade-dos-and-full-domain-takeover/",
         },
     }

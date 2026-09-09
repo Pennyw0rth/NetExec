@@ -108,7 +108,7 @@ class ldap(connection):
             ldap_url = f"{proto}://{self.host}"
             self.logger.info(f"Connecting to {ldap_url} with no baseDN")
 
-            self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host)
+            self.ldap_connection = ldap_impacket.LDAPConnection(ldap_url, dstIp=self.host, timeout=self.args.ldap_timeout)
             if self.ldap_connection:
                 self.logger.debug(f"ldap_connection: {self.ldap_connection}")
         except SysCallError as e:
@@ -123,7 +123,7 @@ class ldap(connection):
             self.logger.debug(f"{e} on host {self.host}")
             return False
         except OSError as e:
-            if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT):
+            if e.errno in (EHOSTUNREACH, ENETUNREACH, ETIMEDOUT) or "timed out" in str(e):
                 self.logger.info(f"Error connecting to {self.host}: {e}")
                 return False
             else:
@@ -150,7 +150,7 @@ class ldap(connection):
         self.signing_required = False
         ldap_url = f"ldap://{self.target}"
         try:
-            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False)
+            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False, timeout=self.args.ldap_timeout)
             ldap_connection.login(domain=self.domain)
             self.logger.debug(f"LDAP signing is not enforced on {self.host}")
         except ldap_impacket.LDAPSessionError as e:
@@ -164,7 +164,7 @@ class ldap(connection):
         self.cbt_status = "Never"
         ldap_url = f"ldaps://{self.target}"
         try:
-            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
             ldap_connection.channel_binding_value = None
             ldap_connection.login(user=" ", domain=self.domain)
         except ldap_impacket.LDAPSessionError as e:
@@ -173,7 +173,7 @@ class ldap(connection):
                 self.cbt_status = "Always"  # CBT is Required
             # Login failed (wrong credentials). test if we get an error with an existing, but wrong CBT -> When supported
             elif str(e).find("data 52e") >= 0:
-                ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+                ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
                 new_cbv = bytearray(ldap_connection.channel_binding_value)
                 new_cbv[15] = (new_cbv[3] + 1) % 256
                 ldap_connection.channel_binding_value = bytes(new_cbv)
@@ -335,7 +335,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
             self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
             if self.username == "":
                 self.username = self.get_ldap_username()
@@ -364,7 +364,7 @@ class ldap(connection):
                 color="yellow",
             )
             # If no preauth is set, we want to be able to execute commands such as --kerberoasting
-            if self.args.no_preauth_targets:  # noqa: SIM103
+            if self.args.no_preauth_targets:  # ruff: ignore[needless-bool]
                 return True
             else:
                 return False
@@ -394,7 +394,7 @@ class ldap(connection):
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
                     self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
                     if self.username == "":
                         self.username = self.get_ldap_username()
@@ -458,7 +458,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple")
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple", timeout=self.args.ldap_timeout)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
@@ -487,7 +487,7 @@ class ldap(connection):
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
@@ -554,7 +554,7 @@ class ldap(connection):
             proto = "ldaps" if self.port == 636 else "ldap"
             ldaps_url = f"{proto}://{self.target}"
             self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
@@ -580,7 +580,7 @@ class ldap(connection):
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
                     self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
-                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host)
+                    self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
                     self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
@@ -744,12 +744,12 @@ class ldap(connection):
         self.users()
 
     def groups(self):
-        # Building the search filter
+        # Group specific member search
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
-            # Resolve group DN and primaryGroupID (objectSid)
-            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid"])
+            # Resolve group DN and primaryGroupID (objectSid) and member attribute
+            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid", "member"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
@@ -757,29 +757,63 @@ class ldap(connection):
                 return
             else:
                 group = group_parsed[0]
+                direct_group_members = group.get("member", [])
+                if not isinstance(direct_group_members, list):
+                    direct_group_members = [direct_group_members]
 
-            # Search filter: user must have membership OR primaryGroupID
+            # Get all group members: user must have membership OR primaryGroupID
             search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
             attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
+            resp = self.search(search_filter, attributes)
+            group_members = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(group_members)}")
 
-        else:
-            search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member", "description"]
+            # Resolve any missing group members that the memberOf/primaryGroupID search above didn't already return
+            if len(group_members) < len(direct_group_members):
+                for member_dn in direct_group_members:
+                    member_resp = self.search(f"(distinguishedName={member_dn})", ["sAMAccountName", "distinguishedName", "cn", "objectClass"])
+                    member_parsed = parse_result_attributes(member_resp)
 
-        resp = self.search(search_filter, attributes)
-        resp_parsed = parse_result_attributes(resp)
-        self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+                    if member_parsed:
+                        group_members.append(member_parsed[0])
+                    else:
+                        self.logger.debug(f"Failed to resolve group member DN '{member_dn}' for group '{self.args.groups}'")
+                        group_members.append({"distinguishedName": member_dn})
 
-        if self.args.groups:
+            # Deduplicate group members by distinguishedName or cn
+            deduped = {}
+            for item in group_members:
+                key = item.get("distinguishedName", item.get("cn", "")).lower()
+                deduped.setdefault(key, item)
+            resp_parsed = list(deduped.values())
+
             # Display group members
             if not resp_parsed:
                 self.logger.fail(f"Group '{self.args.groups}' has no members")
             else:
                 for item in resp_parsed:
-                    # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
-                    # Fallback to cn should sAMAccountName not be present (e.g. Service Principal Names)
-                    self.logger.highlight(item.get("sAMAccountName", item["cn"]) if "group" not in item["objectClass"] else item["cn"])
+                    # Display cn if it is a group
+                    # Otherwise display sAMAccountName and fall back to cn if sAMAccountName is not present
+                    # If nothing is present, display Distinguished Name
+                    if "group" in item.get("objectClass", []):
+                        out = item["cn"]
+                    elif "sAMAccountName" in item:
+                        out = item["sAMAccountName"]
+                    elif "cn" in item:
+                        out = item["cn"]
+                    else:
+                        out = item["distinguishedName"]
+                    self.logger.highlight(out)
+
+        # List all groups
         else:
+            search_filter = "(objectCategory=group)"
+            attributes = ["cn", "member", "description"]
+
+            resp = self.search(search_filter, attributes)
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
@@ -791,6 +825,52 @@ class ldap(connection):
                 except Exception as e:
                     self.logger.debug("Exception:", exc_info=True)
                     self.logger.debug(f"Skipping item, cannot process due to error {e}")
+
+    def ous(self):
+        if self.args.ous:
+            # Find the OU's distinguished name first
+            self.logger.debug(f"Dumping users from OU: {self.args.ous}")
+            ou_resp = self.search(
+                f"(&(objectCategory=organizationalUnit)(ou={self.args.ous}))",
+                ["distinguishedName"],
+            )
+            ou_parsed = parse_result_attributes(ou_resp)
+
+            if not ou_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' not found")
+                return
+
+            self.logger.debug(f"Found OU DN: {ou_parsed[0]['distinguishedName']}")
+
+            # Search for users scoped to that OU
+            resp = self.search(
+                "(&(objectCategory=person)(objectClass=user))",
+                ["sAMAccountName", "cn"],
+                baseDN=ou_parsed[0]["distinguishedName"],
+            )
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            if not resp_parsed:
+                self.logger.fail(f"OU '{self.args.ous}' has no users")
+                return
+
+            self.logger.highlight(f"{'-sAMAccountName-':<30} -cn-")
+            for user in resp_parsed:
+                self.logger.highlight(f"{user.get('sAMAccountName'):<30} {user.get('cn', '')}")
+        else:
+            # List all OUs
+            self.logger.debug("Dumping all organizational units")
+            resp = self.search("(objectCategory=organizationalUnit)", ["ou", "distinguishedName"])
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned: {len(resp_parsed)}")
+
+            self.logger.highlight(f"{'-OU-':<40} -Distinguished Name-")
+            for ou in resp_parsed:
+                try:
+                    self.logger.highlight(f"{ou['ou']:<40} {ou['distinguishedName']}")
+                except Exception as e:
+                    self.logger.debug(f"Exception: {e}", exc_info=True)
 
     def computers(self):
         resp = self.search(f"(sAMAccountType={SAM_MACHINE_ACCOUNT})", ["sAMAccountName"])
@@ -1157,7 +1237,7 @@ class ldap(connection):
         def printTable(items, header):
             colLen = []
 
-            # Calculating maximum lenght before parsing CN.
+            # Calculating maximum length before parsing CN.
             for i, col in enumerate(header):
                 rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
                 colLen.append(max(rowMaxLen, len(col)))
@@ -1646,7 +1726,7 @@ class ldap(connection):
             )
             ad = AD(
                 auth=auth,
-                domain=self.domain,
+                domain=self.targetDomain,
                 nameserver=self.args.dns_server,
                 dns_tcp=self.args.dns_tcp,
                 dns_timeout=self.args.dns_timeout,
@@ -1654,7 +1734,7 @@ class ldap(connection):
 
             self.logger.debug("Using DNS to retrieve domain information")
             try:
-                ad.dns_resolve(domain=self.domain)
+                ad.dns_resolve(domain=self.targetDomain)
             except (resolver.LifetimeTimeout, resolver.NoNameservers):
                 self.logger.fail("Bloodhound-python failed to resolve domain information, try specifying the DNS server.")
                 return
@@ -1717,13 +1797,13 @@ class ldap(connection):
             # Create CertiHound adapter and collector
             adapter = ImpacketLDAPAdapter(
                 search_func=self.search,
-                domain=self.domain,
+                domain=self.targetDomain,
                 domain_sid=self.sid_domain,
             )
 
             collector = ADCSCollector.from_external(
                 ldap_connection=adapter,
-                domain=self.domain,
+                domain=self.targetDomain,
                 domain_sid=self.sid_domain,
             )
             data = collector.collect_all()
