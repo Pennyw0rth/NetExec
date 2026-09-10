@@ -3,6 +3,8 @@ netexec -h
 ##### SMB
 netexec smb TARGET_HOST --generate-hosts-file /tmp/hostsfile
 netexec smb TARGET_HOST --generate-krb5-file /tmp/krb5conf
+# GOAD-Light multi-domain krb5 merge verification:
+# uv run nxc smb 192.168.56.0/24 --generate-krb5-file /tmp/nxc-krb5-cidr-20260910-5.conf
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec {DNS} smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --shares

@@ -8,7 +8,6 @@ from pathlib import Path
 
 from nxc.helpers.path import sanitize_filename
 from Cryptodome.Hash import MD4
-from textwrap import dedent
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
@@ -92,6 +91,7 @@ from time import time, ctime, sleep
 from traceback import format_exc
 from termcolor import colored
 import contextlib
+from threading import Lock
 
 smb_share_name = gen_random_string(5).upper()
 
@@ -127,6 +127,9 @@ def get_error_string(exception):
 
 
 class smb(connection):
+    krb5_file_lock = Lock()
+    krb5_file_generated_targets = set()
+
     def __init__(self, args, db, host):
         self.domain = None
         self.server_os = None
@@ -151,8 +154,11 @@ class smb(connection):
         self.protocol = "SMB"
         self.is_guest = None
         self.isdc = None
+        self.isdc_via_smb = None
+        self.isdc_via_kerberos = None
         self.tgt = None
         self.tgs = None
+        self.krb5_file_generated = False
 
         connection.__init__(self, args, db, host)
 
@@ -339,31 +345,172 @@ class smb(connection):
                     dc_part = f" {self.targetDomain}" if self.isdc else ""
                     host_file.write(f"{self.host}     {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}\n")
                     self.logger.debug(f"Line added to {self.args.generate_hosts_file} {self.host}    {self.hostname}.{self.targetDomain}{dc_part} {self.hostname}")
-            elif self.args.generate_krb5_file and self.isdc:
-                with open(self.args.generate_krb5_file, "w+") as host_file:
-                    data = dedent(f"""
-                    [libdefaults]
-                        dns_lookup_kdc = false
-                        dns_lookup_realm = false
-                        default_realm = {self.domain.upper()}
-
-                    [realms]
-                        {self.domain.upper()} = {{
-                            kdc = {self.hostname.lower()}.{self.domain}
-                            admin_server = {self.hostname.lower()}.{self.domain}
-                            default_domain = {self.domain}
-                        }}
-
-                    [domain_realm]
-                        .{self.domain} = {self.domain.upper()}
-                        {self.domain} = {self.domain.upper()}
-                    """).strip()
-                    host_file.write(data)
-                    self.logger.debug(data)
-                    self.logger.success(f"krb5 conf saved to: {self.args.generate_krb5_file}")
-                    self.logger.success(f"Run the following command to use the conf file: export KRB5_CONFIG={self.args.generate_krb5_file}")
+            elif self.args.generate_krb5_file and self.should_generate_krb5_file():
+                self.write_krb5_file()
+                self.krb5_file_generated = True
 
         return self.host, self.hostname, self.targetDomain
+
+    def should_generate_krb5_file(self):
+        if self.krb5_file_generated:
+            return False
+        if self.isdc_via_smb is True:
+            return True
+        if self.isdc_via_kerberos is None:
+            self.isdc_via_kerberos = self._is_dc_via_kerberos() is True
+        return self.isdc_via_kerberos
+
+    def write_krb5_file(self):
+        realm = self.targetDomain.upper()
+        domain = self.targetDomain.lower()
+        kdc = f"{self.hostname.lower()}.{domain}"
+        generated_target = (self.args.generate_krb5_file, realm, kdc)
+
+        with self.krb5_file_lock, self.krb5_file_write_lock():
+            if generated_target in self.krb5_file_generated_targets:
+                return
+
+            if os.path.exists(self.args.generate_krb5_file):
+                with open(self.args.generate_krb5_file) as host_file:
+                    current_data = host_file.read()
+                data = self.merge_krb5_file(current_data, realm, domain, kdc) if current_data.strip() else self.render_krb5_file(realm, domain, kdc)
+            else:
+                data = self.render_krb5_file(realm, domain, kdc)
+
+            with open(self.args.generate_krb5_file, "w+") as host_file:
+                host_file.write(data)
+            self.krb5_file_generated_targets.add(generated_target)
+
+        self.logger.debug(data)
+        self.logger.success(f"krb5 conf saved to: {self.args.generate_krb5_file}")
+        self.logger.success(f"Run the following command to use the conf file: export KRB5_CONFIG={self.args.generate_krb5_file}")
+
+    @contextlib.contextmanager
+    def krb5_file_write_lock(self):
+        lock_file = f"{self.args.generate_krb5_file}.lock"
+        lock_handle = None
+        while lock_handle is None:
+            try:
+                lock_handle = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            except FileExistsError:
+                sleep(0.1)
+        try:
+            yield
+        finally:
+            os.close(lock_handle)
+            with contextlib.suppress(OSError):
+                os.unlink(lock_file)
+
+    def merge_krb5_file(self, data, realm, domain, kdc):
+        lines = self.merge_krb5_realm(data.splitlines(), realm, domain, kdc)
+        lines = self.merge_krb5_domain_realm(lines, realm, domain, kdc)
+        return "\n".join(lines) + "\n"
+
+    def merge_krb5_realm(self, lines, realm, domain, kdc):
+        realm_block = [
+            f"    {realm} = {{",
+            f"        kdc = {kdc}",
+            f"        admin_server = {kdc}",
+            f"        kpasswd_server = {kdc}",
+            f"        default_domain = {domain}",
+            "    }",
+        ]
+        section_start, section_end = self.find_krb5_section(lines, "realms")
+        if section_start is None:
+            return [*lines, "", "[realms]", *realm_block]
+
+        realm_start = None
+        realm_end = None
+        for index in range(section_start + 1, section_end):
+            line = lines[index].strip()
+            if line.endswith("{") and "=" in line and line.split("=", 1)[0].strip().upper() == realm:
+                realm_start = index
+                break
+
+        if realm_start is None:
+            if section_end < len(lines):
+                realm_block.append("")
+            return lines[:section_end] + realm_block + lines[section_end:]
+
+        for index in range(realm_start + 1, section_end):
+            if lines[index].strip() == "}":
+                realm_end = index
+                break
+        if realm_end is None:
+            return lines
+
+        for index in range(realm_start + 1, realm_end):
+            line = lines[index].strip()
+            if "=" in line:
+                key, value = [item.strip() for item in line.split("=", 1)]
+                if key == "kdc" and value.lower() == kdc:
+                    return lines
+
+        lines.insert(realm_end, f"        kdc = {kdc}")
+        return lines
+
+    def merge_krb5_domain_realm(self, lines, realm, domain, kdc):
+        mappings = [
+            f"    .{domain} = {realm}",
+            f"    {domain} = {realm}",
+            f"    {kdc} = {realm}",
+        ]
+        section_start, section_end = self.find_krb5_section(lines, "domain_realm")
+        if section_start is None:
+            return [*lines, "", "[domain_realm]", *mappings]
+
+        existing_mappings = {line.strip().lower() for line in lines[section_start + 1:section_end]}
+        missing_mappings = [mapping for mapping in mappings if mapping.strip().lower() not in existing_mappings]
+        if missing_mappings and section_end < len(lines):
+            missing_mappings.append("")
+        return lines[:section_end] + missing_mappings + lines[section_end:]
+
+    def find_krb5_section(self, lines, section):
+        section_start = None
+        section_header = f"[{section}]"
+        for index, line in enumerate(lines):
+            if line.strip().lower() == section_header:
+                section_start = index
+                break
+        if section_start is None:
+            return None, None
+
+        section_end = len(lines)
+        for index in range(section_start + 1, len(lines)):
+            line = lines[index].strip()
+            if line.startswith("[") and line.endswith("]"):
+                section_end = index
+                break
+        return section_start, section_end
+
+    def render_krb5_file(self, realm, domain, kdc):
+        lines = [
+            "[libdefaults]",
+            f"    default_realm = {realm}",
+            "    dns_lookup_kdc = false",
+            "    dns_lookup_realm = false",
+            "    rdns = false",
+            "    dns_canonicalize_hostname = false",
+            "    ticket_lifetime = 24h",
+            "    renew_lifetime = 7d",
+            "    forwardable = true",
+            "    noaddresses = true",
+            "    udp_preference_limit = 1",
+            "",
+            "[realms]",
+            f"    {realm} = {{",
+            f"        kdc = {kdc}",
+            f"        admin_server = {kdc}",
+            f"        kpasswd_server = {kdc}",
+            f"        default_domain = {domain}",
+            "    }",
+            "",
+            "[domain_realm]",
+            f"    .{domain} = {realm}",
+            f"    {domain} = {realm}",
+            f"    {kdc} = {realm}",
+        ]
+        return "\n".join(lines) + "\n"
 
     @contextlib.contextmanager
     def increase_auth_timeout(self):
@@ -904,6 +1051,7 @@ class smb(connection):
         if not self.null_auth:
             if not self.no_ntlm:
                 self.logger.debug("NTLM enabled but no null session: host is not a DC")
+                self.isdc_via_smb = False
                 return False
             self.logger.debug("No null session (NTLM disabled): deferring to Kerberos")
             return None
@@ -911,13 +1059,16 @@ class smb(connection):
             tid = self.conn.connectTree("SYSVOL")
             self.conn.disconnectTree(tid)
             self.logger.debug("SYSVOL reachable over SMB: host is a DC")
+            self.isdc_via_smb = True
             return True
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in str(e):
                 self.logger.debug("SYSVOL exists (access denied): host is a DC")
+                self.isdc_via_smb = True
                 return True
             if "STATUS_BAD_NETWORK_NAME" in str(e):
                 self.logger.debug("No SYSVOL share: host is not a DC")
+                self.isdc_via_smb = False
                 return False
             self.logger.debug(f"SMB DC check inconclusive: {e}")
             return None
@@ -953,9 +1104,12 @@ class smb(connection):
             getKerberosTGT(user, "", realm, "", "", kdcHost=self.host)
         except KerberosError as e:
             self.logger.debug(f"KDC replied with an error ({e}): host is a DC")
+            self.isdc_via_kerberos = True
         except Exception as e:
             self.logger.debug(f"No KDC response (port 88 filtered or not a DC): {e}")
+            self.isdc_via_kerberos = False
             return None
+        self.isdc_via_kerberos = True
         return True
 
     def _is_dc_via_rpc(self):
