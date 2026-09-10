@@ -15,6 +15,22 @@ from paramiko.ssh_exception import (
 )
 
 
+# Substrings raised by Paramiko when the server refuses a public key because
+# its algorithm is not in the server's accepted list (e.g. sshd
+# "PubkeyAcceptedAlgorithms ssh-ed25519" while the key is RSA). These must be
+# distinguished from a wrong passphrase so the user gets an actionable error.
+_KEY_TYPE_REJECTED_SUBSTRINGS = (
+    "unsupported or disabled",
+    "no RSA pubkey algorithms are configured",
+    "Unable to agree on a pubkey algorithm",
+)
+
+
+def _is_key_type_rejected(exc):
+    """Return True if *exc* indicates the server rejected the key's algorithm."""
+    return any(sub in str(exc) for sub in _KEY_TYPE_REJECTED_SUBSTRINGS)
+
+
 class ssh(connection):
     def __init__(self, args, db, host):
         self.protocol = "SSH"
@@ -125,6 +141,8 @@ class ssh(connection):
         except AuthenticationException as e:
             if "Private key file is encrypted" in str(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not load private key, error: {e}")
+            elif _is_key_type_rejected(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
             else:
                 self.logger.fail(f"{username}:{process_secret(password)}")
         except SSHException as e:
@@ -132,6 +150,8 @@ class ssh(connection):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
             elif "Error reading SSH protocol banner" in str(e):
                 self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
+            elif _is_key_type_rejected(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
             else:
                 self.logger.exception(e)
         except Exception as e:
