@@ -40,6 +40,24 @@ def write_csv(filename, headers, entries):
             csv_file.writerow(entry)
 
 
+def host_csv_headers(hosts_table, mode="simple"):
+    """Return the CSV header tuple for a ``hosts`` export.
+
+    The columns are derived from the actual ``HostsTable`` of the active
+    protocol instead of being hard-coded to the SMB schema. This keeps the
+    header aligned with the row content for every protocol (issue #1385):
+    exporting RDP/MSSQL/SSH/... hosts no longer prints SMB-only columns such
+    as ``smbv1``/``spooler``/``zerologon``/``petitpotam``.
+
+    ``simple`` returns the first 8 columns (matching the historical row width);
+    ``detailed`` returns every column of the table.
+    """
+    columns = tuple(col.name for col in hosts_table.columns)
+    if mode == "detailed":
+        return columns
+    return columns[:8]
+
+
 def write_list(filename, entries):
     """Writes a file with a simple list"""
     with open(os.path.expanduser(filename), "w") as export_file:
@@ -169,34 +187,16 @@ class DatabaseNavigator(cmd.Cmd):
                 print("[-] invalid arguments, export hosts <simple|detailed|signing> <filename>")
                 return
 
-            csv_header_simple = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-            )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-                "spooler",
-                "zerologon",
-                "petitpotam",
-            )
+            # Derive the CSV headers from the active protocol's HostsTable so
+            # the header matches the row content for every protocol (#1385).
+            # Previously these were SMB-specific hard-coded column names.
+            csv_header_simple = host_csv_headers(self.db.HostsTable, "simple")
+            csv_header_detailed = host_csv_headers(self.db.HostsTable, "detailed")
             filename = line[2]
 
             if line[1].lower() == "simple":
                 hosts = self.db.get_hosts()
-                simple_hosts = [host[:8] for host in hosts]
+                simple_hosts = [host[: len(csv_header_simple)] for host in hosts]
                 write_csv(filename, csv_header_simple, simple_hosts)
             # TODO: maybe add more detail like who is an admin on it, shares discovered, etc
             elif line[1].lower() == "detailed":
