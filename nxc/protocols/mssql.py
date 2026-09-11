@@ -44,6 +44,9 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.no_ntlm = False
+        self.encryption = None
+        self.edition = ""
+        self.version = ""
 
         connection.__init__(self, args, db, host)
 
