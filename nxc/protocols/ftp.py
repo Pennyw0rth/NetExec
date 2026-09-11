@@ -165,6 +165,30 @@ class ftp(connection):
         else:
             self.logger.fail(f"Failed to upload: {local_file} to {remote_file}")
 
+    def cat(self):
+        # Extract the filename from the path
+        remote_file = self.args.cat
+        try:
+            # Check if the current connection is ASCII (ASCII does not support .size())
+            if self.conn.encoding == "utf-8":
+                # Switch the connection to binary
+                self.conn.sendcmd("TYPE I")
+            # Attempt to get the file content
+            buf = BytesIO()
+            self.conn.retrbinary(f"RETR {remote_file}", buf.write)
+        except error_perm as error_message:
+            self.logger.fail(f"Failed to get file content. Response: ({error_message})")
+            return False
+        except FileNotFoundError:
+            self.logger.fail("Failed to get file content. Response: (No such file or directory.)")
+            return False
+
+        try:
+            for line in buf.getvalue().decode().splitlines():
+                self.logger.highlight(line)
+        except UnicodeDecodeError as e:
+            self.logger.fail(f"File is not in UTF-8: {e}")
+
     def supported_commands(self):
         raw_supported_commands = self.conn.sendcmd("HELP")
         supported_commands = [item for sublist in (x.split() for x in raw_supported_commands.split("\n")[1:-1]) for item in sublist]
