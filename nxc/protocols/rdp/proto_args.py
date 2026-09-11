@@ -20,8 +20,8 @@ def proto_args(parser, parents):
     cgroup = rdp_parser.add_argument_group("Command Execution")
     cgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
     cgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
-    cgroup.add_argument("--cmd-delay", type=int, default=5, help="Sleep time before executing command")
-    cgroup.add_argument("--clipboard-delay", type=int, default=30, help="Maximum time to wait for clipboard initialization (seconds)")
+    cgroup.add_argument("--cmd-delay", type=int, default=5, help="Delay before executing the command and before disconnecting with --no-output")
+    cgroup.add_argument("--clipboard-delay", type=int, default=30, help="Maximum time to wait for clipboard initialization and command output")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
 
     return parser
