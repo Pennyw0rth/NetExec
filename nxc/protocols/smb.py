@@ -2054,17 +2054,17 @@ class smb(connection):
             import os
             import re as _re
             from nxc.paths import DATA_PATH
-            
+
             extensions = []
             if len(self.args.spider_extensions) == 0:
                 default_ext_path = os.path.join(DATA_PATH, "spidering", "sensitive_extensions.txt")
                 if os.path.exists(default_ext_path):
-                    with open(default_ext_path, "r") as f:
+                    with open(default_ext_path) as f:
                         extensions = [line.strip() for line in f if line.strip() and not line.startswith("#")]
                 else:
                     self.logger.fail(f"Default extension file not found at {default_ext_path}")
             elif len(self.args.spider_extensions) == 1 and os.path.isfile(self.args.spider_extensions[0]):
-                with open(self.args.spider_extensions[0], "r") as f:
+                with open(self.args.spider_extensions[0]) as f:
                     extensions = [line.strip() for line in f if line.strip() and not line.startswith("#")]
             else:
                 extensions = [ext.strip() if ext.startswith(".") else f".{ext.strip()}" for ext in self.args.spider_extensions]
@@ -2450,7 +2450,7 @@ class smb(connection):
             use_kcache=self.use_kcache,
         )
 
-        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # noqa: SIM115
+        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler]
 
         conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
         if conn is None:
