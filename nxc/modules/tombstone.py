@@ -88,6 +88,7 @@ class NXCModule:
             if self.id == entries["name"].split(":")[1]:
 
                 context.log.highlight(f"{'sAMAccountName':<20}: {entries.get('sAMAccountName', '')}")
+                context.log.highlight(f"{'description':<20}: {entries.get('description', '')}")
                 context.log.highlight(f"{'dn':<20}: {entries.get('distinguishedName', '')}")
                 context.log.highlight(f"{'ID':<20}: {entries.get('name', '').split(':')[1]}")
                 context.log.highlight(f"{'isDeleted':<20}: {entries.get('isDeleted', '')}")
@@ -158,6 +159,7 @@ class NXCModule:
                 continue
 
             context.log.highlight(f"{'sAMAccountName':<20}: {entries.get('sAMAccountName', '')}")
+            context.log.highlight(f"{'description':<20}: {entries.get('description', '')}")
             context.log.highlight(f"{'dn':<20}: {entries.get('distinguishedName', '')}")
             context.log.highlight(f"{'ID':<20}: {entries.get('name', '').split(':')[1]}")
             context.log.highlight(f"{'isDeleted':<20}: {entries.get('isDeleted', '')}")
