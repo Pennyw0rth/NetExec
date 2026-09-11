@@ -287,7 +287,7 @@ class ldap(connection):
         self.logger.debug("Printing host info for LDAP")
         if self.signing_required is True:
             signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"])
-        if self.signing_required is False:
+        elif self.signing_required is False:
             signing = colored("signing:None", host_info_colors[1], attrs=["bold"])
         else:
             signing = colored("signing:Unknown", host_info_colors[2], attrs=["bold"])
