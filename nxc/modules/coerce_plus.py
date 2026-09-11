@@ -1,4 +1,5 @@
 from impacket.dcerpc.v5 import transport, rprn, even, epm
+from impacket.dcerpc.v5.rrp import DCERPCSessionError  # ruff: ignore[unused-import] solves an issue with error handling of impacket not displaying the correct exception
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRPOINTER, NDRUniConformantArray, NDRPOINTERNULL
 from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL, WSTR, LONG, BOOL, PCHAR, RPC_SID
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY

@@ -1730,6 +1730,7 @@ class ldap(connection):
                 aeskey=self.aesKey,
                 kdc=self.kdcHost,
                 auth_method="auto",
+                ldap_channel_binding=self.cbt_status == "Always"
             )
             ad = AD(
                 auth=auth,
@@ -1768,9 +1769,13 @@ class ldap(connection):
                     exclude_dcs=False,
                 )
             except Exception as e:
-                self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
-                self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
-                return
+                if "ldap3-bleeding-edge" in str(e):
+                    self.logger.fail("Bloodhound collection failed due to channel binding requirements. Inject 'ldap3-bleeding-edge': pipx inject netexec ldap3-bleeding-edge")
+                    return
+                else:
+                    self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+                    self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+                    return
 
         # Collect ADCS data using CertiHound if requested
         if "adcs" in collect:
