@@ -101,7 +101,8 @@ class NXCModule:
                             context.log.fail("Looks like target system version is under NT6, please add 'OLD=true' in module options.")
                         else:
                             context.log.fail(str(e))
-                wmi_rdp._RdpWmi__dcom.disconnect()
+                if wmi_rdp._RdpWmi__dcom is not None:
+                    wmi_rdp._RdpWmi__dcom.disconnect()
 
 
 class RdpSmb:
@@ -221,6 +222,14 @@ class RdpWmi:
         self.__remoteHost = connection.host
         self.__aesKey = connection.aesKey
         self.__timeout = timeout
+
+        self.__dcom = None
+        if self.__currentprotocol == "wmi":
+            # The wmi protocol already holds an authenticated IWbemLevel1Login:
+            # reuse it instead of creating a second DCOMConnection to the same
+            # target (whose disconnect would clash with the protocol's own)
+            self.__iWbemLevel1Login = connection.iWbemLevel1Login
+            return
 
         try:
             self.__dcom = DCOMConnection(

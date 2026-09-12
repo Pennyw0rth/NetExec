@@ -147,11 +147,12 @@ class ldap(connection):
         return ""
 
     def check_ldap_signing(self):
-        self.signing_required = False
+        self.signing_required = None
         ldap_url = f"ldap://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False, timeout=self.args.ldap_timeout)
             ldap_connection.login(domain=self.domain)
+            self.signing_required = False
             self.logger.debug(f"LDAP signing is not enforced on {self.host}")
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
@@ -185,6 +186,7 @@ class ldap(connection):
                         self.cbt_status = "When Supported"  # CBT is When Supported
             else:
                 self.logger.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
+                self.cbt_status = "Unknown"
         except SysCallError as e:
             self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
             if e.args[1] in ["ECONNRESET", "WSAECONNRESET", "Unexpected EOF"]:
@@ -283,7 +285,12 @@ class ldap(connection):
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
-        signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored("signing:None", host_info_colors[1], attrs=["bold"])
+        if self.signing_required is True:
+            signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"])
+        elif self.signing_required is False:
+            signing = colored("signing:None", host_info_colors[1], attrs=["bold"])
+        else:
+            signing = colored("signing:Unknown", host_info_colors[2], attrs=["bold"])
         cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
 
@@ -1237,7 +1244,7 @@ class ldap(connection):
         def printTable(items, header):
             colLen = []
 
-            # Calculating maximum lenght before parsing CN.
+            # Calculating maximum length before parsing CN.
             for i, col in enumerate(header):
                 rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
                 colLen.append(max(rowMaxLen, len(col)))
