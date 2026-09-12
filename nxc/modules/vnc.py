@@ -2,6 +2,7 @@ import ntpath
 import tempfile
 
 from impacket import winregistry
+from impacket.dcerpc.v5 import rrp
 
 from Cryptodome.Cipher import DES
 from binascii import unhexlify
@@ -107,7 +108,14 @@ class NXCModule:
             ("TightVNC", "Software\\TightVNC\\Server", "PasswordViewOnly"),
         )
         for vnc_name, path, key in vncs:
-            value = dpapi_conn.reg_get_key_value("HKLM", path, key)
+            try:
+                value = dpapi_conn.reg_get_key_value("HKLM", path, key)
+            except rrp.DCERPCSessionError as e:
+                if "ERROR_FILE_NOT_FOUND" in str(e):
+                    self.context.log.debug(f"Could not find {path}\\{key}, likely not installed: {e}")
+                else:
+                    self.context.log.fail(f"Error while RegQueryValue {path}\\{key}: {e}")
+                continue
             if value is None:
                 continue
             value = value.rstrip(b"\x00")
