@@ -5,9 +5,7 @@ import requests
 import urllib3
 import logging
 import ntpath
-import xml.etree.ElementTree as ET
 
-from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
 from termcolor import colored
@@ -141,17 +139,61 @@ class winrm(connection):
         return False
 
     def check_if_admin(self):
-        wsman = self.conn.wsman
-        wsen = NAMESPACES["wsen"]
-        wsmn = NAMESPACES["wsman"]
+        """Set admin_privs from a WinRM service configuration read.
 
-        enum_msg = ET.Element(f"{{{wsen}}}Enumerate")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
+        Only administrators can read the WinRM configuration, and the
+        request answers in milliseconds on both paths. It doubles as the
+        first authenticated WSMan request of the session, so an
+        authentication error here fails the login.
+        """
+        try:
+            self.conn.wsman.get("http://schemas.microsoft.com/wbem/wsman/1/config")
+            self.admin_privs = True
+        except WSManFaultError:
+            self.admin_privs = False
 
-        wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
-        self.admin_privs = True
-        return True
+        # A shell type requested on the command line (-x runs a cmd shell,
+        # -X a PowerShell runspace) is counted as working without probing:
+        # the execution itself confirms it, and a failure is reported loudly.
+        shell_checks = {
+            "cmd": not getattr(self.args, "execute", None),
+            "powershell": not getattr(self.args, "ps_execute", None),
+        }
+        self.shell_types = [t for t in ("cmd", "powershell") if not shell_checks[t] or self.probe_shell(t)]
+        return self.admin_privs
+
+    def probe_shell(self, shell_type):
+        """Open and immediately close a shell to check the endpoint access.
+
+        No command is executed: the shell create alone is denied when the
+        account lacks the right. Authentication errors still fail the login,
+        only a WSMan fault counts as no access.
+        """
+        shell = None
+        try:
+            if shell_type == "cmd":
+                shell = WinRS(self.conn.wsman)
+            else:
+                shell = RunspacePool(self.conn.wsman)
+            shell.open()
+            return True
+        except WSManFaultError as e:
+            self.logger.debug(f"{shell_type} shell not accessible: {e}")
+            return False
+        finally:
+            if shell is not None:
+                with contextlib.suppress(Exception):
+                    shell.close()
+
+    def mark_shell_access(self):
+        if not self.shell_types:
+            return ""
+        if len(self.shell_types) == 2:
+            shell_type = "all"
+        else:
+            shell_type = f"{self.shell_types[0]} only"
+        prefix = " - " if self.admin_privs else " "
+        return f"{prefix}{highlight(f'Shell access! ({shell_type})')}"
 
     def plaintext_login(self, domain, username, password):
         # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
