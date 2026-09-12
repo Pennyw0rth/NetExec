@@ -1,4 +1,6 @@
 import os
+import re
+import contextlib
 import base64
 import traceback
 import requests
@@ -7,8 +9,11 @@ import logging
 import ntpath
 import xml.etree.ElementTree as ET
 
-from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
+from pypsrp.exceptions import WSManFaultError
+from pypsrp.powershell import RunspacePool
+from pypsrp.wsman import NAMESPACES
+from pypsrp.shell import WinRS
 from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
@@ -18,7 +23,7 @@ from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 from impacket.uuid import bin_to_string
 
 from nxc.config import process_secret, host_info_colors
-from nxc.connection import connection
+from nxc.connection import connection, requires_admin
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import gen_random_string
@@ -141,17 +146,61 @@ class winrm(connection):
         return False
 
     def check_if_admin(self):
-        wsman = self.conn.wsman
-        wsen = NAMESPACES["wsen"]
-        wsmn = NAMESPACES["wsman"]
+        """Set admin_privs from a WinRM service configuration read.
 
-        enum_msg = ET.Element(f"{{{wsen}}}Enumerate")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
+        Only administrators can read the WinRM configuration, and the
+        request answers in milliseconds on both paths. It doubles as the
+        first authenticated WSMan request of the session, so an
+        authentication error here fails the login.
+        """
+        try:
+            self.conn.wsman.get("http://schemas.microsoft.com/wbem/wsman/1/config")
+            self.admin_privs = True
+        except WSManFaultError:
+            self.admin_privs = False
 
-        wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
-        self.admin_privs = True
-        return True
+        # A shell type requested on the command line (-x runs a cmd shell,
+        # -X a PowerShell runspace) is counted as working without probing:
+        # the execution itself confirms it, and a failure is reported loudly.
+        shell_checks = {
+            "cmd": not getattr(self.args, "execute", None),
+            "powershell": not getattr(self.args, "ps_execute", None),
+        }
+        self.shell_types = [t for t in ("cmd", "powershell") if not shell_checks[t] or self.probe_shell(t)]
+        return self.admin_privs
+
+    def probe_shell(self, shell_type):
+        """Open and immediately close a shell to check the endpoint access.
+
+        No command is executed: the shell create alone is denied when the
+        account lacks the right. Authentication errors still fail the login,
+        only a WSMan fault counts as no access.
+        """
+        shell = None
+        try:
+            if shell_type == "cmd":
+                shell = WinRS(self.conn.wsman)
+            else:
+                shell = RunspacePool(self.conn.wsman)
+            shell.open()
+            return True
+        except WSManFaultError as e:
+            self.logger.debug(f"{shell_type} shell not accessible: {e}")
+            return False
+        finally:
+            if shell is not None:
+                with contextlib.suppress(Exception):
+                    shell.close()
+
+    def mark_shell_access(self):
+        if not self.shell_types:
+            return ""
+        if len(self.shell_types) == 2:
+            shell_type = "all"
+        else:
+            shell_type = f"{self.shell_types[0]} only"
+        prefix = " - " if self.admin_privs else " "
+        return f"{prefix}{highlight(f'Shell access! ({shell_type})')}"
 
     def plaintext_login(self, domain, username, password):
         # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
@@ -247,6 +296,128 @@ class winrm(connection):
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
+
+    def wmi_query(self, wql=None, namespace=None):
+        """Run a WQL query natively over WS-Management and print the results.
+
+        The query is sent as a wsman:Filter with the Microsoft WQL dialect and
+        executed server-side (projection and WHERE included) - no PowerShell
+        process is spawned on the target and no DCOM access is needed,
+        matching the smb/wmi protocols --wmi-query behavior.
+
+        Permissions: WinRM authentication creates a network-type logon
+        session, and two layers gate WMI over WS-Management for it: the
+        WinRM service WMI plugin only serves Administrators, Interactive
+        and Remote Management Users (network logons lack the Interactive
+        group), and the namespace itself requires Remote Enable for
+        network contexts (Administrators by default) - hence the
+        requires_admin gate.
+        """
+        if not wql:
+            wql = self.args.wmi_query.strip("\n")
+        if not namespace:
+            namespace = self.args.wmi_namespace
+
+        try:
+            records = self.wql_enumerate(wql, namespace)
+        except WSManFaultError as e:
+            # a missing namespace or class, a bad WQL syntax, or access
+            # denied: the fault carries the reason, print it instead of
+            # dumping a traceback through the module layer
+            self.logger.fail(f"WMI query fault (code {e.code}): {e}")
+            return []
+        for record in records:
+            for k, v in record.items():
+                self.logger.highlight(f"{k} => {v}")
+        if not records:
+            self.logger.highlight("No entries found")
+        # Same record format the smb/wmi protocols return ({prop: {"value": ...}})
+        # so modules built on connection.wmi_query work unchanged over winrm
+        return [{k: {"value": v} for k, v in record.items()} for record in records]
+
+    @requires_admin
+    def wql_enumerate(self, wql, namespace):
+        """Run a WQL query natively over WS-Management, returning the records.
+
+        Raises WSManFaultError when the server rejects the query (e.g. access
+        denied) and authentication/transport errors as-is.
+        """
+        records = []
+        wsen, wsmn = NAMESPACES["wsen"], NAMESPACES["wsman"]
+        namespace_path = namespace.replace("\\", "/")
+        resource_uri = f"http://schemas.microsoft.com/wbem/wsman/1/wmi/{namespace_path}/*"
+        # https://learn.microsoft.com/en-us/windows/winrm/winrm-scripting-shell?tabs=filter-1
+        wql_dialect = "http://schemas.microsoft.com/wbem/wsman/1/WQL"
+
+        def parse_items(res):
+            items = []
+            for element in res.iter():
+                if not element.tag.endswith("}Items"):
+                    continue
+                for instance in element:
+                    props = {}
+                    for prop in instance:
+                        name = prop.tag.split("}")[-1]
+                        if name in props:
+                            # multi-valued WMI property arrives as repeated elements
+                            if not isinstance(props[name], list):
+                                props[name] = [props[name]]
+                            props[name].append(prop.text)
+                        elif prop.text is None and len(prop) == 1:
+                            # unwrap nested single-child values (e.g. InstallDate
+                            # arrives as <InstallDate><Datetime>...</Datetime>) and
+                            # normalize ISO datetimes to the DMTF format the DCOM
+                            # protocols return (2026-09-05T20:16:36.503745+08:00
+                            # -> 20260905201636.503745+480)
+                            text = prop[0].text
+                            match = re.match(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:([+-])(\d{2}):(\d{2}))?", text or "")
+                            if match:
+                                year, month, day, hour, minute, second, fraction, sign, tz_h, tz_m = match.groups()
+                                value = f"{year}{month}{day}{hour}{minute}{second}"
+                                if fraction:
+                                    value += f".{fraction[:6]}"
+                                if sign:
+                                    value += f"{sign}{int(tz_h) * 60 + int(tz_m)}"
+                                props[name] = value
+                            else:
+                                props[name] = text
+                        else:
+                            props[name] = prop.text
+                    items.append(props)
+            return items
+
+        def find_context(res):
+            for element in res.iter():
+                if element.tag.endswith("}EnumerationContext") and element.text and element.text.strip():
+                    return element.text.strip()
+            return None
+
+        enum_msg = ET.Element(f"{{{wsen}}}Enumerate")
+        wql_filter = ET.SubElement(enum_msg, f"{{{wsmn}}}Filter")
+        wql_filter.set("Dialect", wql_dialect)
+        wql_filter.text = wql
+        ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
+        ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
+
+        self.logger.info(f"Executing WQL syntax: {wql}")
+        res = self.conn.wsman.enumerate(resource_uri=resource_uri, resource=enum_msg)
+
+        records.extend(parse_items(res))
+
+        # Pull the remaining pages until the server sends EndOfSequence
+        context = find_context(res)
+        while context:
+            pull_msg = ET.Element(f"{{{wsen}}}Pull")
+            context_element = ET.SubElement(pull_msg, f"{{{wsen}}}EnumerationContext")
+            context_element.text = context
+            ET.SubElement(pull_msg, f"{{{wsen}}}MaxElements").text = "32000"
+            res = self.conn.wsman.pull(resource_uri, pull_msg)
+            records.extend(parse_items(res))
+            if any(element.tag.endswith("}EndOfSequence") for element in res.iter()):
+                break
+            context = find_context(res)
+
+        return records
 
     def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:
