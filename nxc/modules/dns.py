@@ -1,605 +1,283 @@
 import sys
-import re
-import socket
-import datetime
-from struct import unpack
-from impacket.structure import Structure
-from ldap3 import LEVEL, MODIFY_DELETE, MODIFY_ADD, MODIFY_REPLACE, Tls, Server, Connection, NTLM
-import ldap3
-import dns.resolver
-import ssl
+from impacket.dnsp import (
+    ADIDNSManager,
+    DNS_RECORD,
+    DNS_RPC_RECORD_A,
+    DNS_RPC_RECORD_NODE_NAME,
+    DNS_RPC_RECORD_SRV,
+    DNS_RPC_RECORD_TS,
+    RECORD_TYPE_MAPPING,
+    format_record,
+)
+from nxc.helpers.misc import CATEGORY
+from nxc.parsers.ldap_results import parse_result_attributes
 
-
-class DNS_RECORD(Structure):
-    """
-    dnsRecord - used in LDAP
-    [MS-DNSP] section 2.3.2.2
-    """
-    structure = (
-        ("DataLength", "<H-Data"),
-        ("Type", "<H"),
-        ("Version", "B=5"),
-        ("Rank", "B"),
-        ("Flags", "<H=0"),
-        ("Serial", "<L"),
-        ("TtlSeconds", ">L"),
-        ("Reserved", "<L=0"),
-        ("TimeStamp", "<L=0"),
-        ("Data", ":")
-    )
-
-
-class DNS_COUNT_NAME(Structure):
-    """
-    DNS_COUNT_NAME
-    Used for FQDNs in LDAP communication
-    [MS-DNSP] section 2.2.2.2.2
-    """
-    structure = (
-        ("Length", "B-RawName"),
-        ("LabelCount", "B"),
-        ("RawName", ":")
-    )
-
-    def toFqdn(self):
-        ind = 0
-        labels = []
-        for _i in range(self["LabelCount"]):
-            nextlen = unpack("B", self["RawName"][ind:ind + 1])[0]
-            labels.append(self["RawName"][ind + 1:ind + 1 + nextlen].decode("utf-8"))
-            ind += nextlen + 1
-        # For the final dot
-        labels.append("")
-        return ".".join(labels)
-
-
-class DNS_RPC_RECORD_A(Structure):
-    """
-    DNS_RPC_RECORD_A
-    [MS-DNSP] section 2.2.2.2.4.1
-    """
-    structure = (
-        ("address", ":"),
-    )
-
-    def formatCanonical(self):
-        return socket.inet_ntoa(self["address"])
-
-    def fromCanonical(self, canonical):
-        self["address"] = socket.inet_aton(canonical)
-
-
-class DNS_RPC_RECORD_NODE_NAME(Structure):
-    """
-    DNS_RPC_RECORD_NODE_NAME
-    [MS-DNSP] section 2.2.2.2.4.2
-    """
-    structure = (
-        ("nameNode", ":", DNS_COUNT_NAME),
-    )
-
-
-class DNS_RPC_RECORD_SOA(Structure):
-    """
-    DNS_RPC_RECORD_SOA
-    [MS-DNSP] section 2.2.2.2.4.3
-    """
-    structure = (
-        ("dwSerialNo", ">L"),
-        ("dwRefresh", ">L"),
-        ("dwRetry", ">L"),
-        ("dwExpire", ">L"),
-        ("dwMinimumTtl", ">L"),
-        ("namePrimaryServer", ":", DNS_COUNT_NAME),
-        ("zoneAdminEmail", ":", DNS_COUNT_NAME)
-    )
-
-
-class DNS_RPC_RECORD_SRV(Structure):
-    """
-    DNS_RPC_RECORD_SRV
-    [MS-DNSP] section 2.2.2.2.4.18
-    """
-    structure = (
-        ("wPriority", ">H"),
-        ("wWeight", ">H"),
-        ("wPort", ">H"),
-        ("nameTarget", ":", DNS_COUNT_NAME)
-    )
-
-
-class DNS_RPC_RECORD_TS(Structure):
-    """
-    DNS_RPC_RECORD_TS
-    [MS-DNSP] section 2.2.2.2.4.23
-    """
-    structure = (
-        ("entombedTime", "<Q"),
-    )
-
-    def toDatetime(self):
-        microseconds = self["entombedTime"] / 10.
-        return datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=microseconds)
-
-
-RECORD_TYPE_MAPPING = {
-    0: "ZERO",
-    1: "A",
-    2: "NS",
-    5: "CNAME",
-    6: "SOA",
-    33: "SRV",
-    65281: "WINS"
+# Short aliases for faster use: -o A=query R=new-pc D=10.0.20.5
+ALIASES = {
+    "A": "ACTION",
+    "R": "RECORD",
+    "D": "DATA",
+    "O": "OPTIONS",
+    "Z": "ZONE",
+    "M": "ALLOWMULTIPLE",
+    "T": "TOMBSTONED",
 }
+
+VALID_ACTIONS = (
+    "list",
+    "list-dn",
+    "enum",
+    "query",
+    "add",
+    "modify",
+    "remove",
+    "ldapdelete",
+    "resurrect",
+)
+
+# Actions that operate on a specific record / that write record data
+RECORD_ACTIONS = ("query", "add", "modify", "remove", "ldapdelete", "resurrect")
+DATA_ACTIONS = ("add", "modify")
 
 
 class NXCModule:
     """
-    DNS management module for Active Directory integrated DNS via LDAP
+    Manage DNS records of Active Directory integrated DNS zones via LDAP.
     Module by @lodos2005 inspired by @dirkjanm // https://github.com/dirkjanm/krbrelayx/blob/master/dnstool.py
+    Record handling is provided by impacket.dnsp.ADIDNSManager.
     """
 
     name = "dns"
-    description = "Query/modify DNS records for Active Directory integrated DNS via LDAP"
+    description = "Query/modify DNS records of Active Directory integrated DNS via LDAP"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
     opsec_safe = True
     multiple_hosts = True
 
-    def __init__(self):
-        self.context = None
-        self.module_options = None
-        self.show_usage = False
-
-    def print_usage(self, context):
-        context.log.highlight("DNS management module for Active Directory integrated DNS via LDAP")
-        context.log.highlight("Module by @lodos2005 inspired by @dirkjanm")
-        context.log.highlight("Usage: -M dns -o <options>")
-        context.log.highlight("")
-        context.log.highlight("ACTIONS (specify with -o ACTION=<action> or A=<action>):")
-        context.log.highlight("")
-        context.log.highlight("  add:          Adds a new A record. Requires RECORD and DATA.")
-        context.log.highlight("    Example: -M dns -o ACTION=add RECORD=new-pc DATA=10.0.20.05")
-        context.log.highlight("")
-        context.log.highlight("  modify:       Modifies an existing A record. Requires RECORD and DATA.")
-        context.log.highlight("    Example: -M dns -o ACTION=modify RECORD=new-pc DATA=10.0.20.05")
-        context.log.highlight("")
-        context.log.highlight("  query:        Queries an existing record. Requires RECORD.")
-        context.log.highlight("    Example: -M dns -o A=query R=new-pc")
-        context.log.highlight("")
-        context.log.highlight("  remove:       Removes a record by tombstoning it. Requires RECORD and optionally DATA.")
-        context.log.highlight("    Example: -M dns -o ACTION=remove RECORD=new-pc DATA=10.0.20.05")
-        context.log.highlight("")
-        context.log.highlight("  ldapdelete:   Deletes a record object directly from LDAP. Requires RECORD.")
-        context.log.highlight("    Example: -M dns -o A=ldapdelete R=new-pc")
-        context.log.highlight("")
-        context.log.highlight("  resurrect:    Resurrects a tombstoned record object. Requires RECORD.")
-        context.log.highlight("    Example: -M dns -o ACTION=resurrect RECORD=tombstoned-pc")
-        context.log.highlight("")
-        context.log.highlight("  list:         Lists all DNS zones. (Default action if no options are given)")
-        context.log.highlight("    Example: -M dns -o ACTION=list")
-        context.log.highlight("")
-        context.log.highlight("  list-dn:      Lists all DNS zones with their Distinguished Names.")
-        context.log.highlight("    Example: -M dns -o ACTION=list-dn")
-        context.log.highlight("")
-        context.log.highlight("OTHER OPTIONS:")
-        context.log.highlight("  RECORD / R:       The FQDN of the record to target (e.g., 'lodos2005').")
-        context.log.highlight("  DATA / D:         The data for the record. For A records, this is the IP address. (e.g., 10.0.20.05)")
-        context.log.highlight("  OPTIONS / O:      DNS partition to use ('forest' or 'legacy'). Default is DomainDnsZones.")
-        context.log.highlight("  ZONE / Z:         Zone to search in, if different from the current domain. (e.g., lodos2005.local)")
-        context.log.highlight("  ALLOWMULTIPLE / M: Allow multiple A records for the same name (e.g., 'true').")
-        context.log.highlight("  HELP / H:         Show this help message.")
-        
     def options(self, context, module_options):
         """
-        Options:
-        --------
-        ACTION      Action to perform: add, modify, query, remove, resurrect, ldapdelete, list, list-dn (default: auto)
-        RECORD      Target DNS record (FQDN)
-        DATA        Record data (IP address for A records)
-        OPTIONS     DNS zone options: legacy, forest
-        ZONE        Zone to search in (if different than the current domain)
-        ALLOWMULTIPLE   Allow multiple A records for the same name (default: false)
-        HELP          Show usage examples
-        A           Alias for ACTION
-        R           Alias for RECORD
-        D           Alias for DATA
-        O           Alias for OPTIONS
-        Z           Alias for ZONE
-        M           Alias for ALLOWMULTIPLE
-        H           Show usage examples
+        ACTION          Action to perform (default: add with RECORD+DATA, query with RECORD, otherwise list):
+                          list         list DNS zones of the domain and forest partitions
+                          list-dn      same as list, but show the zones' Distinguished Names
+                          enum         dump every record of the zone (set ZONE/OPTIONS to target another one)
+                          query        show one record and all its values
+                          add          add an A record (requires RECORD + DATA)
+                          modify       change the IP of an existing A record (requires RECORD + DATA)
+                          remove       tombstone the record (DATA removes one IP of a multi-record node)
+                          ldapdelete   delete the record object directly from LDAP, bypassing the tombstone
+                          resurrect    revive a tombstoned record, re-add its IP afterwards with ACTION=add
+        RECORD          Target DNS record, FQDN or relative to the zone (e.g. 'web01' or 'web01.corp.local')
+        DATA            Record data, an IPv4 address for A records (e.g. 10.0.20.5)
+        ZONE            Zone to operate in (default: current domain)
+        OPTIONS         DNS partition: forest (ForestDnsZones) or legacy (CN=System); default: DomainDnsZones
+        ALLOWMULTIPLE   With ACTION=add: append the record even if another A record exists (default: false)
+        TOMBSTONED      With ACTION=enum: also show tombstoned records, marked [TOMBSTONED] (default: false)
 
-        
+        Short aliases: A=ACTION, R=RECORD, D=DATA, Z=ZONE, O=OPTIONS, M=ALLOWMULTIPLE, T=TOMBSTONED
+
+        Usage:
+            nxc ldap 192.168.20.05 -u user -p pass -M dns                                # list zones
+            nxc ldap 192.168.20.05 -u user -p pass -M dns -o ACTION=enum                 # dump zone records
+            nxc ldap 192.168.20.05 -u user -p pass -M dns -o ACTION=add RECORD=web01 DATA=10.0.20.5
+            nxc ldap 192.168.20.05 -u user -p pass -M dns -o A=query R=web01             # short aliases
+            nxc ldap 192.168.20.05 -u user -p pass -M dns -o A=add R=web01 D=10.0.20.6 M=true   # second IP
+            nxc ldap 192.168.20.05 -u user -p pass -M dns -o ACTION=enum ZONE=_msdcs.corp.local OPTIONS=forest T=true
         """
-        self.context = context
-        self.module_options = module_options
-        self.show_usage = False
+        options = {}
+        for key, value in module_options.items():
+            options[ALIASES.get(key.upper(), key.upper())] = value
 
-        if "HELP" in module_options or "H" in module_options:
-            self.action = "help"
-            return
+        self.action = options.get("ACTION", "").lower()
+        self.record = options.get("RECORD", "")
+        self.data = options.get("DATA", "")
+        self.zone = options.get("ZONE", "")
+        self.partition = options.get("OPTIONS", "").lower() or "domain"
+        self.allow_multiple = options.get("ALLOWMULTIPLE", "").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        self.include_tombstoned = options.get("TOMBSTONED", "").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
-        # Parse options with aliases
-        self.action = module_options.get("ACTION", "").lower()
-        if "A" in module_options:
-            self.action = module_options["A"].lower()
-
-        # if action not valid list show usage
-        if self.action not in ["add", "modify", "query", "remove", "ldapdelete", "resurrect", "list", "list-dn"]:
-            self.print_usage(context)
-            sys.exit(1)
-            
-        self.record = module_options.get("RECORD", "")
-        if "R" in module_options:
-            self.record = module_options["R"]
-            
-        self.data = module_options.get("DATA", "")
-        if "D" in module_options:
-            self.data = module_options["D"]
-            
-        self.dns_options = module_options.get("OPTIONS", "").lower()
-        if "O" in module_options:
-            self.dns_options = module_options["O"].lower()
-            
-        self.zone = module_options.get("ZONE", "")
-        if "Z" in module_options:
-            self.zone = module_options["Z"]
-            
-        self.allow_multiple = module_options.get("ALLOWMULTIPLE", "false").lower() == "true"
-        if "M" in module_options:
-            self.allow_multiple = module_options["M"].lower() == "true"
-            
-        help_value = module_options.get("HELP", "false").lower()
-        self.show_usage = help_value == "true" or help_value == "" or len(help_value) > 0 or "H" in module_options
-        if help_value == "false":
-            self.show_usage = False
-
-        # Determine default action based on provided parameters
+        # Derive the default action before validating it
         if not self.action:
             if self.record and self.data:
                 self.action = "add"
-            elif self.record and not self.data:
+            elif self.record:
                 self.action = "query"
-            elif not self.record and not self.data:
-                self.action = "list"
             else:
-                context.log.fail("You must specify ACTION when RECORD and DATA are not provided together")
-                sys.exit(1)
+                self.action = "list"
 
-        # Validate required parameters
-        if self.action in ["add", "modify", "remove"] and not self.data:
-            context.log.fail(f"Action '{self.action}' requires DATA parameter")
+        if self.action not in VALID_ACTIONS:
+            context.log.fail(
+                f"Invalid ACTION '{self.action}', valid actions: {', '.join(VALID_ACTIONS)}"
+            )
             sys.exit(1)
 
-        if self.action in ["modify", "remove", "ldapdelete", "resurrect", "query"] and not self.record:
-            context.log.fail(f"Action '{self.action}' requires RECORD parameter")
+        if self.partition not in ("domain", "forest", "legacy"):
+            context.log.fail(
+                "OPTIONS must be 'forest' or 'legacy' (default: DomainDnsZones)"
+            )
             sys.exit(1)
 
-    def get_dns_zones(self, ldap_conn, root, attr="dc"):
-        """Get DNS zones from LDAP"""
-        ldap_conn.search(search_base=root, search_filter="(objectClass=dnsZone)", search_scope=LEVEL, attributes=[attr])
-        zones = []
-        for entry in ldap_conn.response:
-            if entry["type"] != "searchResEntry":
-                continue
-            zones.append(entry["attributes"][attr])
-        return zones
+        if self.action in RECORD_ACTIONS and not self.record:
+            context.log.fail(f"Action '{self.action}' requires the RECORD option")
+            sys.exit(1)
 
-    def get_next_serial(self, dc, zone):
-        """Get next serial number for DNS record"""
-        try:
-            dnsresolver = dns.resolver.Resolver()
-            try:
-                socket.inet_aton(dc)
-                dnsresolver.nameservers = [dc]
-            except OSError:
-                pass
-
-            res = dnsresolver.resolve(zone, "SOA", tcp=True)
-            for answer in res:
-                return answer.serial + 1
-        except Exception:
-            # If we can't get serial, use current timestamp
-            return int(datetime.datetime.now().timestamp())
-
-    def ldap2domain(self, ldap):
-        """Convert LDAP DN to domain name"""
-        return re.sub(r",DC=", ".", ldap[ldap.find("DC="):], flags=re.I)[3:]
-
-    def print_record(self, context, record, ts=False):
-        """Print DNS record information"""
-        try:
-            rtype = RECORD_TYPE_MAPPING[record["Type"]]
-        except KeyError:
-            rtype = "Unsupported"
-        
-        if ts:
-            context.log.highlight("Record is tombStoned (inactive)")
-        
-        context.log.success("Record entry:")
-        context.log.display(f' - Type: {record["Type"]} ({rtype}) (Serial: {record["Serial"]})')
-        
-        if record["Type"] == 0:
-            tstime = DNS_RPC_RECORD_TS(record["Data"])
-            context.log.display(f" - Tombstoned at: {tstime.toDatetime()}")
-        # A record
-        elif record["Type"] == 1:
-            address = DNS_RPC_RECORD_A(record["Data"])
-            context.log.display(f" - Address: {address.formatCanonical()}")
-        # NS record or CNAME record
-        elif record["Type"] == 2 or record["Type"] == 5:
-            address = DNS_RPC_RECORD_NODE_NAME(record["Data"])
-            context.log.display(f' - Address: {address["nameNode"].toFqdn()}')
-        # SRV record
-        elif record["Type"] == 33:
-            record_data = DNS_RPC_RECORD_SRV(record["Data"])
-            context.log.display(f' - Priority: {record_data["wPriority"]}')
-            context.log.display(f' - Weight: {record_data["wWeight"]}')
-            context.log.display(f' - Port: {record_data["wPort"]}')
-            context.log.display(f' - Name: {record_data["nameTarget"].toFqdn()}')
-        # SOA record
-        elif record["Type"] == 6:
-            record_data = DNS_RPC_RECORD_SOA(record["Data"])
-            context.log.display(f' - Serial: {record_data["dwSerialNo"]}')
-            context.log.display(f' - Refresh: {record_data["dwRefresh"]}')
-            context.log.display(f' - Retry: {record_data["dwRetry"]}')
-            context.log.display(f' - Expire: {record_data["dwExpire"]}')
-            context.log.display(f' - Minimum TTL: {record_data["dwMinimumTtl"]}')
-            context.log.display(f' - Primary server: {record_data["namePrimaryServer"].toFqdn()}')
-            context.log.display(f' - Zone admin email: {record_data["zoneAdminEmail"].toFqdn()}')
-
-    def new_record(self, rtype, serial):
-        """Create new DNS record"""
-        nr = DNS_RECORD()
-        nr["Type"] = rtype
-        nr["Serial"] = serial
-        nr["TtlSeconds"] = 180
-        # From authoritive zone
-        nr["Rank"] = 240
-        return nr
+        if self.action in DATA_ACTIONS and not self.data:
+            context.log.fail(f"Action '{self.action}' requires the DATA option")
+            sys.exit(1)
 
     def on_login(self, context, connection):
-        """Main module execution"""
-        self.context = context
-        
-        if hasattr(self, "action") and self.action == "help":
-            self.print_usage(context)
-            return
+        manager = ADIDNSManager(
+            connection.ldap_connection,
+            dns_server=getattr(connection.args, "dns_server", None) or connection.host,
+            dns_timeout=getattr(connection.args, "dns_timeout", None) or 3,
+            domain_root=connection.baseDN or None,
+            forest_root=getattr(connection, "forestDN", "") or None,
+        )
 
-        if not hasattr(self, "action"):
-            context.log.fail("Module options not properly initialized")
-            return
-
-        # Establish a new ldap3 connection
-        use_ssl = connection.port == 636
-        tls_config = None
-        if use_ssl:
-            tls_config = Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2)
-        
-        try:
-            server = Server(connection.host, port=connection.port, use_ssl=use_ssl, tls=tls_config, get_info=ldap3.ALL)
-            ldap_conn = Connection(server, user=f"{connection.domain}\\{connection.username}", password=connection.password, authentication=NTLM, auto_bind=True)
-        except Exception as e:
-            context.log.fail(f"Failed to establish LDAP connection: {e}")
-            return
-
-        # Get domain information
-        domainroot = ldap_conn.server.info.other["defaultNamingContext"][0]
-        forestroot = ldap_conn.server.info.other["rootDomainNamingContext"][0]
-        
-        # Determine DNS root based on options
-        if self.dns_options == "forest":
-            dnsroot = f"CN=MicrosoftDNS,DC=ForestDnsZones,{forestroot}"
-        elif self.dns_options == "legacy":
-            dnsroot = f"CN=MicrosoftDNS,CN=System,{domainroot}"
+        if self.action in ("list", "list-dn"):
+            self._list_zones(context, manager)
+        elif self.action == "enum":
+            self._enum(context, connection, manager)
+        elif self.action == "query":
+            self._query(context, manager)
         else:
-            dnsroot = f"CN=MicrosoftDNS,DC=DomainDnsZones,{domainroot}"
+            self._mutate(context, manager)
 
-        # Handle list operations
-        if self.action in ["list", "list-dn"]:
-            attr = "distinguishedName" if self.action == "list-dn" else "dc"
-            
-            zones = self.get_dns_zones(ldap_conn, dnsroot, attr)
-            if len(zones) > 0:
-                context.log.success(f"Found {len(zones)} domain DNS zones:")
+    def _list_zones(self, context, manager):
+        partitions = (
+            [("legacy", "legacy")]
+            if self.partition == "legacy"
+            else [("domain", "domain"), ("forest", "forest")]
+        )
+        if self.partition == "forest":
+            partitions = [("forest", "forest")]
+
+        found_any = False
+        for partition, label in partitions:
+            zones = manager.get_dns_zones(partition, return_dn=self.action == "list-dn")
+            if zones:
+                found_any = True
+                context.log.success(f"Found {len(zones)} {label} DNS zones:")
                 for zone in zones:
                     context.log.highlight(f"    {zone}")
-            
-            if self.dns_options != "legacy":
-                forestdns = f"CN=MicrosoftDNS,DC=ForestDnsZones,{forestroot}"
-                zones = self.get_dns_zones(ldap_conn, forestdns, attr)
-                if len(zones) > 0:
-                    context.log.success(f"Found {len(zones)} forest DNS zones:")
-                    for zone in zones:
-                        context.log.highlight(f"    {zone}")
-            
-            if self.show_usage:
-                self.print_usage(context)
 
-            ldap_conn.unbind()
+        if not found_any:
+            context.log.fail("No DNS zones found")
+
+    def _enum(self, context, connection, manager):
+        zone = self.zone or manager.domain
+        search_base = f"DC={zone},{manager.get_dns_root(self.partition)}"
+        response = connection.search(
+            searchFilter="(objectClass=dnsNode)",
+            attributes=["dnsRecord", "dNSTombstoned", "name"],
+            baseDN=search_base,
+        )
+        entries = [e for e in parse_result_attributes(response) if e]
+        tombstoned_entries = [
+            e for e in entries if str(e.get("dNSTombstoned", "FALSE")).upper() == "TRUE"
+        ]
+        visible_entries = (
+            entries
+            if self.include_tombstoned
+            else [
+                e
+                for e in entries
+                if str(e.get("dNSTombstoned", "FALSE")).upper() != "TRUE"
+            ]
+        )
+        if not visible_entries:
+            context.log.fail(f"No records found in zone {zone} ({self.partition})")
             return
 
-        # Validate record parameter for record operations
-        if not self.record:
-            context.log.fail("You need to specify a RECORD parameter")
-            ldap_conn.unbind()
-            return
-
-        # Determine zone
-        zone = self.zone if self.zone else self.ldap2domain(domainroot)
-
-        # Clean target record
-        target = self.record
-        if target.lower().endswith(zone.lower()):
-            target = target[:-(len(zone) + 1)]
-
-        searchtarget = f"DC={zone},{dnsroot}"
-        
-        # Search for existing record
-        try:
-            ldap_conn.search(
-                search_base=searchtarget, 
-                search_filter=f"(&(objectClass=dnsNode)(name={ldap3.utils.conv.escape_filter_chars(target)}))", 
-                attributes=["dnsRecord", "dNSTombstoned", "name"]
+        context.log.success(f"Found {len(visible_entries)} records in zone {zone}:")
+        for entry in sorted(
+            visible_entries, key=lambda e: str(e.get("name", "")).lower()
+        ):
+            records = entry.get("dnsRecord", [])
+            if isinstance(records, bytes):
+                records = [records]
+            tombstoned = str(entry.get("dNSTombstoned", "FALSE")).upper() == "TRUE"
+            name = (
+                f"[TOMBSTONED] {entry.get('name', '?')}"
+                if tombstoned
+                else entry.get("name", "?")
             )
-        except Exception as e:
-            context.log.fail(f"Failed to search for DNS record: {e}")
-            ldap_conn.unbind()
+            for data in records:
+                context.log.highlight(
+                    f"    {name!s:<35} {self._summarize_record(DNS_RECORD(data))}"
+                )
+
+        if tombstoned_entries and not self.include_tombstoned:
+            context.log.display(
+                f"{len(tombstoned_entries)} tombstoned records hidden (use TOMBSTONED=true to show them)"
+            )
+
+    @staticmethod
+    def _summarize_record(record):
+        rtype = RECORD_TYPE_MAPPING.get(record["Type"], "UNKNOWN")
+        if record["Type"] == 1:
+            return f"A {DNS_RPC_RECORD_A(record['Data']).formatCanonical()}"
+        if record["Type"] in (2, 5):
+            fqdn = DNS_RPC_RECORD_NODE_NAME(record["Data"])["nameNode"].toFqdn()
+            return f"{rtype} {fqdn}"
+        if record["Type"] == 33:
+            srv = DNS_RPC_RECORD_SRV(record["Data"])
+            return f"SRV {srv['wPriority']} {srv['wWeight']} {srv['wPort']} {srv['nameTarget'].toFqdn()}"
+        if record["Type"] == 0:
+            return f"Tombstone ({DNS_RPC_RECORD_TS(record['Data']).toDatetime()})"
+        return rtype
+
+    def _query(self, context, manager):
+        entry = manager.query_record(self.record, self.zone, self.partition)
+        if entry is None:
+            context.log.fail(manager.last_error)
             return
 
-        targetentry = None
-        for entry in ldap_conn.response:
-            if entry["type"] != "searchResEntry":
-                continue
-            targetentry = entry
+        context.log.success(f"Found record {entry['name']}")
+        context.log.display(entry["dn"])
+        for record in entry["records"]:
+            for line in format_record(record, entry["tombstoned"]):
+                context.log.display(line)
 
-        # Check if record exists when required
-        if self.action in ["modify", "remove", "ldapdelete", "resurrect", "query"] and not targetentry:
-            context.log.fail("Target record not found!")
-            ldap_conn.unbind()
-            return
+    def _mutate(self, context, manager):
+        actions = {
+            "add": lambda: manager.add_record(
+                self.record,
+                self.data,
+                "A",
+                self.zone,
+                self.partition,
+                self.allow_multiple,
+            ),
+            "modify": lambda: manager.modify_record(
+                self.record, self.data, self.zone, self.partition
+            ),
+            "remove": lambda: manager.remove_record(
+                self.record, self.zone, self.partition, self.data or None
+            ),
+            "ldapdelete": lambda: manager.ldap_delete(
+                self.record, self.zone, self.partition
+            ),
+            "resurrect": lambda: manager.resurrect_record(
+                self.record, self.zone, self.partition
+            ),
+        }
 
-        # Execute action
-        if self.action == "query":
-            context.log.success(f'Found record {targetentry["attributes"]["name"]}')
-            context.log.display(targetentry["dn"])
-            for record in targetentry["raw_attributes"]["dnsRecord"]:
-                dr = DNS_RECORD(record)
-                self.print_record(context, dr, targetentry["attributes"]["dNSTombstoned"])
-
-        elif self.action == "add":
-            addtype = 1  # A record
-            if targetentry:
-                if not self.allow_multiple:
-                    for record in targetentry["raw_attributes"]["dnsRecord"]:
-                        dr = DNS_RECORD(record)
-                        if dr["Type"] == 1:
-                            address = DNS_RPC_RECORD_A(dr["Data"])
-                            context.log.fail(f"Record already exists and points to {address.formatCanonical()}. Use ACTION=modify to overwrite or ALLOWMULTIPLE=true to override this")
-                            ldap_conn.unbind()
-                            return
-
-                # Add extra record
-                record = self.new_record(addtype, self.get_next_serial(connection.host, zone))
-                record["Data"] = DNS_RPC_RECORD_A()
-                record["Data"].fromCanonical(self.data)
-                context.log.display("Adding extra record")
-                ldap_conn.modify(targetentry["dn"], {"dnsRecord": [(MODIFY_ADD, record.getData())]})
-                if ldap_conn.result["result"] == 0:
-                    context.log.success("LDAP operation completed successfully")
-                else:
-                    context.log.fail(f'LDAP operation failed: {ldap_conn.result["description"]} {ldap_conn.result.get("message", "")}')
-            else:
-                # Create new record
-                node_data = {
-                    "objectCategory": f'CN=Dns-Node,{ldap_conn.server.info.other["schemaNamingContext"][0]}',
-                    "dNSTombstoned": False,
-                    "name": target
-                }
-                record = self.new_record(addtype, self.get_next_serial(connection.host, zone))
-                record["Data"] = DNS_RPC_RECORD_A()
-                record["Data"].fromCanonical(self.data)
-                record_dn = f"DC={target},{searchtarget}"
-                node_data["dnsRecord"] = [record.getData()]
-                context.log.display("Adding new record")
-                ldap_conn.add(record_dn, ["top", "dnsNode"], node_data)
-                if ldap_conn.result["result"] == 0:
-                    context.log.success("LDAP operation completed successfully")
-                else:
-                    context.log.fail(f'LDAP operation failed: {ldap_conn.result["description"]} {ldap_conn.result.get("message", "")}')
-
-        elif self.action == "modify":
-            addtype = 1  # A record
-            targetrecord = None
-            records = []
-            for record in targetentry["raw_attributes"]["dnsRecord"]:
-                dr = DNS_RECORD(record)
-                if dr["Type"] == 1:
-                    targetrecord = dr
-                else:
-                    records.append(record)
-            
-            if not targetrecord:
-                context.log.fail("No A record exists yet. Use ACTION=add to add it")
-                ldap_conn.unbind()
-                return
-            
-            targetrecord["Serial"] = self.get_next_serial(connection.host, zone)
-            targetrecord["Data"] = DNS_RPC_RECORD_A()
-            targetrecord["Data"].fromCanonical(self.data)
-            records.append(targetrecord.getData())
-            context.log.display("Modifying record")
-            ldap_conn.modify(targetentry["dn"], {"dnsRecord": [(MODIFY_REPLACE, records)]})
-            if ldap_conn.result["result"] == 0:
-                context.log.success("LDAP operation completed successfully")
-            else:
-                context.log.fail(f'LDAP operation failed: {ldap_conn.result["description"]} {ldap_conn.result.get("message", "")}')
-
-        elif self.action == "remove":
-            if len(targetentry["raw_attributes"]["dnsRecord"]) > 1:
-                context.log.display("Target has multiple records, removing the one specified")
-                targetrecord = None
-                for record in targetentry["raw_attributes"]["dnsRecord"]:
-                    dr = DNS_RECORD(record)
-                    if dr["Type"] == 1:
-                        tr = DNS_RPC_RECORD_A(dr["Data"])
-                        if tr.formatCanonical() == self.data:
-                            targetrecord = record
-                            break
-                
-                if not targetrecord:
-                    context.log.fail("Could not find a record with the specified data")
-                    ldap_conn.unbind()
-                    return
-                
-                ldap_conn.modify(targetentry["dn"], {"dnsRecord": [(MODIFY_DELETE, targetrecord)]})
-                if ldap_conn.result["result"] == 0:
-                    context.log.success("LDAP operation completed successfully")
-                else:
-                    context.log.fail(f'LDAP operation failed: {ldap_conn.result["description"]} {ldap_conn.result.get("message", "")}')
-            else:
-                context.log.display("Target has only one record, tombstoning it")
-                diff = datetime.datetime.today() - datetime.datetime(1601, 1, 1)
-                tstime = int(diff.total_seconds() * 10000)
-                record = self.new_record(0, self.get_next_serial(connection.host, zone))
-                record["Data"] = DNS_RPC_RECORD_TS()
-                record["Data"]["entombedTime"] = tstime
-                ldap_conn.modify(targetentry["dn"], {
-                    "dnsRecord": [(MODIFY_REPLACE, [record.getData()])],
-                    "dNSTombstoned": [(MODIFY_REPLACE, True)]
-                })
-                if ldap_conn.result["result"] == 0:
-                    context.log.success("LDAP operation completed successfully")
-                else:
-                    context.log.fail(f'LDAP operation failed: {ldap_conn.result["description"]} {ldap_conn.result.get("message", "")}')
-
-        elif self.action == "ldapdelete":
-            context.log.display("Deleting record over LDAP")
-            ldap_conn.delete(targetentry["dn"])
-            if ldap_conn.result["result"] == 0:
-                context.log.success("LDAP operation completed successfully")
-            else:
-                context.log.fail(f'LDAP operation failed: {ldap_conn.result["description"]} {ldap_conn.result.get("message", "")}')
-
-        elif self.action == "resurrect":
-            if len(targetentry["raw_attributes"]["dnsRecord"]) > 1:
-                context.log.fail("Target has multiple records, I dont know how to handle this.")
-                ldap_conn.unbind()
-                return
-            else:
-                context.log.display("Target has only one record, resurrecting it")
-                diff = datetime.datetime.today() - datetime.datetime(1601, 1, 1)
-                tstime = int(diff.total_seconds() * 10000)
-                record = self.new_record(0, self.get_next_serial(connection.host, zone))
-                record["Data"] = DNS_RPC_RECORD_TS()
-                record["Data"]["entombedTime"] = tstime
-                ldap_conn.modify(targetentry["dn"], {
-                    "dnsRecord": [(MODIFY_REPLACE, [record.getData()])],
-                    "dNSTombstoned": [(MODIFY_REPLACE, False)]
-                })
-                if ldap_conn.result["result"] == 0:
-                    context.log.success("Record resurrected. You will need to (re)add the record with the IP address.")
-                else:
-                    context.log.fail(f'LDAP operation failed: {ldap_conn.result["description"]} {ldap_conn.result.get("message", "")}')
-        
-        # Close the connection
-        ldap_conn.unbind() 
+        if actions[self.action]():
+            messages = {
+                "add": f"Successfully added DNS record {self.record}",
+                "modify": f"Successfully modified DNS record {self.record}",
+                "remove": f"Successfully removed DNS record {self.record}",
+                "ldapdelete": f"Successfully deleted DNS node {self.record} over LDAP",
+                "resurrect": f"Record {self.record} resurrected. Re-add it with ACTION=add to set the IP address",
+            }
+            context.log.highlight(messages[self.action])
+        else:
+            context.log.fail(manager.last_error)
