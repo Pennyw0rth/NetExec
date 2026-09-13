@@ -644,7 +644,7 @@ class mssql(connection):
             self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
             return
         if not rows:
-            self.logger.display("No backups returned")
+            self.logger.fail("No backups returned")
             return
         else:
             self.logger.display("Enumerated backups")
