@@ -48,6 +48,9 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.no_ntlm = False
+        self.encryption = None
+        self.edition = ""
+        self.version = ""
         self.dpapi_system_key = None
         self.no_da = None
 
