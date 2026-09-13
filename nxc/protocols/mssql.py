@@ -537,11 +537,11 @@ class mssql(connection):
             self.logger.display(f"Tables in database: {self.args.database}")
             self.logger.highlight(f"{'Table Name':<50} {'Last Modified':<25}")
             self.logger.highlight(f"{'-' * 50} {'-' * 25}")
-            for r in rows:
-                mod = r.get("modify_date", "")
-                if mod and hasattr(mod, "strftime"):
-                    mod = mod.strftime("%Y-%m-%d %H:%M:%S")
-                self.logger.highlight(f"{r.get('TableName', ''):<50} {mod!s:<25}")
+            for row in rows:
+                modify_date = row.get("modify_date", "")
+                if modify_date and hasattr(modify_date, "strftime"):
+                    modify_date = modify_date.strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{row.get('TableName', ''):<50} {modify_date!s:<25}")
             self.logger.highlight(f"Total: {len(rows)} table(s)")
             return
 
