@@ -12,7 +12,7 @@ class NXCModule:
 
     name = "enum_dns"
     description = "Uses WMI to dump DNS from an AD DNS Server"
-    supported_protocols = ["smb", "wmi"]
+    supported_protocols = ["smb", "wmi", "winrm"]
     category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
@@ -31,6 +31,9 @@ class NXCModule:
             domains = []
             output = connection.wmi_query("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
             domains = [result["Name"]["value"] for result in output] if output else []
+            if not domains:
+                context.log.fail("No DNS zones found (is this a DNS server?)")
+                return
             context.log.success(f"Domains retrieved: {domains}")
         else:
             domains = [self.domains]
