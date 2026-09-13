@@ -71,8 +71,10 @@ class NXCRPCConnection:
     def create_smb_transport(self, named_pipe, target_ip=None):
         conn = self.connection
 
-        if conn.conn is not None and conn.host == target_ip:
-            return transport.SMBTransport(conn.conn.getRemoteHost(), filename=named_pipe, smb_connection=conn.conn,)
+        # Create a new SMB conn if we don't have one already or
+        # if we are targetting a different IP (e.g. the DC instead of the original host) and therefore need to recreate the conn
+        if conn.conn is not None and (target_ip is None or conn.host == target_ip):
+            return transport.SMBTransport(conn.conn.getRemoteHost(), filename=named_pipe, smb_connection=conn.conn)
         rpc_transport = transport.SMBTransport(conn.remoteName, conn.port, named_pipe, conn.username, conn.password if conn.password else "", conn.domain, conn.lmhash, conn.nthash, conn.aesKey, doKerberos=conn.kerberos, kdcHost=conn.kdcHost)
         if target_ip or conn.host:
             rpc_transport.setRemoteHost(target_ip or conn.host)

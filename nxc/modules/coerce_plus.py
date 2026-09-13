@@ -1083,7 +1083,7 @@ class EFS_HASH_BLOB(NDRSTRUCT):
 
 class ENCRYPTION_CERTIFICATE_HASH(NDRSTRUCT):
     structure = (
-        ("Lenght", DWORD),
+        ("Length", DWORD),
         ("SID", RPC_SID),
         ("Hash", EFS_HASH_BLOB),
         ("Display", LPWSTR),
