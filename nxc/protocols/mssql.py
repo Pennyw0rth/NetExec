@@ -484,8 +484,7 @@ class mssql(connection):
 
     def list_databases(self):
         query = """
-        SELECT d.name AS DatabaseName, 
-                suser_sname(d.owner_sid) AS Owner
+        SELECT d.name AS DatabaseName, suser_sname(d.owner_sid) AS Owner
         FROM sys.databases d
         ORDER BY d.name;
         """
@@ -506,26 +505,24 @@ class mssql(connection):
         self.logger.highlight(f"Total: {len(rows)} database(s)")
 
     def database(self):
-        db_arg = self.args.database
-
         # nxc --database (no value) -> list
-        if db_arg is True or db_arg is None:
+        if self.args.database is True:
             self.list_databases()
             return
 
         # nxc --database <name> -> tables
-        if isinstance(db_arg, str):
-            safe = db_arg.replace("'", "''")
+        if isinstance(self.args.database, str):
+            safe = self.args.database.replace("'", "''")
             exists = self.conn.sql_query(f"SELECT 1 FROM sys.databases WHERE name = N'{safe}';")
             if self.conn.lastError:
                 self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
             if not exists:
-                self.logger.fail(f"Database [{db_arg}] does not exist on the server.")
+                self.logger.fail(f"Database [{self.args.database}] does not exist on the server.")
                 return
 
             query = f"""
                 SELECT t.name AS TableName, t.modify_date
-                FROM {self._qname(db_arg)}.sys.tables t
+                FROM {self._qname(self.args.database)}.sys.tables t
                 ORDER BY t.name;
             """
             rows = self.conn.sql_query(query)
@@ -534,10 +531,10 @@ class mssql(connection):
                 self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
 
             if not rows:
-                self.logger.display(f"Database [{db_arg}] has no user tables.")
+                self.logger.display(f"Database [{self.args.database}] has no user tables.")
                 return
 
-            self.logger.display(f"Tables in database: {db_arg}")
+            self.logger.display(f"Tables in database: {self.args.database}")
             self.logger.highlight(f"{'Table Name':<50} {'Last Modified':<25}")
             self.logger.highlight(f"{'-' * 50} {'-' * 25}")
             for r in rows:
