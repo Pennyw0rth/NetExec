@@ -13,7 +13,7 @@ from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
 from nxc.paths import NXC_PATH
 
-from aardwolf.connection import RDPConnection
+from aardwolf.connection import RDPConnection, AUTHZ_ACCESS_DENIED
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
 from aardwolf.commons.iosettings import RDPIOSettings
@@ -168,6 +168,9 @@ class rdp(connection):
             timeout=self.args.rdp_timeout,
         )
 
+        # Reset so aardwolf negotiates on its own (restricted admin + HYBRID_EX), the loop above pinned it
+        self.iosettings.supported_protocols = None
+
         return True
 
     async def check_nla(self):
@@ -202,6 +205,7 @@ class rdp(connection):
         _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
         if err is not None:
             raise err
+        self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
 
     async def terminate_conn(self):
         """Terminate the RDP connection with a timeout so cleanup doesn't hang."""
@@ -215,6 +219,30 @@ class rdp(connection):
             await self.connect_rdp()
         finally:
             await self.terminate_conn()
+
+    async def login_and_confirm(self):
+        """Connect and return whether a real session opened (Save Session Info PDU), always cleaning up.
+
+        That PDU never comes when access is authorized but the logon is refused (restricted admin).
+        """
+        try:
+            await self.connect_rdp()
+            try:
+                await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
+                return True
+            except asyncio.TimeoutError:
+                self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
+                return False
+        finally:
+            await self.terminate_conn()
+
+    def rdp_access_denied(self):
+        """Whether the Early User Authorization Result PDU says the account has no RDP access right at all.
+
+        Distinct from a valid right whose logon is later refused (restricted admin), which yields no such PDU.
+        """
+        self.logger.debug(f"authz_result from Early User Authorization Result PDU: {self.conn.authz_result}")
+        return self.conn.authz_result == AUTHZ_ACCESS_DENIED
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         try:
@@ -269,9 +297,8 @@ class rdp(connection):
                 stype=stype,
             )
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            self.admin_privs = asyncio.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(
                 "{}\\{}{} {}".format(
                     domain,
@@ -299,8 +326,11 @@ class rdp(connection):
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
-            elif "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{(process_secret(password))} {self.mark_pwned()}")
+            elif self.rdp_access_denied():
+                self.logger.success(f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             elif "No such file" in str(e):
                 self.logger.fail(e)
             else:
@@ -325,9 +355,8 @@ class rdp(connection):
                 stype=asyauthSecret.PASS,
             )
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            self.admin_privs = asyncio.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
@@ -335,8 +364,11 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
+            if self.rdp_access_denied():
+                self.logger.success(f"{domain}\\{username}:{process_secret(password)}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             else:
                 reason = None
                 for word in self.rdp_error_status:
@@ -359,9 +391,8 @@ class rdp(connection):
                 stype=asyauthSecret.NT,
             )
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            self.admin_privs = asyncio.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
@@ -369,8 +400,11 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
+            if self.rdp_access_denied():
+                self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             else:
                 reason = None
                 for word in self.rdp_error_status:
