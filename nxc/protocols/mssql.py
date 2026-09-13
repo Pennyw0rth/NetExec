@@ -490,68 +490,65 @@ class mssql(connection):
         return "[" + str(ident).replace("]", "]]") + "]"
 
     def list_databases(self):
-        try:
-            q = (
-                "SELECT d.name AS DatabaseName, "
-                "       suser_sname(d.owner_sid) AS Owner "
-                "FROM sys.databases d "
-                "ORDER BY d.name;"
-            )
-            rows = self.conn.sql_query(q) or []
-            if not rows:
-                self.logger.display("No databases returned")
-                return
+        query = """
+        SELECT d.name AS DatabaseName, suser_sname(d.owner_sid) AS Owner
+        FROM sys.databases d
+        ORDER BY d.name;
+        """
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+        if not rows:
+            self.logger.display("No databases returned")
+            return
 
-            self.logger.display("Enumerated databases")
-            self.logger.highlight(f"{'Database Name':<30} {'Owner':<25}")
-            self.logger.highlight(f"{'-' * 30} {'-' * 25}")
-            for r in rows:
-                self.logger.highlight(f"{r.get('DatabaseName', ''):<30} {r.get('Owner', ''):<25}")
-            self.logger.highlight(f"Total: {len(rows)} database(s)")
-        except Exception as e:
-            self.logger.fail(f"Failed to enumerate databases: {e}")
-            self.logger.debug("list_databases error", exc_info=True)
+        self.logger.display("Enumerated databases")
+        self.logger.highlight(f"{'Database Name':<30} {'Owner':<25}")
+        self.logger.highlight(f"{'-' * 30} {'-' * 25}")
+        for row in rows:
+            database_name = row.get("DatabaseName", "")
+            owner = row.get("Owner", "")
+            self.logger.highlight(f"{database_name:<30} {owner:<25}")
+        self.logger.highlight(f"Total: {len(rows)} database(s)")
 
     def database(self):
-        db_arg = self.args.database
-
         # nxc --database (no value) -> list
-        if db_arg is True or db_arg is None:
+        if self.args.database is True:
             self.list_databases()
             return
 
         # nxc --database <name> -> tables
-        if isinstance(db_arg, str):
-            try:
-                safe = db_arg.replace("'", "''")
-                exists = self.conn.sql_query(f"SELECT 1 FROM sys.databases WHERE name = N'{safe}';")
-                if not exists:
-                    self.logger.fail(f"Database [{db_arg}] does not exist on the server.")
-                    return
-
-                tq = (
-                    f"SELECT t.name AS TableName, t.modify_date "
-                    f"FROM {self._qname(db_arg)}.sys.tables t "
-                    f"ORDER BY t.name;"
-                )
-                rows = self.conn.sql_query(tq) or []
-            except Exception as e:
-                self.logger.fail(f"Insufficient permissions or query error in [{db_arg}]: {e}")
-                self.logger.debug("database() error", exc_info=True)
+        if isinstance(self.args.database, str):
+            safe = self.args.database.replace("'", "''")
+            exists = self.conn.sql_query(f"SELECT 1 FROM sys.databases WHERE name = N'{safe}';")
+            if self.conn.lastError:
+                self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+            if not exists:
+                self.logger.fail(f"Database [{self.args.database}] does not exist on the server.")
                 return
+
+            query = f"""
+                SELECT t.name AS TableName, t.modify_date
+                FROM {self._qname(self.args.database)}.sys.tables t
+                ORDER BY t.name;
+            """
+            rows = self.conn.sql_query(query)
+
+            if self.conn.lastError:
+                self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
 
             if not rows:
-                self.logger.display(f"Database [{db_arg}] has no user tables.")
+                self.logger.display(f"Database [{self.args.database}] has no user tables.")
                 return
 
-            self.logger.display(f"Tables in database: {db_arg}")
+            self.logger.display(f"Tables in database: {self.args.database}")
             self.logger.highlight(f"{'Table Name':<50} {'Last Modified':<25}")
             self.logger.highlight(f"{'-' * 50} {'-' * 25}")
-            for r in rows:
-                mod = r.get("modify_date", "")
-                if mod and hasattr(mod, "strftime"):
-                    mod = mod.strftime("%Y-%m-%d %H:%M:%S")
-                self.logger.highlight(f"{r.get('TableName', ''):<50} {mod!s:<25}")
+            for row in rows:
+                modify_date = row.get("modify_date", "")
+                if modify_date and hasattr(modify_date, "strftime"):
+                    modify_date = modify_date.strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{row.get('TableName', ''):<50} {modify_date!s:<25}")
             self.logger.highlight(f"Total: {len(rows)} table(s)")
             return
 
