@@ -48,7 +48,8 @@ dependencies = [
     "xmltodict>=0.13.0",
     # Git Dependencies
     "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
-    "impacket @ git+https://github.com/fortra/impacket",
+    #"impacket @ git+https://github.com/fortra/impacket",
+    "impacket @ git+https://github.com/b-mine/impacket@add_NetShareEnum_func_with_502_struct",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
 

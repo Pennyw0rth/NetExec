@@ -75,6 +75,7 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--qwinsta", type=str, nargs="?", const="", help="Enumerate user sessions. If a username is given, filter for it; if a file is given, filter for listed usernames. If no value is given, list all.")
     mapping_enum_group.add_argument("--tasklist", type=str, nargs="?", const=True, help="Enumerate running processes and filter for the specified one if specified")
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
+    mapping_enum_group.add_argument("--shares-privs", action="store_true", help="Enumerate shares and their access privileges (Requires Admin privs)")
 
     wmi_group = smb_parser.add_argument_group("WMI Queries")
     wmi_group.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")

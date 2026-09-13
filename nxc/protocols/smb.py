@@ -57,6 +57,7 @@ from impacket.smb3structs import (
     WRITE_OWNER,
 )
 from impacket.dcerpc.v5 import tsts as TSTS
+from impacket.ldap.ldaptypes import SR_SECURITY_DESCRIPTOR
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
@@ -1762,6 +1763,167 @@ class smb(connection):
                 continue
             self.logger.highlight(f"{name:<15} {perms:<22} {remark}")
         return permissions
+
+    @requires_admin
+    def shares_privs(self):
+        # List shares with groups/users having privs (RAED/WRITE) on each share.
+        # RPC used, not SMB => no connection to SMB service.
+        # Use of NetShareEnum function with option 502.
+        # (NetShareEnum: https://learn.microsoft.com/en-us/windows/win32/api/lmshare/nf-lmshare-netshareenum)
+        # (SHARE_INFO_502 Struct: https://learn.microsoft.com/en-us/windows/win32/api/lmshare/ns-lmshare-share_info_502)
+
+        def resolve_sid_to_name(sids_list):
+
+            resolved_sid_name = {}
+
+            # Bind to the LSARPC Pipe for SID resolution
+            try:
+                dce = NXCRPCConnection(self).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
+            except Exception as e:
+                self.logger.debug(f"Failed to connect to LSARPC for SID resolution on {self.hostname}: {e}")
+                return resolved_sid_name
+
+            # Resolve SIDs
+            try:
+                # Open LSA policy
+                resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED)
+                policy_handle = resp["PolicyHandle"]
+
+                try:
+                    # Lookup
+                    lookup = lsat.hLsarLookupSids(dce, policy_handle, sids_list)
+                except Exception as e:
+
+                    error = get_error_string(e)
+                    self.logger.fail(f"lsalookupsids : {error}")
+                finally:
+                    lsad.hLsarClose(dce, policy_handle)
+            except Exception as e:
+                self.logger.fail(f"Error: {e}")
+                return resolved_sid_name
+            finally:
+                dce.disconnect()
+
+            domains = lookup["ReferencedDomains"]["Domains"]
+            names = lookup["TranslatedNames"]["Names"]
+            for i, sid in enumerate(sids_list):
+                try:
+                    name = names[i]
+                    domain_index = name["DomainIndex"]
+
+                    if domain_index >= 0:
+                        domain_name = domains[domain_index]["Name"]
+                    else:
+                        domain_name = ""
+
+                    account_name = name["Name"]
+
+                    if domain_name:
+                        resolved_name = f"{domain_name}\\{account_name}"
+                    else:
+                        resolved_name = account_name
+                    resolved_sid_name[sid] = resolved_name
+                except Exception:
+                    resolved_sid_name[sid] = sid
+                    continue
+            return resolved_sid_name
+
+        # List share with NetShareEnum 502 (RPC call)
+        try:
+            self.logger.debug("Attempting to list shares...")
+            # https://github.com/fortra/impacket/pull/2295
+            shares = self.conn.listSharesWithPrivs()
+            self.logger.info(f"Shares returned: {shares}")
+        except SessionError as e:
+            error = get_error_string(e)
+            self.logger.fail(
+                f"Error enumerating shares: {error}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            return
+        except Exception as e:
+            error = get_error_string(e)
+            self.logger.fail(
+                f"Error enumerating shares: {error}",
+                color="magenta" if error in smb_error_status else "red",
+            )
+            return
+
+        share_infos = []
+        sid_list_to_resolve = []
+        for share in shares:
+            share_name = share["shi502_netname"][:-1]
+
+            # Skip excluded shares
+            if self.args.exclude_shares and share_name in self.args.exclude_shares:
+                self.logger.debug(f"Skipping excluded share: {share_name}")
+                continue
+
+            share_remark = share["shi502_remark"][:-1]
+            share_info = {"name": share_name, "remark": share_remark, "access": {}}
+
+            if share["shi502_security_descriptor"] == b"":
+                continue
+
+            try:
+                # translate shi502_security_descriptor (SID)
+                security_descriptor = SR_SECURITY_DESCRIPTOR(data=b"".join(share["shi502_security_descriptor"]))
+            except Exception as e:
+                error = get_error_string(e)
+                self.logger.fail(f"Error decoding Security Descriptor: {error}",
+                color="magenta" if error in smb_error_status else "red",
+                )
+                return
+
+            # Get Share Owner
+            share_info["access"][security_descriptor["OwnerSid"].formatCanonical()] = "Owner"
+
+            dacl = security_descriptor["Dacl"]
+            if dacl is not None:
+                for ace in dacl.aces:
+                    sid = ace["Ace"]["Sid"].formatCanonical()
+
+                    sid_list_to_resolve.append(sid)
+
+                    mask = ace["Ace"]["Mask"]["Mask"]
+                    share_info["access"][sid] = ""
+                    if mask & 0x1:
+                        share_info["access"][sid] += "READ,"
+                    if mask & 0x2:
+                        share_info["access"][sid] += "WRITE,"
+                    if mask & 0x4:
+                        share_info["access"][sid] += "EXECUTE"
+
+                    share_info["access"][sid] = share_info["access"][sid].strip(",")
+
+            share_infos.append(share_info)
+
+        # sid resolution after share info gathering, to reduce the number of resolution requests
+        resolved = resolve_sid_to_name(list(set(sid_list_to_resolve)))
+
+        for share in share_infos:
+            try:
+                for rSid, rName in resolved.items():
+                    if rSid in share["access"]:
+                        share["access"][rName] = share["access"].pop(rSid)
+            except Exception as e:
+                error = get_error_string(e)
+                self.logger.fail(f"Error decoding SID {sid.formatCanonical()}: {error}",
+                color="magenta" if error in smb_error_status else "red")
+
+        self.logger.display("Enumerated shares with privs")
+        self.logger.highlight(f"{'Share':<15} {'Object':<35} {'Permissions':<30} {'Remark'}")
+        self.logger.highlight(f"{'-----':<15} {'-----------':<35} {'-----------':<30} {'------'}")
+
+        for share in share_infos:
+            name = share["name"]
+            remark = share["remark"]
+            if len(share["access"]) == 0:
+                self.logger.highlight(f"{name:<15} {'<N/A>':<35} {'N/A':<30} {remark}")
+            else:
+                for ad_obj in share["access"]:
+                    self.logger.highlight(f"{name:<15} {ad_obj:<35} {share['access'][ad_obj]:<30} {remark}")
+        return
 
     def dir(self):
         search_path = ntpath.join(self.args.dir, "*")
