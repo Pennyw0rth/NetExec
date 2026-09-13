@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.10, <4.0"
 
 [options]
-exclude-newer = "2026-09-08T19:14:51.279264021Z"
+exclude-newer = "2026-09-12T21:55:15.980757914Z"
 exclude-newer-span = "P1D"
 
 [[package]]
@@ -747,7 +747,7 @@ wheels = [
 [[package]]
 name = "dploot"
 version = "4.0.0"
-source = { git = "https://github.com/zblurx/dploot.git?rev=network_proto_upgrade#603059633b88b4735f9df377fd56d8d7b1b38dee" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "impacket" },
@@ -755,6 +755,10 @@ dependencies = [
     { name = "pick" },
     { name = "pyasn1" },
     { name = "pypsrp" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/59/89/66fcaaa99b85713fe1759a2df0246f94597f7c8d26902a3acdfb0b20ff55/dploot-4.0.0.tar.gz", hash = "sha256:c77303536377e64f43ba8210fc04ed3e787e96b4c105e09f5b9ef55f1cd55e52", size = 71370, upload-time = "2026-08-24T13:06:42.938Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/ed/9550cbe71e939b8ef19c3a9bd6dffc25c024ff908e11d9f2efcf8c41176c/dploot-4.0.0-py3-none-any.whl", hash = "sha256:24d0660be049199e363f93d6d10e5336b175cc8b8e6bcedd7382e569190a4542", size = 100723, upload-time = "2026-08-24T13:06:44.254Z" },
 ]
 
 [[package]]
@@ -1408,7 +1412,7 @@ requires-dist = [
     { name = "certihound", specifier = ">=0.1.1" },
     { name = "certipy-ad", git = "https://github.com/Pennyw0rth/Certipy" },
     { name = "cryptography", specifier = ">=42.0.8" },
-    { name = "dploot", git = "https://github.com/zblurx/dploot.git?rev=network_proto_upgrade" },
+    { name = "dploot", specifier = ">=4.0.0" },
     { name = "dsinternals", specifier = ">=1.2.4" },
     { name = "impacket", git = "https://github.com/fortra/impacket" },
     { name = "jwt", specifier = ">=1.3.1" },
