@@ -32,7 +32,7 @@ class NXCModule:
 
         if connection.admin_privs:
             res = self.mssql_conn.sql_query("EXEC sp_helplinkedsrvlogin")
-            srvs = [srv for srv in res if srv["Local Login"] != "NULL"]
+            srvs = [srv for srv in res if srv["Local Login"] is not None]
             if not srvs:
                 self.context.log.fail("No linked servers found.")
                 return

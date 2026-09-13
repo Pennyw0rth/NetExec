@@ -21,7 +21,7 @@ class MSSQLEXEC:
             raw = self.mssql_conn.sql_query(cmd)
             self.logger.debug(f"Raw results from query: {raw}")
             if raw:
-                result = "\n".join(line["output"] for line in raw if line["output"] != "NULL")
+                result = "\n".join(line["output"] for line in raw if line["output"] is not None)
                 self.logger.debug(f"Concatenated result together for easier parsing: {result}")
                 # if you prepend SilentlyContinue it will still output the error, but it will still continue on (so it's not silent...)
                 if "Preparing modules for first use" in result and "Completed" not in result:

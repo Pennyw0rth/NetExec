@@ -1,15 +1,14 @@
 # PYTHON_ARGCOMPLETE_OK
 import contextlib
 import sys
+
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import identify_target_file, display_modules
-from nxc.parsers.ip import parse_targets
-from nxc.parsers.nmap import parse_nmap_xml
-from nxc.parsers.nessus import parse_nessus_file
+from nxc.helpers.misc import display_modules
 from nxc.cli import gen_cli_args
 from nxc.loaders.protocolloader import ProtocolLoader
-from nxc.loaders.moduleloader import ModuleLoader
+from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.first_run import first_run_setup
+from nxc.parsers.ip import process_targets
 from nxc.paths import NXC_PATH, WORKSPACE_DIR
 from nxc.console import nxc_console
 from nxc.logger import nxc_logger
@@ -21,7 +20,6 @@ from nxc.helpers import powershell
 import signal
 import shutil
 import os
-from os.path import exists
 from os.path import join as path_join
 from sys import exit
 from rich.progress import Progress
@@ -42,7 +40,7 @@ if platform.system() != "Windows":
     resource.setrlimit(resource.RLIMIT_NOFILE, file_limit)
 
 
-async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
+async def start_run(protocol_obj, args, db, targets):  # ruff: ignore[unused-async]
     futures = []
     nxc_logger.debug("Creating ThreadPoolExecutor")
     if args.no_progress or len(targets) == 1:
@@ -60,7 +58,7 @@ async def start_run(protocol_obj, args, db, targets):  # noqa: RUF029
             nxc_logger.debug(f"Creating thread for {protocol_obj}")
             futures = [executor.submit(protocol_obj, args, db, target) for target in targets]
             for _ in as_completed(futures):
-                current += 1  # noqa: SIM113
+                current += 1  # ruff: ignore[enumerate-for-loop]
                 progress.update(tasks, completed=current)
     for future in as_completed(futures):
         try:
@@ -110,41 +108,23 @@ def main():
         nxc_logger.error("KRB5CCNAME environment variable is not set")
         exit(1)
 
-    targets = []
-
     if hasattr(args, "cred_id") and args.cred_id:
         for cred_id in args.cred_id:
             if "-" in str(cred_id):
                 start_id, end_id = cred_id.split("-")
                 try:
                     for n in range(int(start_id), int(end_id) + 1):
-                        args.cred_id.append(n)    # noqa: B909
-                    args.cred_id.remove(cred_id)  # noqa: B909
+                        args.cred_id.append(n)    # ruff: ignore[loop-iterator-mutation]
+                    args.cred_id.remove(cred_id)  # ruff: ignore[loop-iterator-mutation]
                 except Exception as e:
                     nxc_logger.error(f"Error parsing database credential id: {e}")
                     exit(1)
 
-    if hasattr(args, "target") and args.target:
-        for target in args.target:
-            try:
-                if exists(target) and os.path.isfile(target):
-                    target_file_type = identify_target_file(target)
-                    if target_file_type == "nmap":
-                        targets.extend(parse_nmap_xml(target, args.protocol))
-                    elif target_file_type == "nessus":
-                        targets.extend(parse_nessus_file(target, args.protocol))
-                    else:
-                        with open(target) as target_file:
-                            for target_entry in target_file:
-                                targets.extend(parse_targets(target_entry.strip()))
-                else:
-                    targets.extend(parse_targets(target))
-            except Exception as e:
-                nxc_logger.fail(f"Failed to parse target '{target}': {e}")
+    targets = process_targets(args)
 
     # The following is a quick hack for the powershell obfuscation functionality, I know this is yucky
     if hasattr(args, "clear_obfscripts") and args.clear_obfscripts:
-        obfuscated_dir = os.path.join(NXC_PATH, "obfuscated_scripts")
+        obfuscated_dir = path_join(NXC_PATH, "obfuscated_scripts")
         shutil.rmtree(obfuscated_dir)
         os.mkdir(obfuscated_dir)
         nxc_logger.success("Cleared cached obfuscated PowerShell scripts")
@@ -207,7 +187,11 @@ def main():
                 exit(1)
 
             nxc_logger.debug(f"Loading module for sanity check {m} at path {modules[m]['path']}")
-            module = loader.init_module(modules[m]["path"])
+            try:
+                loader.init_module(modules[m]["path"])
+            except ModuleOptionsError as e:
+                nxc_logger.debug(f"Aborting run: {e}")
+                exit(1)
 
             # Add modules paths to the protocol object so it can load them itself
             proto_module_paths.append(modules[m]["path"])
