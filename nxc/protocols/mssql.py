@@ -655,4 +655,4 @@ class mssql(connection):
                 hash_type = row.get("hash_type")
                 password_hash = row.get("password_hash")
                 if password_hash != "NULL":
-                    self.logger.highlight(f"{name:<15} {hash_type:<10} {password_hash.decode():<140}")
+                    self.logger.highlight(f"{name:<15} {hash_type:<10} {password_hash:<140}")
