@@ -160,6 +160,8 @@ class ldap(connection):
                 self.signing_required = True
             else:
                 self.logger.debug(f"LDAPSessionError while checking for signing requirements (likely NTLM disabled): {e!s}")
+        except OSError as e:
+            self.logger.debug(f"Connection error while checking LDAP signing on {self.host}: {e!s}")
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
