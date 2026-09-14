@@ -390,6 +390,20 @@ class wmi(connection):
         if powershellv3_namespace is None:
             return None
 
+        # Check file size
+        def callback_func(iEnumWbemClassObject, records):
+            wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
+            record = dict(wmi_results.getProperties())
+            callback_func.size = record["FileSize"]["value"]
+
+        callback_func.size = 0
+
+        wql = f"SELECT FileSize FROM CIM_DataFile WHERE Name = '{escaped_path}'"
+        self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
+        # If file is bigger than 70MB, print a warning
+        if callback_func.size > 73400320: # 70MB
+            self.logger.fail(f"{remote_path} filesize is {callback_func.size/1024**2:.2f} Mo. The download will take some time and can crash.")
+        
         # Read the file
         try:
             object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
@@ -659,7 +673,7 @@ class wmi(connection):
                 record = dict(wmi_results.getProperties())
                 records.append(record)
 
-        snapshots = self.wmi_query(wql=wql, namespace="root\\cimv2", callback_func=callback_func)
+        snapshots = self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
         if not snapshots:
             self.logger.info("No volume shadow copies found.")
             return
