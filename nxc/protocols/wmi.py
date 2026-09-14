@@ -472,10 +472,18 @@ class wmi(connection):
         self.logger.success(f"Dumped {highlight(add_sam_hash.sam_hashes)} SAM hashes to {output_filename + '.sam'}")
 
     @requires_admin
-    def lsa(self):
+    def lsa(self, quiet=False):
         def add_lsa_secret(secret):
             add_lsa_secret.secrets += 1
-            self.logger.highlight(secret)
+            if "dpapi_machinekey" not in secret:
+                if not quiet:
+                    self.logger.highlight(secret)
+            else:
+                correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                if not quiet:
+                    self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                    self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
             if "_SC_GMSA_{84A78B8C" in secret:
                 gmsa_id = secret.split("_")[4].split(":")[0]
                 data = bytes.fromhex(secret.split("_")[4].split(":")[1])
@@ -485,7 +493,8 @@ class wmi(connection):
                 ntlm_hash = MD4.new()
                 ntlm_hash.update(currentPassword)
                 passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
-                self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+                if not quiet:
+                    self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
 
         add_lsa_secret.secrets = 0
 
@@ -508,12 +517,14 @@ class wmi(connection):
             isRemote=None,
             perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
         )
-        self.logger.display("Dumping LSA secrets")
+        if not quiet:
+            self.logger.display("Dumping LSA secrets")
         LSA.dumpCachedHashes()
         LSA.exportCached(output_filename)
         LSA.dumpSecrets()
         LSA.exportSecrets(output_filename)
-        self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {output_filename + '.secrets'} and {output_filename + '.cached'}")
+        if not quiet:
+            self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {output_filename + '.secrets'} and {output_filename + '.cached'}")
 
     @requires_admin
     def ntds(self):
@@ -742,7 +753,7 @@ class wmi(connection):
         if self._remote_ops is None:
             self._remote_ops = RemoteOperations(self, shadow_id=self.args.shadow_id)
         return self._remote_ops
-      
+
     @requires_admin
     def sccm(self):
         self.dpapi_triage.triage_sccm()
