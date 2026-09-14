@@ -181,6 +181,8 @@ class connection:
             self.proto_flow()
         except FileNotFoundError as e:
             self.logger.error(f"File not found error on target {target}: {e}")
+        except ConnectionRefusedError as e:
+            self.logger.error(f"Target {target} refused the connection: {e}")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
