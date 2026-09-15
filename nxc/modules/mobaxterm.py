@@ -21,9 +21,9 @@ class NXCModule:
 
         def mobaxterm_callback(credential):
             if isinstance(credential, MobaXtermCredential):
-                log_text = "{} - {}:{}".format(credential.name, credential.username, credential.password.decode("latin-1"))
+                log_text = f"{credential.name} - {credential.username}:{credential.password.decode('latin-1')}"
             elif isinstance(credential, MobaXtermPassword):
-                log_text = "{}:{}".format(credential.username, credential.password.decode("latin-1"))
+                log_text = f"{credential.username}:{credential.password.decode('latin-1')}"
             connection.dpapi_triage.log_secret(f"[{credential.winuser}] {log_text}", logger=context.log)
 
         try:
