@@ -86,6 +86,7 @@ def proto_args(parser, parents):
     spidering_group.add_argument("--content", action="store_true", help="enable file content searching")
     spidering_group.add_argument("--exclude-dirs", type=str, metavar="DIR_LIST", default="", help="directories to exclude from spidering")
     spidering_group.add_argument("--depth", type=int, help="max spider recursion depth")
+    spidering_group.add_argument("--spider-extensions", nargs="*", help="Spiders for defaults sensitives extensions, can specify a file containing extensions to look for")
     spidering_group.add_argument("--only-files", action="store_true", help="only spider files")
     spidering_group.add_argument("--silent", action="store_true", help="Do not print found files/directories", default=False)
     segroup = spidering_group.add_mutually_exclusive_group()
