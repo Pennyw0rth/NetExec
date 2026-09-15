@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.10, <4.0"
 
 [options]
-exclude-newer = "2026-09-12T21:55:15.980757914Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P1D"
 
 [[package]]
@@ -746,7 +746,7 @@ wheels = [
 
 [[package]]
 name = "dploot"
-version = "4.0.0"
+version = "4.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
@@ -756,9 +756,9 @@ dependencies = [
     { name = "pyasn1" },
     { name = "pypsrp" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/89/66fcaaa99b85713fe1759a2df0246f94597f7c8d26902a3acdfb0b20ff55/dploot-4.0.0.tar.gz", hash = "sha256:c77303536377e64f43ba8210fc04ed3e787e96b4c105e09f5b9ef55f1cd55e52", size = 71370, upload-time = "2026-08-24T13:06:42.938Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/6c/52dee037768f5d940b5ae410d80fd431fef7d210d7f9af83caeb871e88f9/dploot-4.1.1.tar.gz", hash = "sha256:aaf4e4cf581c980e888d5d53a46d6c4e39faa1e51374f699342768f39bb24248", size = 72339, upload-time = "2026-09-14T13:55:44.529Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/71/ed/9550cbe71e939b8ef19c3a9bd6dffc25c024ff908e11d9f2efcf8c41176c/dploot-4.0.0-py3-none-any.whl", hash = "sha256:24d0660be049199e363f93d6d10e5336b175cc8b8e6bcedd7382e569190a4542", size = 100723, upload-time = "2026-08-24T13:06:44.254Z" },
+    { url = "https://files.pythonhosted.org/packages/19/c0/ede1a114ca34556b2c44844627e043336cb68a76817253682f6d96535fbb/dploot-4.1.1-py3-none-any.whl", hash = "sha256:5fbca4076f0526ddd37f82a9b62a7a60ec72f7b674601e6c501a40164a542b1a", size = 101304, upload-time = "2026-09-14T13:55:45.849Z" },
 ]
 
 [[package]]
