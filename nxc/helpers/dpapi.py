@@ -108,9 +108,11 @@ class DPAPITriage:
         if self.output_file is not None and self.secrets_counter > 0:
             self.connection.logger.success(f"Dumped {highlight(self.secrets_counter)} DPAPI secrets to {self.output_file}")
 
-    def log_secret(self, line):
+    def log_secret(self, line, logger=None):
         # Handle the secret counter here, avoid to handle it in multiple places
-        self.connection.logger.highlight(line)
+        if logger is None:
+            logger = self.connection.logger
+        logger.highlight(line)
         with open(self.output_file, "a", encoding="utf-8") as fd:
             self.secrets_counter += 1
             fd.write(line + "\n")
