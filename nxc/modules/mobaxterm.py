@@ -1,4 +1,4 @@
-from dploot.triage.mobaxterm import MobaXtermTriage, MobaXtermCredential, MobaXtermPassword
+from dploot.triage.mobaxterm import MobaXtermTriage
 
 from nxc.helpers.misc import CATEGORY
 
@@ -19,16 +19,9 @@ class NXCModule:
             context.log.fail("No masterkeys looted")
             return
 
-        def mobaxterm_callback(credential):
-            if isinstance(credential, MobaXtermCredential):
-                log_text = f"{credential.name} - {credential.username}:{credential.password.decode('latin-1')}"
-            elif isinstance(credential, MobaXtermPassword):
-                log_text = f"{credential.username}:{credential.password.decode('latin-1')}"
-            connection.dpapi_triage.log_secret(f"[{credential.winuser}] {log_text}", logger=context.log)
-
         try:
             context.log.success("Looting MobaXterm secrets")
-            triage = MobaXtermTriage(target=connection.dpapi_triage.target, conn=connection.dpapi_triage.conn, masterkeys=self.masterkeys, per_secret_callback=mobaxterm_callback)
+            triage = MobaXtermTriage(target=connection.dpapi_triage.target, conn=connection.dpapi_triage.conn, masterkeys=self.masterkeys)
             triage.triage_mobaxterm()
         except Exception as e:
             context.log.debug(f"Could not loot MobaXterm secrets: {e}")
