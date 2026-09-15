@@ -133,7 +133,7 @@ def get_error_string(exception):
 class smb(connection):
     def __init__(self, args, db, host):
         self.domain = None
-        self.server_os = None
+        self.server_os = ""
         self.server_os_major = None
         self.server_os_minor = None
         self.server_os_build = None
