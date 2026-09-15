@@ -834,26 +834,23 @@ wmi = ["wmi (>=1.5.1)"]
 
 [[package]]
 name = "dploot"
-version = "4.0.0"
+version = "4.1.1"
 description = "DPAPI looting remotely in Python"
 optional = false
-python-versions = ">=3.10,<4.0"
+python-versions = "<4.0,>=3.10"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "dploot-4.1.1-py3-none-any.whl", hash = "sha256:5fbca4076f0526ddd37f82a9b62a7a60ec72f7b674601e6c501a40164a542b1a"},
+    {file = "dploot-4.1.1.tar.gz", hash = "sha256:aaf4e4cf581c980e888d5d53a46d6c4e39faa1e51374f699342768f39bb24248"},
+]
 
 [package.dependencies]
 cryptography = ">=40.0.1"
 impacket = ">=0.13.0"
 lxml = ">=5.0"
+pick = ">=2.6.0,<3.0.0"
 pyasn1 = ">=0.4.8"
 pypsrp = ">=0.9.1,<0.10.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/zblurx/dploot.git"
-reference = "network_proto_upgrade"
-resolved_reference = "291d79d087a7eae99126688d35ed4f766b7ba80e"
 
 [[package]]
 name = "dsinternals"
@@ -1753,6 +1750,24 @@ files = [
     {file = "pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"},
     {file = "pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632"},
 ]
+
+[[package]]
+name = "pick"
+version = "2.6.0"
+description = "Pick an option in the terminal with a simple GUI"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "pick-2.6.0-py3-none-any.whl", hash = "sha256:2acd5cad09be96398fba3b8be89454929de7b05362e01c69d94a05801820871f"},
+    {file = "pick-2.6.0.tar.gz", hash = "sha256:f24434a845ae9265ebf7657fc224b9a203ac75aa576b568e061484a72e27be82"},
+]
+
+[package.dependencies]
+windows-curses = {version = ">=2.2.0", markers = "platform_system == \"Windows\""}
+
+[package.extras]
+blessed = ["blessed (>=1.17.0)"]
 
 [[package]]
 name = "pillow"
@@ -2979,6 +2994,35 @@ files = [
 
 [package.dependencies]
 cryptography = ">=38.0.1"
+
+[[package]]
+name = "windows-curses"
+version = "2.4.2"
+description = "Support for the standard curses module on Windows"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "platform_system == \"Windows\""
+files = [
+    {file = "windows_curses-2.4.2-cp310-cp310-win32.whl", hash = "sha256:fb55b40df1dd8633f431307f204293ca2a0b4f928927490509f1bf68beef3cfe"},
+    {file = "windows_curses-2.4.2-cp310-cp310-win_amd64.whl", hash = "sha256:0ff2a0884cb78d48e15eea1e274f73c1f5a780a4b872357724c17b39de75c996"},
+    {file = "windows_curses-2.4.2-cp311-cp311-win32.whl", hash = "sha256:ecf7af9c97002af661d3e47b9c5eb31cdb7629a032adcdab46530efea8ba1864"},
+    {file = "windows_curses-2.4.2-cp311-cp311-win_amd64.whl", hash = "sha256:03c4ef0095ab8212ed964236d51b4d8c815f302c5a7de94831dae468f05ce333"},
+    {file = "windows_curses-2.4.2-cp312-cp312-win32.whl", hash = "sha256:7ec4629685add716d494e8fbdd0b83485de726e9deeda57d30e742c77a32a156"},
+    {file = "windows_curses-2.4.2-cp312-cp312-win_amd64.whl", hash = "sha256:df782859176f9e8142618e4966d6cee7a53a8b1c819faeb6e606a60fa4f8972a"},
+    {file = "windows_curses-2.4.2-cp313-cp313-win32.whl", hash = "sha256:248bf3f1d973e92ca193b1ea8a626ec7f81a66be6f6d6c5e31ff82056453678d"},
+    {file = "windows_curses-2.4.2-cp313-cp313-win_amd64.whl", hash = "sha256:1bf3d0c902374b6c430a954adcb686a5ecd7a31fc4195d31136385b5c1bea925"},
+    {file = "windows_curses-2.4.2-cp314-cp314-win32.whl", hash = "sha256:a970bf067b3126251423b4da051ef8c1c77acf6294ec96a7d6de7f6b9e5c27a0"},
+    {file = "windows_curses-2.4.2-cp314-cp314-win_amd64.whl", hash = "sha256:6c22cb0310500dfbfe54c76354e37070e300d5473596d48ac4f9c65b2d578b6f"},
+    {file = "windows_curses-2.4.2-cp36-cp36m-win32.whl", hash = "sha256:aa1b97c94882ac0c0019a0dcbb9b57a3f751e166e0ed6d99230e5d77bfb7f2b5"},
+    {file = "windows_curses-2.4.2-cp36-cp36m-win_amd64.whl", hash = "sha256:f03193397e20e9f86d5a661c63c01d305d63ffcefc2bca46e1881f2c06af2a38"},
+    {file = "windows_curses-2.4.2-cp37-cp37m-win32.whl", hash = "sha256:6ff56a1cc6410cb7600e5af7c01178d534ca704f9bc91da433719fccbe7c26c6"},
+    {file = "windows_curses-2.4.2-cp37-cp37m-win_amd64.whl", hash = "sha256:cc890992a9a554b9e39354db672bd2b74110dd5ed7df0386a9c2d2956e964130"},
+    {file = "windows_curses-2.4.2-cp38-cp38-win32.whl", hash = "sha256:3a2ece436fa601d71c82f02aa5cf829692ebf77075c64d94af5dfd4a13f31166"},
+    {file = "windows_curses-2.4.2-cp38-cp38-win_amd64.whl", hash = "sha256:e716deaff73bbc7336769bdbf2c2b1c4f9ed0743ed6686927af134e7e6f3a699"},
+    {file = "windows_curses-2.4.2-cp39-cp39-win32.whl", hash = "sha256:45b1a9cb17712f78ab4a6e9456bd46df35f96f880c1e814f8e0c6b4511a7e89c"},
+    {file = "windows_curses-2.4.2-cp39-cp39-win_amd64.whl", hash = "sha256:9de1714af3effdffb3a048dff691c1c1d36c289b8f765c96f148a3dcb9f5984c"},
+]
 
 [[package]]
 name = "xmltodict"
