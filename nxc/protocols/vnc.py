@@ -96,10 +96,15 @@ class vnc(connection):
 
     def create_conn_obj(self):
         try:
-            self.target = RDPTarget(ip=self.host, port=self.port)
+            self.target = RDPTarget(ip=self.host, port=self.port, timeout=self.args.vnc_timeout)
             credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.PASS)
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
             asyncio.run(self.connect_vnc(True))
+        except asyncio.TimeoutError:
+            # asyncio.TimeoutError is only an alias of the builtin from 3.11 on,
+            # and the project supports 3.10, so catch it by its asyncio name.
+            self.logger.debug(f"Timed out after {self.args.vnc_timeout}s connecting to {self.host}:{self.port}")
+            return False
         except Exception as e:
             self.logger.debug(str(e))
             if "Connect call failed" in str(e):
@@ -107,7 +112,10 @@ class vnc(connection):
         return True
 
     async def connect_vnc(self, discover=False):
-        _, err = await self.conn.connect()
+        # Bounded like connect_rdp(): the target timeout alone does not cover a
+        # server that completes the TCP connect and then stops responding during
+        # the RFB handshake, which leaves the await outstanding indefinitely.
+        _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.vnc_timeout)
         if err is not None:
             if not discover:
                 await asyncio.sleep(self.args.vnc_sleep)
@@ -136,6 +144,11 @@ class vnc(connection):
             )
             return True
 
+        except asyncio.TimeoutError:
+            # Reporting an unresponsive server as a rejected password would be wrong:
+            # nothing was authenticated, so say what actually happened.
+            self.logger.fail(f"{password} - Connection timed out after {self.args.vnc_timeout}s")
+            return False
         except Exception as e:
             self.logger.debug(str(e))
             self.logger.fail(f"{password} - Authentication failed")

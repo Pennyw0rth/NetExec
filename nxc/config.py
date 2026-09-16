@@ -40,6 +40,12 @@ host_info_colors = literal_eval(nxc_config.get("nxc", "host_info_colors", fallba
 check_guest_account = nxc_config.getboolean("nxc", "check_guest_account", fallback=False)
 display_dc = nxc_config.getboolean("nxc", "display_dc", fallback=True)
 abort_on_lockout = int(nxc_config.get("nxc", "abort_on_lockout", fallback=3))
+skip_self = nxc_config.getboolean("nxc", "skip_self", fallback=False)
+exclude_hosts = literal_eval(nxc_config.get("nxc", "exclude_hosts", fallback=[]))
+if not isinstance(exclude_hosts, list):
+    nxc_logger.error(f"exclude_hosts must be a 'list', got '{type(exclude_hosts).__name__}'. Exiting.")
+    exit(1)
+
 
 if len(host_info_colors) != 4:
     nxc_logger.error("Config option host_info_colors must have 4 values! Using default values.")

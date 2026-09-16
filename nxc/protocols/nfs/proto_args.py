@@ -8,6 +8,7 @@ def proto_args(parser, parents):
     dgroup.add_argument("--shares", action="store_true", help="List NFS shares")
     dgroup.add_argument("--enum-shares", nargs="?", type=int, const=3, help="Authenticate and enumerate exposed shares recursively (default depth: %(const)s)")
     dgroup.add_argument("--ls", const="/", nargs="?", metavar="PATH", help="List files in the specified NFS share. Example: --ls /")
+    dgroup.add_argument("--cat", metavar="FILE", help="Display the contents of an NFS file. Example: --cat /path/to/file")
     dgroup.add_argument("--get-file", nargs=2, metavar="FILE", help="Download remote NFS file. Example: --get-file remote_file local_file")
     dgroup.add_argument("--put-file", nargs=2, metavar="FILE", help="Upload remote NFS file with chmod 777 permissions to the specified folder. Example: --put-file local_file remote_file")
     dgroup.add_argument("--chmod", nargs=2, metavar=("PERMISSIONS", "FILE"), help="Change permissions of remote NFS file. Example: --chmod 777 /path/to/file")

