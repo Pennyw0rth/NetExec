@@ -70,7 +70,8 @@ from nxc.protocols.smb.mmcexec import MMCEXEC
 from nxc.protocols.smb.smbspider import SMBSpider
 from nxc.protocols.smb.passpol import PassPolDump
 from nxc.protocols.smb.samruser import UserSamrDump
-from nxc.protocols.smb.samrfunc import SamrFunc
+from nxc.protocols.smb.samrfunc import SamrFunc, LSAQuery
+from nxc.helpers.smb import get_share_security_descriptor, parse_dacl_aces
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
@@ -1757,7 +1758,67 @@ class smb(connection):
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
             self.logger.highlight(f"{name:<15} {perms:<22} {remark}")
+            if self.args.show_acls and name != "IPC$":
+                for rights, principal in self.acl_lines(name):
+                    self.logger.highlight(f"{'':<15} {rights:<22} {principal}")
         return permissions
+
+    def resolve_sid(self, sid):
+        r"""Resolve a SID to 'AUTHORITY\name' via LSA, caching results for the run.
+
+        Keeps the domain/authority prefix (BUILTIN\Users, NT AUTHORITY\SYSTEM,
+        DOMAIN\user) so an ACL entry can't be mistaken for a same-named principal
+        from another authority. Falls back to the raw SID when it doesn't resolve.
+
+        ponytail: one LSA round-trip per uncached SID. Batch if ACL enumeration
+        gets chatty on large listings.
+        """
+        if not hasattr(self, "_sid_cache"):
+            self._sid_cache = {}
+            self._acl_lsa = LSAQuery(connection=self, logger=self.logger)
+        if sid not in self._sid_cache:
+            try:
+                resp = lsat.hLsarLookupSids(self._acl_lsa.dce, self._acl_lsa.policy_handle, [sid], lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
+                item = resp["TranslatedNames"]["Names"][0]
+                name = item["Name"]
+                if item["DomainIndex"] >= 0:
+                    dom = resp["ReferencedDomains"]["Domains"][item["DomainIndex"]]["Name"]
+                    name = f"{dom}\\{name}" if dom else name
+                self._sid_cache[sid] = name or sid
+            except Exception as e:
+                self.logger.debug(f"Could not resolve SID {sid}: {get_error_string(e)}")
+                self._sid_cache[sid] = sid
+        return self._sid_cache[sid]
+
+    def acl_lines(self, share_name, path=""):
+        """Return [(rights, principal)] granted on a share root (path="") or file/dir.
+
+        Reads the security descriptor via SRVS NetrpGetFileSecurity and decodes
+        each DACL ACE to READ/WRITE. The share root (path="") is readable by any
+        account that can reach the share. Per-file SDs (--dir) need admin.
+        Used to enrich --shares and --dir output when --show-acls is set.
+        """
+        read_bits = {"GENERIC_READ", "GENERIC_ALL", "FILE_READ_DATA", "MAXIMUM_ALLOWED"}
+        write_bits = {"GENERIC_WRITE", "GENERIC_ALL", "FILE_WRITE_DATA", "FILE_APPEND_DATA", "WRITE_DACL", "WRITE_OWNER", "MAXIMUM_ALLOWED"}
+        try:
+            sd = get_share_security_descriptor(self, share_name, path)
+        except Exception as e:
+            self.logger.debug(f"Failed to read ACL for {share_name}\\{path}: {get_error_string(e)}")
+            return []
+        # Merge the (often several) ACEs per principal into one row, keeping
+        # allow and deny separate, so a trustee shows a single READ,WRITE line.
+        merged = {}  # (sid, deny) -> [read, write, name]
+        for ace in parse_dacl_aces(sd, self.resolve_sid)["aces"]:
+            perms = set(ace["permissions"])
+            deny = "DENIED" in ace["ace_type"]
+            row = merged.setdefault((ace["sid"], deny), [False, False, ace["sid_name"] or ace["sid"]])
+            row[0] |= bool(perms & read_bits)
+            row[1] |= bool(perms & write_bits)
+        lines = []
+        for (_sid, deny), (read, write, name) in merged.items():
+            rights = ",".join(r for r, ok in (("READ", read), ("WRITE", write)) if ok) or "OTHER"
+            lines.append((f"DENY:{rights}" if deny else rights, name))
+        return lines
 
     def dir(self):
         search_path = ntpath.join(self.args.dir, "*")
@@ -1779,6 +1840,9 @@ class smb(connection):
         for content in contents:
             full_path = ntpath.join(self.args.dir, content.get_longname())
             self.logger.highlight(f"{'d' if content.is_directory() else 'f'}{'rw-' if content.is_readonly() > 0 else 'r--':<8}{content.get_filesize():<15}{ctime(float(content.get_mtime_epoch())):<30}{full_path:<45}")
+            if self.args.show_acls and content.get_longname() not in (".", ".."):
+                for rights, principal in self.acl_lines(self.args.share, full_path):
+                    self.logger.highlight(f"{'':<9}{rights:<20}{principal}")
 
     def interfaces(self):
         """
