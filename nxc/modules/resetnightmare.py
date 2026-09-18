@@ -37,7 +37,7 @@ class NXCModule:
         NEW_PASSWORD    New password to set on TARGET
         UPN_USER        sAMAccountName of a controlled account you can write a userPrincipalName to (not the login account)
         UPN_PASSWORD    Cleartext password of UPN_USER
-        UPN_NTHASH      NTLM Hash of UPN_USER
+        UPN_NTHASH      NT Hash of UPN_USER
 
         Examples:
         netexec ldap <ip> -u <username> -p <password> -M resetnightmare -o TARGET=Administrator NEW_PASSWORD='NewPass!' UPN_USER=controlled UPN_PASSWORD='Passw0rd!'
