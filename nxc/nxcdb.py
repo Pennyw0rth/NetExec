@@ -15,6 +15,10 @@ from nxc.loaders.protocolloader import ProtocolLoader
 from nxc.paths import CONFIG_PATH, WORKSPACE_DIR
 from nxc.database import create_db_engine, open_config, get_workspace, get_db, write_configfile, create_workspace, set_workspace
 
+# How many leading hosts columns "export hosts simple" keeps. Eight is what it
+# has always taken; protocols with fewer columns just export all of them.
+SIMPLE_HOST_COLUMNS = 8
+
 
 def print_table(data, title=None):
     print()
@@ -169,34 +173,15 @@ class DatabaseNavigator(cmd.Cmd):
                 print("[-] invalid arguments, export hosts <simple|detailed|signing> <filename>")
                 return
 
-            csv_header_simple = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-            )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-                "spooler",
-                "zerologon",
-                "petitpotam",
-            )
+            # Take the headers from the hosts table itself. Every protocol has
+            # its own columns, so a fixed list only ever matches one of them.
+            csv_header_detailed = tuple(self.db.HostsTable.columns.keys())
+            csv_header_simple = csv_header_detailed[:SIMPLE_HOST_COLUMNS]
             filename = line[2]
 
             if line[1].lower() == "simple":
                 hosts = self.db.get_hosts()
-                simple_hosts = [host[:8] for host in hosts]
+                simple_hosts = [host[:SIMPLE_HOST_COLUMNS] for host in hosts]
                 write_csv(filename, csv_header_simple, simple_hosts)
             # TODO: maybe add more detail like who is an admin on it, shares discovered, etc
             elif line[1].lower() == "detailed":
