@@ -351,10 +351,10 @@ class ldap(connection):
 
             self.check_if_admin()
 
-            if password:
+            if password and self.username and not useCache:
                 self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                 self.db.add_credential("plaintext", domain, self.username, self.password)
-            elif ntlm_hash:
+            elif ntlm_hash and self.username and not useCache:
                 self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
                 self.db.add_credential("hash", domain, self.username, self.hash)
 
@@ -410,10 +410,10 @@ class ldap(connection):
 
                     self.check_if_admin()
 
-                    if password:
+                    if password and self.username and not useCache:
                         self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                         self.db.add_credential("plaintext", domain, self.username, self.password)
-                    elif ntlm_hash:
+                    elif ntlm_hash and self.username and not useCache:
                         self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.hash}")
                         self.db.add_credential("hash", domain, self.username, self.hash)
 
