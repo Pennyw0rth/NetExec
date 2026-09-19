@@ -46,8 +46,8 @@ class NXCModule:
         self.target = module_options.get("TARGET")
         self.new_password = module_options.get("NEW_PASSWORD")
         self.upn_user = module_options.get("UPN_USER")
-        self.upn_password = module_options.get("UPN_PASSWORD")
-        self.upn_nthash = module_options.get("UPN_NTHASH")
+        self.upn_password = module_options.get("UPN_PASSWORD", "")
+        self.upn_nthash = module_options.get("UPN_NTHASH", "")
 
         if not all([self.target, self.new_password, self.upn_user, self.upn_password or self.upn_nthash]):
             context.log.fail("TARGET, NEW_PASSWORD, UPN_USER and either UPN_PASSWORD or UPN_NTHASH are all required")
