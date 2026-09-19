@@ -134,6 +134,8 @@ class ssh(connection):
                 self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
             else:
                 self.logger.exception(e)
+        except TimeoutError:
+            self.logger.fail(f"{username}:{process_secret(password)} Connection timed out")
         except Exception as e:
             self.logger.exception(e)
             self.conn.close()
