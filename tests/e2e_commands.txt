@@ -189,7 +189,7 @@ netexec smb TARGET_HOST -u '' -p '' -M petitpotam
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce --continue-on-success
 netexec smb TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE
-netexec smb TARGET_HOST -u TEST_USER_FILE --user-enum
+netexec smb TARGET_HOST --user-enum TEST_USER_FILE
 ##### SMB Hash File
 netexec smb TARGET_HOST -u LOGIN_USERNAME -H tests/data/test_hashes.txt
 netexec smb TARGET_HOST -u TEST_USER_FILE -H tests/data/test_hashes.txt

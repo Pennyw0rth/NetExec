@@ -60,7 +60,7 @@ from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
-from nxc.helpers.misc import gen_random_string, validate_ntlm
+from nxc.helpers.misc import gen_random_string, validate_ntlm, parse_argument
 from nxc.logger import NXCAdapter
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket, asreq_user_status
 from nxc.protocols.smb.wmiexec import WMIEXEC
@@ -875,27 +875,26 @@ class smb(connection):
             self.logger.fail(f"Failed to get ST: {e}")
 
     def user_enum(self):
-        """Check which of the -u accounts exist via an AS-REQ with no pre-auth data, leaving badPwdCount untouched."""
+        """Check which of the --user-enum accounts exist via an AS-REQ with no pre-auth data, leaving badPwdCount untouched."""
         if self.isdc is False:
             self.logger.fail("Kerberos user enumeration only runs against a Domain Controller, so the KDC is queried once")
             return
 
-        domains, usernames, *_ = self.parse_credentials()
-        # parse_credentials keeps the blank lines of a users file, and an empty principal makes impacket throw.
-        accounts = [(domains[index] or self.domain, username) for index, username in enumerate(usernames) if username]
-        if not accounts:
-            self.logger.fail("No account to enumerate, supply one with -u <user|file>")
+        usernames = parse_argument([self.args.user_enum])
+        if not usernames:
+            self.logger.fail(f"No account to enumerate in {self.args.user_enum}")
             return
 
         kdc_host = self.kdcHost or self.host
-        self.logger.display(f"Enumerating {len(accounts)} account(s) over Kerberos, badPwdCount is left untouched")
+        self.logger.display(f"Enumerating {len(usernames)} account(s) over Kerberos, badPwdCount is left untouched")
+        found = []
 
-        for domain, username in accounts:
+        for username in usernames:
             try:
-                status = asreq_user_status(username, domain, kdc_host, self.args.smb_timeout)
+                status = asreq_user_status(username, self.domain, kdc_host, self.args.smb_timeout)
             except OSError as e:
                 # The KDC is unreachable for the whole list, no point repeating it per account
-                self.logger.fail(f"{domain}\\{username} KDC unreachable: {e}")
+                self.logger.fail(f"{self.domain}\\{username} KDC unreachable: {e}")
                 return
 
             entry = asreq_user_status_messages.get(status)
@@ -905,7 +904,15 @@ class smb(connection):
             level, suffix, color = entry
 
             log = self.logger.success if level == "success" else self.logger.fail
-            log(f"{domain}\\{username} {suffix}".rstrip(), color=color)
+            log(f"{self.domain}\\{username} {suffix}".rstrip(), color=color)
+            if level == "success":
+                found.append(username)
+
+        if found:
+            export_path = self.output_file_template.format(output_folder="user_enum")
+            with open(export_path, "w") as export_file:
+                export_file.write("\n".join(found) + "\n")
+            self.logger.success(f"Saved {len(found)} valid account(s) to {export_path}")
 
     def is_host_dc(self, aggressive_check=False):
         if self.isdc is not None:

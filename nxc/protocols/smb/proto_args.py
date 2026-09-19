@@ -27,7 +27,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
-    smb_parser.add_argument("--user-enum", action="store_true", help="Enumerate valid domain users via Kerberos AS-REQ, without incrementing badPwdCount")
+    smb_parser.add_argument("--user-enum", metavar="USER_LIST", help="Enumerate valid domain users via Kerberos AS-REQ, without incrementing badPwdCount")
     self_delegate_arg.make_required = [delegate_arg]
     u2u_arg.make_required = [delegate_arg]
 
