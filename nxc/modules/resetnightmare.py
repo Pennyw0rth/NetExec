@@ -1,4 +1,3 @@
-import sys
 from impacket.krb5 import constants
 from impacket.krb5.types import Principal
 from impacket.krb5.kerberosv5 import getKerberosTGT, KerberosError
@@ -52,7 +51,7 @@ class NXCModule:
 
         if not all([self.target, self.new_password, self.upn_user, self.upn_password or self.upn_nthash]):
             context.log.fail("TARGET, NEW_PASSWORD, UPN_USER and either UPN_PASSWORD or UPN_NTHASH are all required")
-            sys.exit(1)
+            return False
 
     def resolve_account(self, sam):
         response = self.connection.search(searchFilter=f"(sAMAccountName={sam})", attributes=["distinguishedName"])
