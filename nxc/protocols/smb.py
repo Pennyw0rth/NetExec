@@ -62,7 +62,7 @@ from nxc.config import process_secret, host_info_colors, check_guest_account, di
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
-from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
+from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket, asreq_user_status
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -104,6 +104,14 @@ smb_error_status = [
     "KDC_ERR_CLIENT_REVOKED",
     "KDC_ERR_PREAUTH_FAILED",
 ]
+
+# The None key is an AS-REP rather than an error, and CLIENT_REVOKED cannot tell a disabled account from a locked one.
+asreq_user_status_messages = {
+    None: ("success", "account vulnerable to asreproast attack", "yellow"),
+    constants.ErrorCodes.KDC_ERR_PREAUTH_REQUIRED.value: ("success", "", "green"),
+    constants.ErrorCodes.KDC_ERR_KEY_EXPIRED.value: ("success", "KDC_ERR_KEY_EXPIRED (password expired)", "yellow"),
+    constants.ErrorCodes.KDC_ERR_CLIENT_REVOKED.value: ("fail", "KDC_ERR_CLIENT_REVOKED (disabled or locked out)", "magenta"),
+}
 
 
 def get_error_string(exception):
@@ -865,6 +873,39 @@ class smb(connection):
             self.logger.success(f"Run the following command to use the ST: export KRB5CCNAME={st_file}")
         except Exception as e:
             self.logger.fail(f"Failed to get ST: {e}")
+
+    def user_enum(self):
+        """Check which of the -u accounts exist via an AS-REQ with no pre-auth data, leaving badPwdCount untouched."""
+        if self.isdc is False:
+            self.logger.fail("Kerberos user enumeration only runs against a Domain Controller, so the KDC is queried once")
+            return
+
+        domains, usernames, *_ = self.parse_credentials()
+        # parse_credentials keeps the blank lines of a users file, and an empty principal makes impacket throw.
+        accounts = [(domains[index] or self.domain, username) for index, username in enumerate(usernames) if username]
+        if not accounts:
+            self.logger.fail("No account to enumerate, supply one with -u <user|file>")
+            return
+
+        kdc_host = self.kdcHost or self.host
+        self.logger.display(f"Enumerating {len(accounts)} account(s) over Kerberos, badPwdCount is left untouched")
+
+        for domain, username in accounts:
+            try:
+                status = asreq_user_status(username, domain, kdc_host, self.args.smb_timeout)
+            except OSError as e:
+                # The KDC is unreachable for the whole list, no point repeating it per account
+                self.logger.fail(f"{domain}\\{username} KDC unreachable: {e}")
+                return
+
+            entry = asreq_user_status_messages.get(status)
+            if entry is None:
+                error_name = constants.ERROR_MESSAGES[status][0] if status in constants.ERROR_MESSAGES else f"KDC error {status}"
+                entry = ("fail", error_name, "red")
+            level, suffix, color = entry
+
+            log = self.logger.success if level == "success" else self.logger.fail
+            log(f"{domain}\\{username} {suffix}".rstrip(), color=color)
 
     def is_host_dc(self, aggressive_check=False):
         if self.isdc is not None:
