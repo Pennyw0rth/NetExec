@@ -619,21 +619,26 @@ class connection:
         spray_attempts = getattr(self.args, "spray_attempts", 1)
 
         if not self.args.no_bruteforce:
-            round_start = monotonic()
+            last_attempt = {}   # user_index -> monotonic() of their most recent attempt
+            burst_count = {}    # user_index -> attempts since their last window wait
             for secr_index, secr in enumerate(secret):
-                # Pause between password batches so badPwdCount resets before we risk a lockout.
-                # Sleep only what's left of the window - spraying every user already consumed part of it.
-                if spray_window and secr_index and secr_index % spray_attempts == 0:
-                    remaining = spray_window - (monotonic() - round_start)
-                    if remaining > 0:
-                        self.logger.info(f"Sleeping {remaining:.0f}s so the lockout counter resets before the next round")
-                        sleep(remaining)
-                    round_start = monotonic()
                 for user_index, user in enumerate(username):
+                    # Pace each user against their own lockout clock: once they've spent their
+                    # spray-attempts budget, wait out the rest of THEIR window before the next hit.
+                    if burst_count.get(user_index, 0) >= spray_attempts:
+                        wait = spray_window - (monotonic() - last_attempt[user_index])
+                        if wait >= 1:
+                            self.logger.info(f"Sleeping {wait:.0f}s so the lockout counter resets before the next round")
+                        if wait > 0:
+                            sleep(wait)
+                        burst_count[user_index] = 0
                     if self.try_credentials(domain[user_index], user, owned[user_index], secr, cred_type[secr_index], data[secr_index]):
                         owned[user_index] = True
                         if not self.args.continue_on_success:
                             return True
+                    if spray_window:
+                        last_attempt[user_index] = monotonic()
+                        burst_count[user_index] = burst_count.get(user_index, 0) + 1
         else:
             if len(username) != len(secret):
                 self.logger.error("Number provided of usernames and passwords/hashes do not match!")
