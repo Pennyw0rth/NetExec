@@ -1,8 +1,9 @@
 import sys
 
-from impacket.dcerpc.v5 import samr, transport
+from impacket.dcerpc.v5 import samr
 from impacket.ldap.ldap import LDAPSessionError, MODIFY_REPLACE
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -16,14 +17,14 @@ class NXCModule:
     """
 
     name = "add-computer"
-    description = "Adds or deletes a domain computer via SAMR (SMB) or LDAPS"
+    description = "Adds or deletes a domain computer via SAMR (SMB) or LDAP"
     supported_protocols = ["smb", "ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
         add-computer: Adds, deletes, or changes the password of a domain computer account.
-        Uses SAMR when invoked with nxc smb, LDAPS when invoked with nxc ldap.
+        Uses SAMR when invoked with nxc smb.
 
         NAME        Computer name (required). Trailing '$' is added automatically.
         PASSWORD    Computer password (required for add/changepw).
@@ -80,19 +81,14 @@ class NXCModule:
         self.context.db.add_credential("plaintext", self.connection.domain, self.computer_name, self.computer_password)
 
     def _do_samr(self):
-        conn = self.connection
-        rpc_transport = transport.SMBTransport(conn.conn.getRemoteHost(), 445, r"\samr", smb_connection=conn.conn)
-
         try:
-            dce = rpc_transport.get_dce_rpc()
-            dce.connect()
-            dce.bind(samr.MSRPC_UUID_SAMR)
+            dce = NXCRPCConnection(self.connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
         except Exception as e:
             self.context.log.fail(f"Failed to connect to SAMR: {e}")
             return
 
         try:
-            self._samr_execute(dce, conn.conn.getRemoteName())
+            self._samr_execute(dce, self.connection.conn.getRemoteName())
         finally:
             dce.disconnect()
 
@@ -191,7 +187,7 @@ class NXCModule:
             request["Name"] = self.computer_name
             request["AccountType"] = samr.USER_WORKSTATION_TRUST_ACCOUNT
             request["DesiredAccess"] = samr.USER_FORCE_PASSWORD_CHANGE
-            return dce.request(request)
+            return dce.request(request)["UserHandle"]
         except samr.DCERPCSessionError as e:
             if "STATUS_USER_EXISTS" in str(e):
                 self.context.log.fail(f"Computer '{self.computer_name}' already exists")

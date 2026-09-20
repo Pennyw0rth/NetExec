@@ -6,6 +6,9 @@ from nxc.config import process_secret
 from nxc.connection import connection, dcom_FirewallChecker, requires_admin
 from nxc.logger import NXCAdapter
 from nxc.protocols.wmi import wmiexec, wmiexec_event
+from nxc.helpers.dpapi import DPAPITriage
+
+from dploot.lib.network.wmi import WMITarget as Target
 
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
@@ -47,6 +50,10 @@ class wmi(connection):
         }
         self.iWbemLevel1Login = None
         self.dcom_conn = None
+        self.no_da = None
+        self.dpapi_system_key = None
+
+        self._dpapi_triage = None
 
         connection.__init__(self, args, db, host)
 
@@ -484,3 +491,30 @@ class wmi(connection):
             return output
         else:
             return output
+
+    @requires_admin
+    def sccm(self):
+        self.dpapi_triage.triage_sccm()
+
+    @requires_admin
+    def dpapi(self):
+        self.dpapi_triage.triage_dpapi()
+
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            address=self.remoteName,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+            do_kerberos=self.kerberos,
+            aesKey=self.aesKey,
+            use_kcache=self.use_kcache,
+        )
+
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage
