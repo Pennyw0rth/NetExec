@@ -26,18 +26,18 @@ def gen_random_string(length=10):
     return "".join(random.sample(string.ascii_letters, int(length)))
 
 
-_HOSTNAME_SANITIZE_RE = re.compile(r"[^\w\-.]")
+def sanitize_dns(hostname, logger):
+    """Check that the hostname is compliant with DNS naming conventions and sanitize it if necessary."""
+    # As defined in: https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/naming-conventions-for-computer-domain-site-ou
+    # and RFCs 952, 1123 this should restrict DNS names (including the hostname) to the following regex
+    # Taken from https://stackoverflow.com/a/2063247
+    DNS_REGEX = re.compile(r"^(?![0-9]+$)(?!-)[a-zA-Z0-9-]{,63}(?<!-)$")
 
-
-def sanitize_hostname(hostname, logger):
-    """Strip characters from a server-provided hostname that could cause path
-    traversal, newline injection, or format-string issues when used in file
-    paths or output content.  Logs a warning when the value is modified.
-    """
-    sanitized = _HOSTNAME_SANITIZE_RE.sub("_", hostname)
-    if sanitized != hostname:
-        logger.fail(f"Hostname contained invalid characters (received: {hostname!r}), sanitized to: {sanitized!r}")
-    return sanitized
+    is_valid = re.match(DNS_REGEX, hostname)
+    if not is_valid:
+        logger.fail(f"Invalid hostname '{hostname}' detected. Sanitizing to prevent potential issues.")
+        return re.sub(r"[^a-zA-Z0-9]", "", hostname)
+    return hostname
 
 
 def validate_ntlm(data):
