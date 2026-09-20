@@ -126,20 +126,17 @@ class NXCModule:
             except Exception as e:
                 context.log.fail(f"[OPSEC] Error deleting lsass.dmp file on share {self.share}: {e}")
 
-            h_in = open(self.dir_result + machine_name, "rb")  # noqa: SIM115
-            h_out = open(self.dir_result + machine_name + ".decode", "wb")  # noqa: SIM115
+            with open(self.dir_result + machine_name, "rb") as h_in, open(self.dir_result + machine_name + ".decode", "wb") as h_out:
+                bytes_in = bytearray(h_in.read())
 
-            bytes_in = bytearray(h_in.read())
-            bytes_in_len = len(bytes_in)
+                context.log.display(f"Deobfuscating, this might take a while (size: {len(bytes_in)} bytes)")
 
-            context.log.display(f"Deobfuscating, this might take a while (size: {bytes_in_len} bytes)")
+                chunks = [bytes_in[i: i + 1000000] for i in range(0, len(bytes_in), 1000000)]
+                for chunk in chunks:
+                    for i in range(len(chunk)):
+                        chunk[i] ^= 0x41
 
-            chunks = [bytes_in[i: i + 1000000] for i in range(0, bytes_in_len, 1000000)]
-            for chunk in chunks:
-                for i in range(len(chunk)):
-                    chunk[i] ^= 0x41
-
-                h_out.write(bytes(chunk))
+                    h_out.write(bytes(chunk))
 
             with open(self.dir_result + machine_name + ".decode", "rb") as dump:
                 try:
