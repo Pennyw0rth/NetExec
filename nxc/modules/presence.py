@@ -1,4 +1,5 @@
 import re
+import socket
 from impacket.dcerpc.v5 import samr, tsch
 from impacket.dcerpc.v5 import tsts as TSTS
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
@@ -6,6 +7,7 @@ from contextlib import suppress
 import traceback
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.rpc import NXCRPCConnection
+from ldap3 import Server, Connection, ALL, NTLM, SUBTREE
 
 
 class NXCModule:
@@ -20,11 +22,35 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """There are no module options."""
+        """
+        ALTUSER     Alternative domain user to enumerate admin groups over LDAP
+        ALTPASS     Password for ALTUSER
+        ALTDOMAIN   Domain FQDN of the alternative credentials (e.g. corp.local)
+        ALTDC       Optional DC IP, if the domain cannot be resolved via DNS
+        ALTSSL      Optional, set to any value to use LDAPS (636) instead of LDAP (389)
+
+        When alternative credentials are supplied, Domain and Enterprise Admins are enumerated over LDAP against the DC (needed when logging in with a local administrator, which cannot enumerate these groups over SAMR).
+        """
+        self.altuser = module_options.get("ALTUSER")
+        self.altpass = module_options.get("ALTPASS")
+        self.altdomain = module_options.get("ALTDOMAIN")
+        self.altdc = module_options.get("ALTDC")
+        self.altssl = module_options.get("ALTSSL")
+
+        alt_creds = [self.altuser, self.altpass, self.altdomain]
+        if any(alt_creds) and not all(alt_creds):
+            context.log.fail("ALTUSER, ALTPASS, and ALTDOMAIN must be specified together")
+            raise ValueError("Incomplete alternative credentials")
 
     def on_admin_login(self, context, connection):
         try:
-            admin_users = self.enumerate_admin_users(context, connection)
+            if self.altuser and self.altpass and self.altdomain:
+                context.log.info(f"Using alternative domain credentials: {self.altdomain}\\{self.altuser}")
+                self.alt_dc_ip = self.altdc if self.altdc else self.get_dc_ip_from_domain(context, self.altdomain)
+                admin_users = self.enumerate_admin_users_ldap(context)
+            else:
+                admin_users = self.enumerate_admin_users(context, connection)
+
             if not admin_users:
                 context.log.fail("No admin users found.")
                 return
@@ -39,6 +65,89 @@ class NXCModule:
         except Exception as e:
             context.log.fail(str(e))
             context.log.debug(traceback.format_exc())
+
+    #resolve a dc ip from the domain fqdn. use altdc to override if this fails
+    def get_dc_ip_from_domain(self, context, domain):
+        try:
+            dc_ip = socket.gethostbyname(domain)
+            context.log.debug(f"Resolved {domain} to {dc_ip}")
+            return dc_ip
+        except Exception as e:
+            context.log.fail(f"Could not resolve a DC IP for {domain}: {e}. Specify one manually with -o ALTDC=<ip>")
+            raise
+
+    #enumerate domain and enterprise admins over ldap using alternative domain credentials
+    def enumerate_admin_users_ldap(self, context):
+        admin_users = []
+
+        try:
+            use_ssl = bool(self.altssl)
+            port = 636 if use_ssl else 389
+            context.log.debug(f"Connecting to {'LDAPS' if use_ssl else 'LDAP'} at {self.alt_dc_ip}:{port}")
+            server = Server(self.alt_dc_ip, port=port, use_ssl=use_ssl, get_info=ALL)
+            conn = Connection(server, user=f"{self.altdomain}\\{self.altuser}", password=self.altpass, authentication=NTLM)
+            if not conn.bind():
+                context.log.fail(f"LDAP bind failed: {conn.result}")
+                return admin_users
+            context.log.success(f"Successfully bound to {'LDAPS' if use_ssl else 'LDAP'} as {self.altdomain}\\{self.altuser}")
+        except Exception as e:
+            context.log.fail(f"Failed to connect to LDAP: {e}")
+            context.log.debug(traceback.format_exc())
+            return admin_users
+
+        try:
+            domain_dn = ",".join(f"DC={part}" for part in self.altdomain.split("."))
+            netbios = self.altdomain.split(".")[0].upper()
+
+            # Resolve the domain SID
+            conn.search(domain_dn, "(objectClass=domain)", attributes=["objectSid"])
+            if not conn.entries:
+                context.log.fail("Failed to retrieve domain SID from LDAP")
+                return admin_users
+            self.domain_sid = str(conn.entries[0].objectSid)
+            context.log.debug(f"Resolved domain SID for {netbios}: {self.domain_sid}")
+
+            admin_rids = {
+                "Domain Admins": 512,
+                "Enterprise Admins": 519,
+            }
+
+            # Enumerate admin groups and their members
+            for group_name, group_rid in admin_rids.items():
+                group_sid = f"{self.domain_sid}-{group_rid}"
+                context.log.debug(f"Looking up group: {group_name} with SID {group_sid}")
+
+                conn.search(domain_dn, f"(objectSid={group_sid})", attributes=["member"])
+                if not conn.entries:
+                    context.log.debug(f"Group {group_name} not found or has no members")
+                    continue
+
+                members = conn.entries[0].member if "member" in conn.entries[0] else []
+                for member_dn in members:
+                    try:
+                        conn.search(member_dn, "(objectClass=user)", search_scope=SUBTREE, attributes=["sAMAccountName", "objectSid"])
+                        if not conn.entries:
+                            continue
+                        username = str(conn.entries[0].sAMAccountName)
+                        user_sid = str(conn.entries[0].objectSid)
+
+                        # If user already exists, append group name
+                        if any(u["sid"] == user_sid for u in admin_users):
+                            user = next(u for u in admin_users if u["sid"] == user_sid)
+                            user["group"].append(group_name)
+                        else:
+                            admin_users.append({"username": username, "sid": user_sid, "domain": netbios, "group": [group_name], "in_tasks": False, "in_directory": False, "in_scheduled_tasks": False})
+                        context.log.debug(f"Found user: {username} with SID {user_sid} in group {group_name}")
+                    except Exception as e:
+                        context.log.debug(f"Failed to get user info for {member_dn}: {e!s}")
+        except Exception as e:
+            context.log.fail(f"Failed to enumerate admin users via LDAP: {e}")
+            context.log.debug(traceback.format_exc())
+        finally:
+            with suppress(Exception):
+                conn.unbind()
+
+        return admin_users
 
     def get_dce_rpc(self, named_pipe, dce_binding, connection, target_ip=None, auth_level=None):
         return NXCRPCConnection(connection).connect(
@@ -135,6 +244,15 @@ class NXCModule:
                 user["in_directory"] = True
                 context.log.info(f"Found user {user['username']} in directories")
 
+    def parse_process(self, process):
+    #fixes KeyError: 'ImageName' in check_tasklist
+        if hasattr(process, "getProcessInfo"):
+            info = process.getProcessInfo()
+            image = info["ImageName"]
+            image = image.getValue() if hasattr(image, "getValue") else str(image)
+            return image, info["UniqueProcessId"], info["SessionId"], process.getSid()
+        return process["ImageName"], process.get("UniqueProcessId"), process["SessionId"], process["pSid"]
+
     def check_tasklist(self, context, connection, admin_users):
         """Checks tasklist over rpc."""
         try:
@@ -148,12 +266,20 @@ class NXCModule:
         context.log.debug(f"Enumerated {len(processes)} processes on {connection.host}")
 
         for process in processes:
-            context.log.debug(f"ImageName: {process['ImageName']}, UniqueProcessId: {process['SessionId']}, pSid: {process['pSid']}")
+            try:
+                image_name, pid, session_id, psid = self.parse_process(process)
+            except Exception as e:
+                context.log.debug(f"Failed to parse process entry: {e}")
+                continue
+
+            context.log.debug(f"ImageName: {image_name}, UniqueProcessId: {pid}, SessionId: {session_id}, pSid: {psid}")
             # Check if process SID matches any admin user SID
+            if not psid:
+                continue
             for user in admin_users:
-                if process["pSid"] == user["sid"]:
+                if psid == user["sid"]:
                     user["in_tasks"] = True
-                    context.log.info(f"Matched process {process['ImageName']} with user {user['username']}")
+                    context.log.info(f"Matched process {image_name} with user {user['username']}")
 
     def check_scheduled_tasks(self, context, connection, admin_users):
         """Checks scheduled tasks over rpc."""
