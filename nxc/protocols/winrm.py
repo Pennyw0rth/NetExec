@@ -8,7 +8,7 @@ import ntpath
 import xml.etree.ElementTree as ET
 
 from pypsrp.wsman import NAMESPACES
-from nxc.helpers.misc import sanitize_hostname
+from nxc.helpers.misc import sanitize_dns
 from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
 from termcolor import colored
@@ -70,7 +70,7 @@ class winrm(connection):
             return False
 
         self.targetDomain = self.domain = ntlm_info["domain"]
-        self.hostname = sanitize_hostname(ntlm_info["hostname"], self.logger)
+        self.hostname = sanitize_dns(ntlm_info["hostname"], self.logger)
         self.server_os = ntlm_info["os_version"]
         self.logger.extra["hostname"] = self.hostname
 

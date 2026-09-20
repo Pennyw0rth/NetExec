@@ -8,7 +8,7 @@ from termcolor import colored
 from impacket.krb5.ccache import CCache
 
 from nxc.connection import connection
-from nxc.helpers.misc import sanitize_hostname
+from nxc.helpers.misc import sanitize_dns
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
@@ -143,7 +143,7 @@ class rdp(connection):
                         pass
                     else:
                         self.domain = info_domain["dnsdomainname"]
-                        self.hostname = sanitize_hostname(info_domain["computername"], self.logger)
+                        self.hostname = sanitize_dns(info_domain["computername"], self.logger)
                         self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
                         self.logger.extra["hostname"] = self.hostname
                     break

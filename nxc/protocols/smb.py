@@ -9,7 +9,7 @@ from pathlib import Path
 from nxc.helpers.path import sanitize_filename
 from Cryptodome.Hash import MD4
 from textwrap import dedent
-from nxc.helpers.misc import sanitize_hostname
+from nxc.helpers.misc import sanitize_dns
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
@@ -210,12 +210,12 @@ class smb(connection):
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
             dns_hostname = self.conn.getServerDNSHostName().upper()
             if dns_hostname and "." in dns_hostname:
-                self.hostname = dns_hostname.split(".")[0]
+                hostname = dns_hostname.split(".")[0]
             elif dns_hostname:
-                self.hostname = dns_hostname
+                hostname = dns_hostname
             else:
-                self.hostname = self.conn.getServerName()
-            self.hostname = sanitize_hostname(self.hostname, self.logger)
+                hostname = self.conn.getServerName()
+            self.hostname = sanitize_dns(hostname, self.logger)
             self.targetDomain = self.conn.getServerDNSDomainName()
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
