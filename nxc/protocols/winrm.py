@@ -631,7 +631,7 @@ class winrm(connection):
             if output is None:
                 raise RuntimeError("Failed to execute LSA dump command")
 
-            if not self.get_file(f"C:\\windows\\temp\\{security_storename} {output_filename}.security"):
+            if not self.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security"):
                 raise RuntimeError("Failed to download SECURITY hive")
 
             if not self.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system"):
@@ -640,6 +640,7 @@ class winrm(connection):
             self.execute(clean_command, get_output=True)
 
         except Exception as e:
+            print(e)
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
                 self.logger.fail("Failed to dump LSA secrets, it may have been detected by AV or current user is not privileged user")
             elif hasattr(e, "code") and e.code == 5:
