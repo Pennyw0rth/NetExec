@@ -25,22 +25,16 @@ class NXCModule:
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=delete DN="CN=test,OU=Users,DC=test,DC=local"
                nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=query
         """
-        self.action = module_options.get("ACTION", "query")
-        self.id = ""
-        self.deleteDN = ""
-        if "ACTION" in module_options:
-            self.action = module_options.get("ACTION")
-        if "ID" in module_options:
-            self.id = module_options["ID"]
-        if "DN" in module_options:
-            self.deleteDN = module_options["DN"]
-        if "ACTION" in module_options and self.action.lower() == "restore" and "ID" not in module_options:
-            context.log.error("ID is necessary when calling tombstone with the restore action")
-            sys.exit(1)
+        self.action = module_options.get("ACTION", "query").lower()
+        self.id = module_options.get("ID", "")
+        self.delete_dn = module_options.get("DN", "")
+        if self.action == "restore" and not self.id:
+            context.log.fail("ID is necessary when calling tombstone with the restore action")
+            return False
 
-        if "ACTION" in module_options and self.action.lower() == "delete" and "DN" not in module_options:
-            context.log.error("DN is necessary when calling tombstone with the delete action")
-            sys.exit(1)
+        if self.action == "delete" and not self.delete_dn:
+            context.log.fail("DN is necessary when calling tombstone with the delete action")
+            return False
 
     def on_login(self, context, connection):
         self.__sAMAccountName = ""
