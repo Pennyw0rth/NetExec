@@ -44,112 +44,91 @@ class NXCModule:
         else:
             context.log.fail(f'The action "{self.action}" is not valid, use only one available option (query, restore, delete)')
 
+    def show_deleted_control(self):
+        return Control().setComponents("1.2.840.113556.1.4.417", True)
+
+    def search_deleted_objects(self, connection):
+        return parse_result_attributes(
+            connection.search(
+                baseDN=f"CN=Deleted Objects,{connection.baseDN}",
+                searchFilter="(isDeleted=TRUE)",
+                attributes=["*"],
+                searchControls=[self.show_deleted_control(), SimplePagedResultsControl(criticality=True, size=1000)],
+            )
+        )
+
     def restore_deleted_object(self, context, connection):
-
-        # ldap DN for deleted objects
-        dn = f"CN=Deleted Objects,{connection.baseDN}"
-
-        # LDAP control necessary to show the deleted objects LDAP_SERVER_SHOW_DELETED_OID
-        show_deleted_control = Control()
-        show_deleted_control["controlType"] = "1.2.840.113556.1.4.417"
-        show_deleted_control["criticality"] = True
+        object_dn = ""
+        original_dn = ""
 
         context.log.highlight(f"Trying to find object with given id {self.id}")
 
         context.log.debug("Search Filter=(isDeleted=TRUE)")
-        resp = self.connection.search(baseDN=dn, searchFilter="(isDeleted=TRUE)", attributes=["*"], searchControls=[show_deleted_control])
-
-        resp_parsed = parse_result_attributes(resp)
         context.log.highlight("")
 
-        for entries in resp_parsed:
-
-            # This check ensures that we skip the result for the Default container and only get the result from the given ID.
-            if "container" in entries["objectClass"] and entries["description"] == "Default container for deleted objects":
-
+        for entries in self.search_deleted_objects(connection):
+            if entries.get("distinguishedName", "").casefold() == f"CN=Deleted Objects,{connection.baseDN}".casefold():
                 continue
 
-            if self.id == entries["name"].split(":")[1]:
-
+            if self.id.casefold() == entries.get("name", "").rsplit(":", 1)[-1].casefold():
                 context.log.highlight(f"{'sAMAccountName':<20}: {entries.get('sAMAccountName', '')}")
                 context.log.highlight(f"{'description':<20}: {entries.get('description', '')}")
                 context.log.highlight(f"{'dn':<20}: {entries.get('distinguishedName', '')}")
-                context.log.highlight(f"{'ID':<20}: {entries.get('name', '').split(':')[1]}")
+                context.log.highlight(f"{'ID':<20}: {entries.get('name', '').rsplit(':', 1)[-1]}")
                 context.log.highlight(f"{'isDeleted':<20}: {entries.get('isDeleted', '')}")
                 context.log.highlight(f"{'lastKnownParent':<20}: {entries.get('lastKnownParent', '')}")
                 context.log.highlight("")
 
-                self.__objectDN = entries.get("distinguishedName", "")
-                self.__lastKnownParent = entries.get("lastKnownParent", "")
-                object_prefix = self.__objectDN.split("\\")[0]
-                self.__originalDN = f"{object_prefix},{self.__lastKnownParent}"
-
+                object_dn = entries.get("distinguishedName", "")
+                original_dn = object_dn.rsplit("\\0ADEL:", 1)[0] + "," + entries.get("lastKnownParent", "")
                 break
 
-        if self.__originalDN == "":
-            context.log.highlight(f"The object was not found with id {self.id}.")
+        if not original_dn:
+            context.log.fail(f"The object was not found with id {self.id}.")
             return False
 
         try:
-            connection.ldap_connection.modify(dn=self.__objectDN, modifications={"isDeleted": [(MODIFY_DELETE, [])], "distinguishedName": [(MODIFY_REPLACE, [self.__originalDN])]}, controls=[show_deleted_control])
-            context.log.highlight(f"Success {self.__originalDN} restored")
+            connection.ldap_connection.modify(dn=object_dn, modifications={"isDeleted": [(MODIFY_DELETE, [])], "distinguishedName": [(MODIFY_REPLACE, [original_dn])]}, controls=[self.show_deleted_control()])
+            context.log.highlight(f"Success {original_dn} restored")
 
         except LDAPSessionError as e:
             context.log.fail(f"Error at trying to recover the object {e}")
             return False
 
     def delete_object(self, context, connection):
-        context.log.highlight(f"Trying to delete {self.deleteDN}")
+        context.log.highlight(f"Trying to delete {self.delete_dn}")
 
         try:
-            connection.ldap_connection.delete(dn=self.deleteDN)
+            connection.ldap_connection.delete(dn=self.delete_dn)
             context.log.highlight("")
-            context.log.highlight(f'Success, "{self.deleteDN}" deleted')
+            context.log.highlight(f'Success, "{self.delete_dn}" deleted')
 
         except LDAPSessionError as e:
             context.log.highlight("")
-            context.log.fail(f'Error when trying to delete "{self.deleteDN}" {e}')
+            context.log.fail(f'Error when trying to delete "{self.delete_dn}" {e}')
 
-    def query_deleted_objects(self, context):
-
-        # ldap DN for deleted objects
-        dn = f"CN=Deleted Objects,{self.connection.baseDN}"
-
-        # LDAP control necessary to show the deleted objects LDAP_SERVER_SHOW_DELETED_OID
-        show_deleted_control = Control()
-        show_deleted_control["controlType"] = "1.2.840.113556.1.4.417"
-        show_deleted_control["criticality"] = True
-
+    def query_deleted_objects(self, context, connection):
         context.log.debug("Search Filter=(isDeleted=TRUE)")
-        resp = self.connection.search(baseDN=dn, searchFilter="(isDeleted=TRUE)", attributes=["*"], searchControls=[show_deleted_control])
-        resp_parsed = parse_result_attributes(resp)
+        resp_parsed = self.search_deleted_objects(connection)
 
-        if len(resp_parsed) == 0:
+        if not resp_parsed:
             context.log.highlight("Could not find the Deleted Objects container, AD recycle bin might not be active")
             return False
 
-        elif len(resp_parsed) < 2:
+        resp_parsed = [entries for entries in resp_parsed if entries.get("distinguishedName", "").casefold() != f"CN=Deleted Objects,{connection.baseDN}".casefold()]
+        if not resp_parsed:
             context.log.highlight("No objects are in a tombstone state")
             return False
 
-        number_of_deleted_objects = 0
         context.log.highlight("")
 
         for entries in resp_parsed:
-
-            # This check ensures that we skip the result for the Default container and only get results that are valid for us.
-            if "container" in entries["objectClass"] and entries["description"] == "Default container for deleted objects":
-
-                continue
-
             context.log.highlight(f"{'sAMAccountName':<20}: {entries.get('sAMAccountName', '')}")
             context.log.highlight(f"{'description':<20}: {entries.get('description', '')}")
             context.log.highlight(f"{'dn':<20}: {entries.get('distinguishedName', '')}")
-            context.log.highlight(f"{'ID':<20}: {entries.get('name', '').split(':')[1]}")
+            context.log.highlight(f"{'ID':<20}: {entries.get('name', '').rsplit(':', 1)[-1]}")
             context.log.highlight(f"{'isDeleted':<20}: {entries.get('isDeleted', '')}")
             context.log.highlight(f"{'lastKnownParent':<20}: {entries.get('lastKnownParent', '')}")
             context.log.highlight("")
 
-            number_of_deleted_objects += 1
-
-        context.log.highlight(f"Found {number_of_deleted_objects} deleted objects")
+        context.log.highlight(f"Found {len(resp_parsed)} deleted objects")
