@@ -37,16 +37,11 @@ class NXCModule:
             return False
 
     def on_login(self, context, connection):
-        self.__sAMAccountName = ""
-        self.__objectDN = ""
-        self.__lastKnownParent = ""
-        self.connection = connection
-
-        if self.action.lower() == "query":
-            self.query_deleted_objects(context)
-        elif self.action.lower() == "delete":
+        if self.action == "query":
+            self.query_deleted_objects(context, connection)
+        elif self.action == "delete":
             self.delete_object(context, connection)
-        elif self.action.lower() == "restore":
+        elif self.action == "restore":
             self.restore_deleted_object(context, connection)
         else:
             context.log.fail(f'The action "{self.action}" is not valid, use only one available option (query, restore, delete)')
