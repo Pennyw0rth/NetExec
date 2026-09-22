@@ -156,9 +156,20 @@ class NXCModule:
         """Recursively resolve members of a group."""
         try:
             self.context.log.debug(f"Resolving group members recursively for {dn}")
+            # Escape LDAP filter special characters in the DN value (RFC 4515) before
+            # interpolating it into the filter below. A DN containing one of these
+            # characters (rare, but valid in AD, e.g. an escaped comma or parenthesis
+            # in a CN) otherwise produces a malformed filter and crashes the search.
+            safe_dn = (
+                dn.replace("\\", "\\5c")
+                .replace("*", "\\2a")
+                .replace("(", "\\28")
+                .replace(")", "\\29")
+                .replace("\x00", "\\00")
+            )
             # Somehow BaseDN is not working together with the LDAP_MATCHING_RULE_IN_CHAIN
             result = self.connection.ldap_connection.search(
-                searchFilter=f"(memberOf:{LDAP_MATCHING_RULE_IN_CHAIN}:={dn})",
+                searchFilter=f"(memberOf:{LDAP_MATCHING_RULE_IN_CHAIN}:={safe_dn})",
                 attributes=["sAMAccountName", "distinguishedName", "sAMAccountType"],
             )
 
