@@ -3,6 +3,7 @@ import struct
 import binascii
 from Cryptodome.Hash import MD4
 from io import StringIO
+import base64
 
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.config import process_secret
@@ -401,32 +402,48 @@ class wmi(connection):
         wql = f"SELECT FileSize FROM CIM_DataFile WHERE Name = '{escaped_path}'"
         self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
         # If file is bigger than 70MB, print a warning
-        if callback_func.size > 73400320: # 70MB
-            self.logger.fail(f"{remote_path} filesize is {callback_func.size/1024**2:.2f} Mo. The download will take some time and can crash.")
-        
-        # Read the file
-        try:
-            object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
-            iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
-        except DCERPCSessionError as e:
-            if e.error_code == 0x80041002:
-                self.logger.fail(f"Cannot find file '{remote_path}'")
-            return None
+        if callback_func.size < 73400320: # 70MB
+            # Read the file
+            try:
+                object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
+                iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
+            except DCERPCSessionError as e:
+                if e.error_code == 0x80041002:
+                    self.logger.fail(f"Cannot find file '{remote_path}'")
+                return None
 
-        obj = iWbemClassObject.getProperties()
+            obj = iWbemClassObject.getProperties()
 
-        file_data = None
-        for prop_name, prop_value in obj.items():
-            if prop_name == "FileData":
-                file_data = prop_value["value"]
-                break
+            file_data = None
+            for prop_name, prop_value in obj.items():
+                if prop_name == "FileData":
+                    file_data = prop_value["value"]
+                    break
 
-        if len(file_data) < 4:
-            return None
+            if len(file_data) < 4:
+                return None
 
-        # Unpack it
-        file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
-        return bytes(file_data[4:4 + file_length])
+            # Unpack it
+            file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
+            return bytes(file_data[4:4 + file_length])
+        else:
+            self.logger.fail(f"{remote_path} filesize is {callback_func.size/1024**2:.2f} Mo. The download will take some time and use wmi command execution.")
+            # Read file dirty
+            data = b""
+            chunk_size = 1 * 1024 * 1024 # 5MB - Could not do bigger or it crash
+            chunk_count = (callback_func.size + chunk_size - 1) // chunk_size
+            try: 
+                for i in range(chunk_count):
+                    offset = i * chunk_size
+                    self.logger.debug(f"Reading bytes from {offset} to {offset+chunk_size if offset+chunk_size < callback_func.size else callback_func.size}")
+                    powershell_command = f"$fs=[IO.File]::OpenRead('{remote_path}');try {{ $fs.Seek({offset},[IO.SeekOrigin]::Begin)|Out-Null;$b=[byte[]]::new({chunk_size});$n=$fs.Read($b,0,$b.Length);Write-Output ([Convert]::ToBase64String($b,0,$n)) }} finally {{ $fs.Dispose() }}"
+                    output = self.execute_psh(powershell_command, get_output=True)
+                    data += base64.b64decode(output)
+                return data
+            except Exception as e:
+                self.logger.debug(f"Error while downloading {remote_path}: {e}")
+                self.logger.fail(f"Could not download {remote_path}")
+        return None
 
     def get_file_single(self, remote_path, download_path):
         if self.args.append_host:
@@ -707,7 +724,8 @@ class wmi(connection):
                 self.iWbemLevel1Login,
                 self.logger,
                 self.args.exec_timeout,
-                self.args.codec
+                self.args.codec,
+                self.get_namespace("//./root/cimv2")
             )
         elif self.args.exec_method == "wmiexec-event":
             exec_method = wmiexec_event.WMIEXEC_EVENT(
@@ -715,7 +733,8 @@ class wmi(connection):
                 self.iWbemLevel1Login,
                 self.logger,
                 self.args.exec_timeout,
-                self.args.codec
+                self.args.codec,
+                self.get_namespace("//./root/subscription")
             )
         output = exec_method.execute(command, get_output, use_powershell=use_powershell)
 
