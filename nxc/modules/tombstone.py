@@ -92,7 +92,6 @@ class NXCModule:
         try:
             connection.ldap_connection.modify(dn=object_dn, modifications={"isDeleted": [(MODIFY_DELETE, [])], "distinguishedName": [(MODIFY_REPLACE, [original_dn])]}, controls=[self.show_deleted_control()])
             context.log.highlight(f"Success {original_dn} restored")
-
         except LDAPSessionError as e:
             context.log.fail(f"Error at trying to recover the object {e}")
             return False
@@ -104,7 +103,6 @@ class NXCModule:
             connection.ldap_connection.delete(dn=self.delete_dn)
             context.log.highlight("")
             context.log.highlight(f'Success, "{self.delete_dn}" deleted')
-
         except LDAPSessionError as e:
             context.log.highlight("")
             context.log.fail(f'Error when trying to delete "{self.delete_dn}" {e}')
