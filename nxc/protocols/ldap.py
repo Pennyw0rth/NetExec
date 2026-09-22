@@ -160,6 +160,8 @@ class ldap(connection):
                 self.signing_required = True
             else:
                 self.logger.debug(f"LDAPSessionError while checking for signing requirements (likely NTLM disabled): {e!s}")
+        except OSError as e:
+            self.logger.debug(f"Connection error while checking LDAP signing on {self.host}: {e!s}")
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
@@ -1730,6 +1732,7 @@ class ldap(connection):
                 aeskey=self.aesKey,
                 kdc=self.kdcHost,
                 auth_method="auto",
+                ldap_channel_binding=self.cbt_status == "Always"
             )
             ad = AD(
                 auth=auth,
@@ -1768,9 +1771,13 @@ class ldap(connection):
                     exclude_dcs=False,
                 )
             except Exception as e:
-                self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
-                self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
-                return
+                if "ldap3-bleeding-edge" in str(e):
+                    self.logger.fail("Bloodhound collection failed due to channel binding requirements. Inject 'ldap3-bleeding-edge': pipx inject netexec ldap3-bleeding-edge")
+                    return
+                else:
+                    self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+                    self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+                    return
 
         # Collect ADCS data using CertiHound if requested
         if "adcs" in collect:

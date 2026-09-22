@@ -48,6 +48,9 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.no_ntlm = False
+        self.encryption = None
+        self.edition = ""
+        self.version = ""
         self.dpapi_system_key = None
         self.no_da = None
 
@@ -668,6 +671,44 @@ class mssql(connection):
 
         self._dpapi_triage = DPAPITriage(self, target)
         return self._dpapi_triage
+
+    @requires_admin
+    def db_hash(self):
+        self.logger.display("Dumping local database users' hashes")
+        query = """
+        SELECT
+            sp.name,
+            CASE
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0200 THEN 'SHA-512'
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0300 THEN 'PBKDF2'
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0100 THEN 'SHA-1'
+                ELSE 'Unknown'
+            END AS hash_type,
+            sl.password_hash
+        FROM sys.server_principals sp
+        INNER JOIN sys.sql_logins sl
+            ON sp.principal_id = sl.principal_id
+        WHERE sp.type = 'S'           -- uniquement les logins SQL
+        AND sp.name NOT LIKE '##%'
+        ORDER BY sp.name;
+        """
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+            return
+        if not rows:
+            self.logger.fail("No logins returned")
+            return
+        else:
+            self.logger.display("Enumerated logins")
+            self.logger.highlight(f"{'Login Name':<15} {'Hash type':<10} {'Hash'}")
+            self.logger.highlight(f"{'----------':<15} {'----------':<10} {'--------------':}")
+            for row in rows:
+                name = row.get("name")
+                hash_type = row.get("hash_type")
+                password_hash = row.get("password_hash")
+                if password_hash != "NULL":
+                    self.logger.highlight(f"{name:<15} {hash_type:<10} {password_hash:<140}")
 
     def list_backups(self):
         self.logger.info("Dumping database backups")

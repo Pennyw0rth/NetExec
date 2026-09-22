@@ -37,6 +37,8 @@ class NXCModule:
         dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
 
         try:
+            # Large hives can take minutes to save before the RPC call returns.
+            connection.conn.setTimeout(max(connection.args.smb_timeout, 60))
             for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
                 hRootKey, subKey = self._strip_root_key(dce, hive)
                 outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}_{rand_suffix}"
@@ -52,6 +54,7 @@ class NXCModule:
             context.log.fail(f"Unexpected error: {e}")
             return
         finally:
+            connection.conn.setTimeout(connection.args.smb_timeout)
             with contextlib.suppress(Exception):
                 dce.disconnect()
 

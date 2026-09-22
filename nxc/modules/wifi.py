@@ -32,16 +32,16 @@ class NXCModule:
                 context.log.highlight(f"[OPEN] {wifi_cred.ssid}")
             elif wifi_cred.auth.upper() in ["WPAPSK", "WPA2PSK", "WPA3SAE"]:
                 try:
-                    context.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password.decode('latin-1')}")
+                    connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password.decode('latin-1')}", self.context.log)
                 except Exception:
-                    context.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}")
+                    connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}", self.context.log)
             elif wifi_cred.auth.upper() in ["WPA", "WPA2"]:
                 try:
                     if wifi_cred.eap_username is not None and wifi_cred.eap_password is not None:
-                        context.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - {wifi_cred.eap_type} - Identifier: {wifi_cred.eap_username}:{wifi_cred.eap_password}")
+                        connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - {wifi_cred.eap_type} - Identifier: {wifi_cred.eap_username}:{wifi_cred.eap_password}", self.context.log)
                     else:
-                        context.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - {wifi_cred.eap_type}")
+                        connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - {wifi_cred.eap_type}", self.context.log)
                 except Exception:
-                    context.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}")
+                    connection.dpapi_triage.log_secret(f"[{wifi_cred.auth.upper()}] {wifi_cred.ssid} - Passphrase: {wifi_cred.password}", self.context.log)
             else:
                 context.log.highlight(f"[WPA-EAP] {wifi_cred.ssid} - {wifi_cred.eap_type}")
