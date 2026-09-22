@@ -1229,10 +1229,11 @@ class ldap(connection):
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
-        for idx, entry in enumerate(resp_parsed):
-            if not isinstance(resp[idx], ldapasn1_impacket.SearchResultEntry):
-                idx += 1  # Skip non-entry responses
-            self.logger.success(f"Response for object: {resp[idx]['objectName']}")
+        # parse_result_attributes() drops non-SearchResultEntry objects (e.g. SearchResultReference),
+        # so resp_parsed can be shorter than resp. Filter resp the same way here to keep the two lists aligned.
+        resp_entries = [entry for entry in resp if isinstance(entry, ldapasn1_impacket.SearchResultEntry)]
+        for entry, raw_entry in zip(resp_parsed, resp_entries):
+            self.logger.success(f"Response for object: {raw_entry['objectName']}")
             for attribute in entry:
                 if isinstance(entry[attribute], list) and entry[attribute]:
                     # Display first item in the same line as attribute
