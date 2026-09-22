@@ -1,8 +1,10 @@
-import sys
-from nxc.parsers.ldap_results import parse_result_attributes
-from impacket.ldap.ldapasn1 import Control
-from impacket.ldap.ldap import LDAPSessionError, MODIFY_REPLACE, MODIFY_DELETE
+from sys import exit
+
+from impacket.ldap.ldap import LDAPSessionError, MODIFY_DELETE, MODIFY_REPLACE
+from impacket.ldap.ldapasn1 import Control, SimplePagedResultsControl
+
 from nxc.helpers.misc import CATEGORY
+from nxc.parsers.ldap_results import parse_result_attributes
 
 
 class NXCModule:
