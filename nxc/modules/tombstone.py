@@ -52,7 +52,7 @@ class NXCModule:
             connection.search(
                 baseDN=f"CN=Deleted Objects,{connection.baseDN}",
                 searchFilter="(isDeleted=TRUE)",
-                attributes=["*"],
+                attributes=[],
                 searchControls=[self.show_deleted_control(), SimplePagedResultsControl(criticality=True, size=1000)],
             )
         )
