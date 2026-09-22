@@ -169,29 +169,12 @@ class DatabaseNavigator(cmd.Cmd):
                 print("[-] invalid arguments, export hosts <simple|detailed|signing> <filename>")
                 return
 
-            csv_header_simple = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-            )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-                "spooler",
-                "zerologon",
-                "petitpotam",
-            )
+            # Build the headers from the current protocol's actual hosts table columns
+            # instead of hardcoding SMB's schema, so e.g. `export hosts detailed` under
+            # `proto rdp` doesn't label RDP's columns with SMB's header names.
+            detailed_columns = list(self.db.HostsTable.columns.keys())
+            csv_header_simple = tuple(detailed_columns[:8])
+            csv_header_detailed = tuple(detailed_columns)
             filename = line[2]
 
             if line[1].lower() == "simple":
