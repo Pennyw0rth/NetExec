@@ -1,5 +1,3 @@
-from sys import exit
-
 from impacket.ldap.ldap import LDAPSessionError, MODIFY_DELETE, MODIFY_REPLACE
 from impacket.ldap.ldapasn1 import Control, SimplePagedResultsControl
 
