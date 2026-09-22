@@ -5,6 +5,7 @@ import requests
 import urllib3
 import ntpath
 from termcolor import colored
+import xml.etree.ElementTree as ET
 
 from dploot.lib.utils import is_guid, is_credfile
 from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
@@ -32,12 +33,28 @@ from impacket.winrm import (
     WinRMFaultError,
     WinRMTransportError,
     get_kerberos_credential,
+    _build_envelope
 )
 from impacket.krb5.kerberosv5 import SessionError
 
 
 urllib3.disable_warnings()
 
+WSMAN_ENUMERATE_ACTION = (
+    "http://schemas.xmlsoap.org/ws/2004/09/enumeration/Enumerate"
+)
+
+WSMAN_SHELL_RESOURCE_URI = (
+    "http://schemas.microsoft.com/wbem/wsman/1/windows/shell"
+)
+
+WSEN_NAMESPACE = (
+    "http://schemas.xmlsoap.org/ws/2004/09/enumeration"
+)
+
+WSMAN_NAMESPACE = (
+    "http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd"
+)
 
 def _parse_hashes(hashes):
     if not hashes:
@@ -56,6 +73,26 @@ def _build_command(command, shell_type):
         encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
         return "powershell.exe", ["-NoP", "-NoL", "-sta", "-NonI", "-W", "Hidden", "-Exec", "Bypass", "-Enc", encoded] 
     return "cmd.exe", ["/Q", "/c", command]
+
+
+def _build_winrm_admin_check_request(timeout=20, session_id=None):
+    envelope, header, body = _build_envelope(
+        "create",
+        resource_uri=WSMAN_SHELL_RESOURCE_URI,
+        timeout=timeout,
+        session_id=session_id,
+    )
+
+    action = header.find("{http://schemas.xmlsoap.org/ws/2004/08/addressing}Action")
+
+    if action is None:
+        raise WinRMTransportError("Unable to find WS-Man Action header")
+    action.text = WSMAN_ENUMERATE_ACTION
+    enumerate_msg = ET.SubElement(body, f"{{{WSEN_NAMESPACE}}}Enumerate")
+    ET.SubElement(enumerate_msg, f"{{{WSMAN_NAMESPACE}}}OptimizeEnumeration")
+    ET.SubElement(enumerate_msg, f"{{{WSMAN_NAMESPACE}}}MaxElements", ).text = "32000"
+
+    return envelope
 
 
 class _KerberosFallbackTransport:
@@ -193,9 +230,17 @@ class winrm(connection):
     def check_if_admin(self):
         self.admin_privs = False
 
+        if self.conn is None:
+            self.logger.debug("WinRM session is not established")
+            return False
+
         try:
-            if output := self.execute("whoami /groups", get_output=True):
-                self.admin_privs = "S-1-5-32-544" in output
+            request = _build_winrm_admin_check_request(timeout=self.conn.timeout, session_id=self.conn.session_id,)
+            self.conn._send(request)
+            self.admin_privs = True
+
+        except WinRMFaultError as e:
+            self.logger.debug(f"WinRM administrator check failed: {e!s}")
 
         except Exception as e:
             self.logger.debug(f"Error checking administrator privileges: {e!s}")
