@@ -9,19 +9,21 @@ class NXCModule:
     """Module by Fabrizzio: @Fabrizzio53"""
 
     name = "tombstone"
-    description = "Query, restore and delete AD object"
+    description = "Query, restore and delete AD objects"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """
-        ACTION: Specify the action to execute, by default it uses the "query" action which only retrieve deleted objects, "restore" recover the object from the "ID" param, delete will delete the object.
-        ID: The id of which object you want to restore.
-        DN: The DN of which object you want to delete.
-        Usage: nxc ldap $DC-IP -u Username -p Password -M tombstone
-               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3
-               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=delete DN="CN=test,OU=Users,DC=test,DC=local"
-               nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=query
+        ACTION      Specify the action to execute: query, restore or delete. Default is query.
+        ID          The id of which object you want to restore.
+        DN          The DN of which object you want to delete.
+
+        Usage:
+        nxc ldap $DC-IP -u Username -p Password -M tombstone
+        nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=query
+        nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=restore ID=5ad162c9-97b1-4a90-a17c-5c2aedb7d1e3
+        nxc ldap $DC-IP -u Username -p Password -M tombstone -o ACTION=delete DN="CN=test,OU=Users,DC=test,DC=local"
         """
         self.action = module_options.get("ACTION", "query").lower()
         self.id = module_options.get("ID", "")
