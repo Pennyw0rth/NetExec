@@ -1,9 +1,12 @@
+from contextlib import suppress
 from enum import Enum
+import hashlib
 import random
 import string
 import re
 import inspect
 import os
+from unicodedata import normalize
 from termcolor import colored
 from ipaddress import ip_address
 from nxc.logger import nxc_logger
@@ -26,18 +29,97 @@ def gen_random_string(length=10):
     return "".join(random.sample(string.ascii_letters, int(length)))
 
 
-def sanitize_dns(hostname, logger):
-    """Check that the hostname is compliant with DNS naming conventions and sanitize it if necessary."""
-    # As defined in: https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/naming-conventions-for-computer-domain-site-ou
-    # and RFCs 952, 1123 this should restrict DNS names (including the hostname) to the following regex
-    # Taken from https://stackoverflow.com/a/2063247
-    DNS_REGEX = re.compile(r"^(?![0-9]+$)(?!-)[a-zA-Z0-9-]{,63}(?<!-)$")
+def sanitize_dns(hostname, logger=nxc_logger):
+    """Return an untrusted hostname or domain as a safe, nonempty string."""
+    # Always provide a safe fallback, even for missing or unstringable input.
+    if hostname is None:
+        return "_"
 
-    is_valid = re.match(DNS_REGEX, hostname)
-    if not is_valid:
-        logger.fail(f"Invalid hostname '{hostname}' detected. Sanitizing to prevent potential issues.")
-        return re.sub(r"[^a-zA-Z0-9]", "", hostname)
-    return hostname
+    try:
+        hostname = hostname.decode("utf-8", errors="surrogateescape") if isinstance(hostname, bytes) else str(hostname)
+    except Exception:
+        return "_"
+    if not hostname:
+        return "_"
+
+    # Replace path, configuration, formatting, whitespace, and control characters.
+    unsafe_characters = '<>:"/\\|?*{}[]=#;\''  # Portable paths, format strings, hosts files, and krb5.conf
+    sanitized = "".join(
+        character if character.isprintable()
+        and not character.isspace()
+        and character not in unsafe_characters
+        and all(
+            normalized_character.isprintable()
+            and not normalized_character.isspace()
+            and normalized_character not in unsafe_characters
+            for normalized_character in normalize("NFKC", character)
+        )
+        else "_"
+        for character in hostname
+    )
+
+    # Neutralize traversal segments and Windows-trimmed trailing dots.
+    if normalize("NFKC", sanitized) in (".", ".."):
+        sanitized = "_" * len(sanitized)
+    if sanitized.endswith(".") or normalize("NFKC", sanitized[-1]).endswith("."):
+        sanitized = f"{sanitized[:-1]}_"
+
+    # Avoid Windows device names when the result is used as a filename.
+    normalized_stem = normalize("NFKC", sanitized).split(".", 1)[0].upper()
+    if normalized_stem in {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"} or re.fullmatch(r"(?:COM|LPT)[1-9]", normalized_stem):
+        sanitized = f"_{sanitized}"
+
+    # Bound filename length while retaining a stable identifier for long names.
+    if len(sanitized.encode("utf-8")) > 253:
+        suffix = f"_{hashlib.sha256(hostname.encode('utf-8', errors='surrogatepass')).hexdigest()[:12]}"
+        byte_length = 0
+        truncated = []
+        for character in sanitized:
+            character_length = len(character.encode("utf-8"))
+            if byte_length + character_length > 253 - len(suffix):
+                break
+            truncated.append(character)
+            byte_length += character_length
+        sanitized = f"{''.join(truncated)}{suffix}"
+
+    # Fail closed if a future change violates any output invariant.
+    normalized = normalize("NFKC", sanitized)
+    normalized_stem = normalized.split(".", 1)[0].upper()
+    if (
+        not sanitized
+        or not normalized
+        or len(sanitized.encode("utf-8")) > 253
+        or normalized in (".", "..")
+        or normalized.endswith(".")
+        or normalized_stem in {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
+        or re.fullmatch(r"(?:COM|LPT)[1-9]", normalized_stem)
+        or any(
+            not character.isprintable()
+            or character.isspace()
+            or character in unsafe_characters
+            or any(
+                not normalized_character.isprintable()
+                or normalized_character.isspace()
+                or normalized_character in unsafe_characters
+                for normalized_character in normalize("NFKC", character)
+            )
+            for character in sanitized
+        )
+    ):
+        sanitized = "_"
+
+    # Report changed input without allowing logging failures to affect safety.
+    if sanitized != hostname:
+        received = ascii(hostname[:256])
+        result = ascii(sanitized)
+        if len(hostname) > 256 or len(received) > 256:
+            received = f"{received[:253]}..."
+        if len(result) > 256:
+            result = f"{result[:253]}..."
+        if logger is not None:
+            with suppress(Exception):
+                logger.fail(f"Unsafe hostname or domain received: {received}; using {result}")
+    return sanitized
 
 
 def validate_ntlm(data):
