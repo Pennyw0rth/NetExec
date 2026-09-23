@@ -519,10 +519,10 @@ class NXCModule:
         parsed_header = self.parse_MFT_header(curr_sector[Offset_to_the_first_attribute:])
 
         if "$FILE_NAME" in parsed_header:
-            filename_lenght = self.bytes_to_int_signed(parsed_header["$FILE_NAME"][0x58: 0x58 + 1])
+            filename_length = self.bytes_to_int_signed(parsed_header["$FILE_NAME"][0x58: 0x58 + 1])
             curr_MFA_sector.parent_record_number = self.bytes_to_int_unsigned(parsed_header["$FILE_NAME"][0x18: 0x18 + 3] + b"\x00")
 
-            curr_MFA_sector.filename = parsed_header["$FILE_NAME"][0x58 + 2: 0x58 + 2 + (filename_lenght * 2)].decode("utf-16")
+            curr_MFA_sector.filename = parsed_header["$FILE_NAME"][0x58 + 2: 0x58 + 2 + (filename_length * 2)].decode("utf-16")
 
         if "$DATA" in parsed_header:
             dataRun_offset = self.bytes_to_int_signed(parsed_header["$DATA"][0x20: 0x20 + 1])

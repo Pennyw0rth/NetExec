@@ -143,6 +143,8 @@ class ssh(connection):
         except ValueError as e:
             self.logger.debug(f"Could not load private key {self.args.key_file}: {e}")
             self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
+        except TimeoutError:
+            self.logger.fail(f"{username}:{process_secret(password)} Connection timed out")
         except Exception as e:
             self.logger.exception(e)
             self.conn.close()

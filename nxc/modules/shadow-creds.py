@@ -23,14 +23,14 @@ class NXCModule:
     """
 
     name = "shadow-creds"
-    description = "List, add, inspect, remove, backup, or revert Shadow Credentials on a user or computer"
+    description = "List, add, inspect, remove, clear, backup, or revert Shadow Credentials on a user or computer"
     supported_protocols = ["ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
         TARGET      sAMAccountName of the target user or computer (for example, TARGET=user or TARGET=DESKTOP-123456$)
-        ACTION      Action to perform: list, add, info, remove, backup, or revert (default: list)
+        ACTION      Action to perform: list, add, info, remove, clear, backup, or revert (default: list); clear removes all KeyCredentials
         DEVICE_ID   KeyCredential device ID; required for info and remove
         JSONFILE    JSON backup path; required for revert and optional for backup
 
@@ -39,6 +39,7 @@ class NXCModule:
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=add
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=info DEVICE_ID=<guid>
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=remove DEVICE_ID=<guid>
+        netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=clear
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=backup JSONFILE=shadow-creds.json
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=revert JSONFILE=shadow-creds.json
         """
@@ -50,8 +51,8 @@ class NXCModule:
         if not self.target:
             context.log.fail("TARGET is required")
             return False
-        if self.action not in {"list", "add", "info", "remove", "backup", "revert"}:
-            context.log.fail("ACTION must be one of: list, add, info, remove, backup, revert")
+        if self.action not in {"list", "add", "info", "remove", "clear", "backup", "revert"}:
+            context.log.fail("ACTION must be one of: list, add, info, remove, clear, backup, revert")
             return False
         if self.action in {"info", "remove"} and not self.device_id:
             context.log.fail(f"DEVICE_ID is required for ACTION={self.action}")
@@ -85,6 +86,8 @@ class NXCModule:
             self.info(self.parse_credentials(raw_values))
         elif self.action == "remove":
             self.remove(target_dn, self.parse_credentials(raw_values))
+        elif self.action == "clear":
+            self.clear(target_dn, raw_values)
         elif self.action == "backup":
             self.backup(raw_values)
         elif self.action == "revert":
@@ -207,6 +210,19 @@ class NXCModule:
             return
 
         self.context.log.success(f"Removed KeyCredential {self.device_id} from {self.target}")
+
+    def clear(self, target_dn, raw_values):
+        if not raw_values:
+            self.context.log.display(f"No KeyCredentials found on {self.target}")
+            return
+
+        try:
+            self.connection.ldap_connection.modify(target_dn, {"msDS-KeyCredentialLink": [(MODIFY_DELETE, [])]})
+        except LDAPSessionError as e:
+            self.context.log.fail(f"Failed to clear KeyCredentials: {e}")
+            return
+
+        self.context.log.success(f"Cleared all KeyCredentials from {self.target}")
 
     def backup(self, raw_values):
         output_path = Path(self.jsonfile) if self.jsonfile else Path(NXC_PATH) / "modules" / "shadow-creds" / f"{self.target.rstrip('$')}.json"
