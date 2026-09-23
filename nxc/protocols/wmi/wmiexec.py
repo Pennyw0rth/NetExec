@@ -21,7 +21,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class WMIEXEC:
-    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec, cimv2_namespace = None):
+    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec, cimv2_namespace=None):
         self.__target = target
         self.__iWbemLevel1Login = iWbemLevel1Login
         self.logger = logger

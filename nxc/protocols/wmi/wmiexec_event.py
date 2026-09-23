@@ -30,7 +30,7 @@ from impacket.dcerpc.v5.dcom.wmi import WBEMSTATUS
 
 
 class WMIEXEC_EVENT:
-    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec, subscription_namespace = None):
+    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec, subscription_namespace=None):
         self.__target = target
         self.__iWbemLevel1Login = iWbemLevel1Login
         self.__outputBuffer = ""
@@ -45,7 +45,6 @@ class WMIEXEC_EVENT:
         if self.__iWbemServices is None:
             self.__iWbemServices = self.__iWbemLevel1Login.NTLMLogin("//./root/subscription", NULL, NULL)
             self.__iWbemLevel1Login.RemRelease()
-
 
     def execute(self, command, output=False, use_powershell=False):
         if "'" in command:

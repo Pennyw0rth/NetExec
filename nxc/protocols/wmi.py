@@ -402,7 +402,7 @@ class wmi(connection):
         wql = f"SELECT FileSize FROM CIM_DataFile WHERE Name = '{escaped_path}'"
         self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
         # If file is bigger than 70MB, print a warning
-        if callback_func.size < 73400320: # 70MB
+        if callback_func.size < 73400320:  # 70MB
             # Read the file
             try:
                 object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
@@ -427,15 +427,15 @@ class wmi(connection):
             file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
             return bytes(file_data[4:4 + file_length])
         else:
-            self.logger.fail(f"{remote_path} filesize is {callback_func.size/1024**2:.2f} Mo. The download will take some time and use wmi command execution.")
+            self.logger.fail(f"{remote_path} filesize is {callback_func.size / 1024**2:.2f} Mo. The download will take some time and use wmi command execution.")
             # Read file dirty
             data = b""
-            chunk_size = 1 * 1024 * 1024 # 5MB - Could not do bigger or it crash
+            chunk_size = 1 * 1024 * 1024  # 5MB - Could not do bigger or it crash
             chunk_count = (callback_func.size + chunk_size - 1) // chunk_size
-            try: 
+            try:
                 for i in range(chunk_count):
                     offset = i * chunk_size
-                    self.logger.debug(f"Reading bytes from {offset} to {offset+chunk_size if offset+chunk_size < callback_func.size else callback_func.size}")
+                    self.logger.debug(f"Reading bytes from {offset} to {offset + chunk_size if offset + chunk_size < callback_func.size else callback_func.size}")
                     powershell_command = f"$fs=[IO.File]::OpenRead('{remote_path}');try {{ $fs.Seek({offset},[IO.SeekOrigin]::Begin)|Out-Null;$b=[byte[]]::new({chunk_size});$n=$fs.Read($b,0,$b.Length);Write-Output ([Convert]::ToBase64String($b,0,$n)) }} finally {{ $fs.Dispose() }}"
                     output = self.execute_psh(powershell_command, get_output=True)
                     data += base64.b64decode(output)
