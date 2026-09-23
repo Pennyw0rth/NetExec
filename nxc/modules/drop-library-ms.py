@@ -50,6 +50,7 @@ class NXCModule:
             self.cleanup = bool(module_options["CLEANUP"])
             context.log.debug(f"CLEANUP is set to {self.cleanup}")
 
+        self.lms_name = module_options["NAME"]
         self.local_path = f"{TMP_PATH}/{self.lms_name}.library-ms"
         self.remote_path = ntpath.join("\\", f"{self.lms_name}.library-ms")
 

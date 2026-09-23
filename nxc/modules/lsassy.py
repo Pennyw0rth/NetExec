@@ -67,7 +67,7 @@ class NXCModule:
         session.get_session(
             address=host,
             target_ip=host,
-            port=445,
+            port=connection.port,
             lmhash=lmhash,
             nthash=nthash,
             username=username,
