@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 from datetime import datetime, timedelta
-from nxc.helpers.misc import CATEGORY
+from os.path import join
+from nxc.helpers.misc import CATEGORY, sanitize_dns
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 import socket
 
@@ -71,7 +73,7 @@ class NXCModule:
 
         if answers:
             obsolete_hosts_count = len(answers)
-            filename = f"{NXC_PATH}/logs/{connection.domain}.obsoletehosts.txt"
+            filename = join(NXC_PATH, "logs", sanitize_path_component(f"{connection.domain}.obsoletehosts.txt"))
             context.log.display(f"{obsolete_hosts_count} Obsolete hosts will be saved to {filename}")
             with open(filename, "w") as f:
                 for dns_hostname, ip_address, os, pwd_last_set_readable in answers:

@@ -3,6 +3,7 @@ from datetime import datetime
 from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
 
@@ -91,7 +92,7 @@ class NXCModule:
 
     def create_log_file(self, host, time):
         """Create a log file for dumping user descriptions."""
-        logfile = f"UserDesc-{host}-{time}.log"
+        logfile = sanitize_path_component(f"UserDesc-{host}-{time}.log")
         logfile = Path(NXC_PATH).joinpath(logfile)
 
         self.context.log.info(f"Creating log file '{logfile}'")

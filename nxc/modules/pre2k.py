@@ -4,6 +4,7 @@ from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal
 from impacket.krb5 import constants
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.paths import NXC_PATH
 
@@ -54,7 +55,7 @@ class NXCModule:
                 context.log.debug(f"Added computer: {computer['sAMAccountName']}")
 
             # Save computers to file
-            domain_dir = os.path.join(f"{NXC_PATH}/modules/pre2k", connection.domain)
+            domain_dir = os.path.join(NXC_PATH, "modules", "pre2k", sanitize_path_component(connection.domain))
             output_file_pre2k = os.path.join(domain_dir, "precreated_computers.txt")
             output_file_non_pre2k = os.path.join(domain_dir, "non_precreated_computers.txt")
 

@@ -6,7 +6,7 @@ import struct
 import ipaddress
 from pathlib import Path
 
-from nxc.helpers.path import sanitize_filename
+from nxc.helpers.path import sanitize_filename, sanitize_path_component
 from Cryptodome.Hash import MD4
 from textwrap import dedent
 from nxc.helpers.misc import sanitize_dns
@@ -2168,10 +2168,10 @@ class smb(connection):
 
     def get_file_single(self, remote_path, download_path, silent=False):
         share_name = self.args.share
+        if self.args.append_host:
+            download_path = sanitize_path_component(f"{self.hostname}-{remote_path}")
         if not silent:
             self.logger.display(f"Copying '{remote_path}' to '{download_path}'")
-        if self.args.append_host:
-            download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
             if self.download_file(share_name, remote_path, file.write):
                 if not silent:

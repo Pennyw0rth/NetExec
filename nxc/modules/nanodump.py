@@ -10,6 +10,7 @@ import tempfile
 from datetime import datetime
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.protocols.mssql.mssqlexec import MSSQLEXEC
 
 
@@ -158,7 +159,7 @@ class NXCModule:
             return
         else:
             self.context.log.display(f"Copying {nano_log_name} to host")
-            filename = os.path.join(self.dir_result, f"{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log")
+            filename = os.path.join(self.dir_result, sanitize_path_component(f"{self.connection.hostname}_{self.connection.os_arch}_{self.connection.domain}.log"))
             if self.context.protocol == "smb":
                 with open(filename, "wb+") as dump_file:
                     try:
