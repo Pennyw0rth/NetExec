@@ -52,7 +52,10 @@ class NXCModule:
         if self.mssql_conn.lastError:
             self.handle_execution_error(self.mssql_conn.lastError)
         elif result:
-            self.context.log.display(f"Command output: {result}")
+            self.context.log.display("Command output:")
+            for row in result:
+                for key, value in row.items():
+                    self.context.log.highlight(f"{key}:{value}" if key else str(value))
         else:
             self.context.log.display("Command executed but returned no output")
 
