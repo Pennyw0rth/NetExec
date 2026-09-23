@@ -41,16 +41,9 @@ def write_csv(filename, headers, entries):
 
 
 def host_csv_headers(hosts_table, mode="simple"):
-    """Return the CSV header tuple for a ``hosts`` export.
+    """Return the CSV header for a hosts export, taken from the protocol's own HostsTable.
 
-    The columns are derived from the actual ``HostsTable`` of the active
-    protocol instead of being hard-coded to the SMB schema. This keeps the
-    header aligned with the row content for every protocol (issue #1385):
-    exporting RDP/MSSQL/SSH/... hosts no longer prints SMB-only columns such
-    as ``smbv1``/``spooler``/``zerologon``/``petitpotam``.
-
-    ``simple`` returns the first 8 columns (matching the historical row width);
-    ``detailed`` returns every column of the table.
+    "simple" keeps the first 8 columns, the historical width of the SMB export, "detailed" returns them all.
     """
     columns = tuple(col.name for col in hosts_table.columns)
     if mode == "detailed":
@@ -187,21 +180,13 @@ class DatabaseNavigator(cmd.Cmd):
                 print("[-] invalid arguments, export hosts <simple|detailed|signing> <filename>")
                 return
 
-            # Derive the CSV headers from the active protocol's HostsTable so
-            # the header matches the row content for every protocol (#1385).
-            # Previously these were SMB-specific hard-coded column names.
-            csv_header_simple = host_csv_headers(self.db.HostsTable, "simple")
-            csv_header_detailed = host_csv_headers(self.db.HostsTable, "detailed")
             filename = line[2]
 
             if line[1].lower() == "simple":
-                hosts = self.db.get_hosts()
-                simple_hosts = [host[: len(csv_header_simple)] for host in hosts]
-                write_csv(filename, csv_header_simple, simple_hosts)
-            # TODO: maybe add more detail like who is an admin on it, shares discovered, etc
+                csv_header = host_csv_headers(self.db.HostsTable, "simple")
+                write_csv(filename, csv_header, [host[: len(csv_header)] for host in self.db.get_hosts()])
             elif line[1].lower() == "detailed":
-                hosts = self.db.get_hosts()
-                write_csv(filename, csv_header_detailed, hosts)
+                write_csv(filename, host_csv_headers(self.db.HostsTable, "detailed"), self.db.get_hosts())
             elif line[1].lower() == "signing":
                 hosts = self.db.get_hosts("signing")
                 signing_hosts = [host[1] for host in hosts]
