@@ -15,7 +15,6 @@ import os
 import sys
 import types
 
-import paramiko
 from paramiko.ssh_exception import AuthenticationException, SSHException
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
