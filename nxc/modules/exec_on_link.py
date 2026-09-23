@@ -46,6 +46,7 @@ class NXCModule:
         linked_server = self.escape_sql_identifier(self.linked_server)
         query = f"EXEC (N'{command}')"
         if self.as_login:
+            # Keep impersonation scoped to this statement so the session does not need a REVERT.
             query += f" AS LOGIN = N'{self.escape_sql_literal(self.as_login)}'"
         query += f" AT [{linked_server}];"
         result = self.mssql_conn.sql_query(query)
@@ -97,6 +98,7 @@ class NXCModule:
                 self.context.log.display(f"Retry with AS_LOGIN={mapping['Local Login']}")
 
     def escape_sql_literal(self, value):
+        # T-SQL string literals escape apostrophes by doubling them; identifiers escape closing brackets.
         return value.replace("'", "''")
 
     def escape_sql_identifier(self, value):
