@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 from os.path import join
-from nxc.helpers.misc import CATEGORY, sanitize_dns
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 import socket

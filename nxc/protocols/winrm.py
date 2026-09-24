@@ -8,7 +8,6 @@ import ntpath
 import xml.etree.ElementTree as ET
 
 from pypsrp.wsman import NAMESPACES
-from nxc.helpers.misc import sanitize_dns
 from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
 from termcolor import colored
@@ -20,7 +19,7 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.dpapi import DPAPITriage
-from nxc.helpers.misc import gen_random_string
+from nxc.helpers.misc import gen_random_string, sanitize_dns
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 

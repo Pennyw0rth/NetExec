@@ -145,7 +145,7 @@ class wmi(connection):
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
         else:
-            self.hostname = sanitize_dns(self.host, self.logger)
+            self.hostname = self.host
         if self.args.local_auth:
             self.domain = self.hostname
         if self.args.domain:
