@@ -2225,15 +2225,16 @@ class smb(connection):
             self.logger.display(f"Created empty directory '{local_folder_path}'")
 
         for item in filtered_items:
-            item_name = sanitize_path_component(item.get_longname())
-            dir_path = ntpath.normpath(ntpath.join(folder, item_name))
-            self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
+            remote_item_name = item.get_longname()
+            item_name = sanitize_path_component(remote_item_name)
+            dir_path = ntpath.normpath(ntpath.join(folder, remote_item_name))
+            self.logger.debug(f"Parsing item: {remote_item_name!r}, {dir_path!r}")
 
             if item.is_directory() and recursive:
-                self.logger.debug(f"Found new directory to parse: {dir_path}")
+                self.logger.debug(f"Found new directory to parse: {dir_path!r}")
                 self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
             elif not item.is_directory():
-                remote_file_path = ntpath.join(folder, item_name)
+                remote_file_path = ntpath.join(folder, remote_item_name)
                 local_file_path = os.path.join(local_folder_path, item_name)
                 # Defense-in-depth: verify path stays under destination
                 resolved = Path(local_file_path).resolve()
@@ -2245,7 +2246,7 @@ class smb(connection):
                 try:
                     self.get_file_single(remote_file_path, local_file_path, silent)
                 except FileNotFoundError:
-                    self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+                    self.logger.fail(f"Error downloading file {remote_file_path!r} due to file not found (probably a race condition between listing and downloading)")
 
     def get_folder(self):
         recursive = self.args.recursive
