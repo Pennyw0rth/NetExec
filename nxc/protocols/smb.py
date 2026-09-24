@@ -2246,7 +2246,7 @@ class smb(connection):
                 try:
                     self.get_file_single(remote_file_path, local_file_path, silent)
                 except FileNotFoundError:
-                    self.logger.fail(f"Error downloading file {remote_file_path!r} due to file not found (probably a race condition between listing and downloading)")
+                    self.logger.fail(f"Error downloading file '{remote_file_path!r}' due to file not found (probably a race condition between listing and downloading)")
 
     def get_folder(self):
         recursive = self.args.recursive
