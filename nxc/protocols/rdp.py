@@ -115,7 +115,7 @@ class rdp(connection):
                 self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
+        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
         asyncio.run(self.check_nla())
@@ -166,6 +166,7 @@ class rdp(connection):
             domain=self.domain,
             dc_ip=self.domain,
             timeout=self.args.rdp_timeout,
+            unsafe_ssl=True,
         )
 
         return True

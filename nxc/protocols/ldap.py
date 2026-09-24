@@ -147,11 +147,12 @@ class ldap(connection):
         return ""
 
     def check_ldap_signing(self):
-        self.signing_required = False
+        self.signing_required = None
         ldap_url = f"ldap://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False, timeout=self.args.ldap_timeout)
             ldap_connection.login(domain=self.domain)
+            self.signing_required = False
             self.logger.debug(f"LDAP signing is not enforced on {self.host}")
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
@@ -159,6 +160,8 @@ class ldap(connection):
                 self.signing_required = True
             else:
                 self.logger.debug(f"LDAPSessionError while checking for signing requirements (likely NTLM disabled): {e!s}")
+        except OSError as e:
+            self.logger.debug(f"Connection error while checking LDAP signing on {self.host}: {e!s}")
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
@@ -185,6 +188,7 @@ class ldap(connection):
                         self.cbt_status = "When Supported"  # CBT is When Supported
             else:
                 self.logger.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
+                self.cbt_status = "Unknown"
         except SysCallError as e:
             self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
             if e.args[1] in ["ECONNRESET", "WSAECONNRESET", "Unexpected EOF"]:
@@ -283,7 +287,12 @@ class ldap(connection):
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
-        signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored("signing:None", host_info_colors[1], attrs=["bold"])
+        if self.signing_required is True:
+            signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"])
+        elif self.signing_required is False:
+            signing = colored("signing:None", host_info_colors[1], attrs=["bold"])
+        else:
+            signing = colored("signing:Unknown", host_info_colors[2], attrs=["bold"])
         cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
 
@@ -744,12 +753,12 @@ class ldap(connection):
         self.users()
 
     def groups(self):
-        # Building the search filter
+        # Group specific member search
         if self.args.groups:
             self.logger.debug(f"Dumping group: {self.args.groups}")
 
-            # Resolve group DN and primaryGroupID (objectSid)
-            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid"])
+            # Resolve group DN and primaryGroupID (objectSid) and member attribute
+            group_resp = self.search(f"(&(cn={self.args.groups})(objectClass=group))", ["distinguishedName", "objectSid", "member"])
             group_parsed = parse_result_attributes(group_resp)
 
             if not group_parsed:
@@ -757,29 +766,63 @@ class ldap(connection):
                 return
             else:
                 group = group_parsed[0]
+                direct_group_members = group.get("member", [])
+                if not isinstance(direct_group_members, list):
+                    direct_group_members = [direct_group_members]
 
-            # Search filter: user must have membership OR primaryGroupID
+            # Get all group members: user must have membership OR primaryGroupID
             search_filter = f"(|(memberOf={group['distinguishedName']})(primaryGroupID={group['objectSid'].split('-')[-1]}))"
             attributes = ["sAMAccountName", "distinguishedName", "cn", "objectClass"]
+            resp = self.search(search_filter, attributes)
+            group_members = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(group_members)}")
 
-        else:
-            search_filter = "(objectCategory=group)"
-            attributes = ["cn", "member", "description"]
+            # Resolve any missing group members that the memberOf/primaryGroupID search above didn't already return
+            if len(group_members) < len(direct_group_members):
+                for member_dn in direct_group_members:
+                    member_resp = self.search(f"(distinguishedName={member_dn})", ["sAMAccountName", "distinguishedName", "cn", "objectClass"])
+                    member_parsed = parse_result_attributes(member_resp)
 
-        resp = self.search(search_filter, attributes)
-        resp_parsed = parse_result_attributes(resp)
-        self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+                    if member_parsed:
+                        group_members.append(member_parsed[0])
+                    else:
+                        self.logger.debug(f"Failed to resolve group member DN '{member_dn}' for group '{self.args.groups}'")
+                        group_members.append({"distinguishedName": member_dn})
 
-        if self.args.groups:
+            # Deduplicate group members by distinguishedName or cn
+            deduped = {}
+            for item in group_members:
+                key = item.get("distinguishedName", item.get("cn", "")).lower()
+                deduped.setdefault(key, item)
+            resp_parsed = list(deduped.values())
+
             # Display group members
             if not resp_parsed:
                 self.logger.fail(f"Group '{self.args.groups}' has no members")
             else:
                 for item in resp_parsed:
-                    # Display sAMAccountName or CN if sAMAccountName not present (could be a group)
-                    # Fallback to cn should sAMAccountName not be present (e.g. Service Principal Names)
-                    self.logger.highlight(item.get("sAMAccountName", item["cn"]) if "group" not in item["objectClass"] else item["cn"])
+                    # Display cn if it is a group
+                    # Otherwise display sAMAccountName and fall back to cn if sAMAccountName is not present
+                    # If nothing is present, display Distinguished Name
+                    if "group" in item.get("objectClass", []):
+                        out = item["cn"]
+                    elif "sAMAccountName" in item:
+                        out = item["sAMAccountName"]
+                    elif "cn" in item:
+                        out = item["cn"]
+                    else:
+                        out = item["distinguishedName"]
+                    self.logger.highlight(out)
+
+        # List all groups
         else:
+            search_filter = "(objectCategory=group)"
+            attributes = ["cn", "member", "description"]
+
+            resp = self.search(search_filter, attributes)
+            resp_parsed = parse_result_attributes(resp)
+            self.logger.debug(f"Total of records returned {len(resp_parsed)}")
+
             # Display all groups
             self.logger.highlight(f"{'-Group-':<40} {'-Members-':<9} {'-Description-':<60}")
             for item in resp_parsed:
@@ -1203,7 +1246,7 @@ class ldap(connection):
         def printTable(items, header):
             colLen = []
 
-            # Calculating maximum lenght before parsing CN.
+            # Calculating maximum length before parsing CN.
             for i, col in enumerate(header):
                 rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
                 colLen.append(max(rowMaxLen, len(col)))
@@ -1689,6 +1732,7 @@ class ldap(connection):
                 aeskey=self.aesKey,
                 kdc=self.kdcHost,
                 auth_method="auto",
+                ldap_channel_binding=self.cbt_status == "Always"
             )
             ad = AD(
                 auth=auth,
@@ -1727,9 +1771,13 @@ class ldap(connection):
                     exclude_dcs=False,
                 )
             except Exception as e:
-                self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
-                self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
-                return
+                if "ldap3-bleeding-edge" in str(e):
+                    self.logger.fail("Bloodhound collection failed due to channel binding requirements. Inject 'ldap3-bleeding-edge': pipx inject netexec ldap3-bleeding-edge")
+                    return
+                else:
+                    self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+                    self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+                    return
 
         # Collect ADCS data using CertiHound if requested
         if "adcs" in collect:

