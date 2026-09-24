@@ -84,7 +84,7 @@ class FirefoxTriage:
             self.logger.debug(f"Gather {browser}")
             for user in users:
                 try:
-                    directories = self.conn.list_dir(share=self.share, path=self.firefox_generic_path.format(user))
+                    directories = self.conn.list_dir(share=self.share, path=path.format(user))
                 except Exception as e:
                     if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                         continue
@@ -94,18 +94,18 @@ class FirefoxTriage:
                 for d in [d for d in directories if d.get_longname() not in self.false_positive and d.is_directory() > 0]:
                     try:
                         if gather_cookies:
-                            cookies_path = ntpath.join(self.firefox_generic_path.format(user), d.get_longname(), "cookies.sqlite")
+                            cookies_path = ntpath.join(path.format(user), d.get_longname(), "cookies.sqlite")
                             cookies_data = self.conn.read_file(path=cookies_path, share=self.share)
                             if cookies_data is not None:
                                 firefox_cookies += self.parse_cookie_data(user, cookies_data)
-                        logins_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\logins.json"
+                        logins_path = path.format(user) + "\\" + d.get_longname() + "\\logins.json"
                         logins_data = self.conn.read_file(path=logins_path, share=self.share)
                         if logins_data is None:
                             continue  # No logins.json file found
                         logins = self.get_login_data(logins_data=logins_data)
                         if len(logins) == 0:
                             continue  # No logins profile found
-                        key4_path = self.firefox_generic_path.format(user) + "\\" + d.get_longname() + "\\key4.db"
+                        key4_path = path.format(user) + "\\" + d.get_longname() + "\\key4.db"
                         key4_data = self.conn.read_file(path=key4_path, share=self.share)
                         if key4_data is None:
                             continue
@@ -148,7 +148,7 @@ class FirefoxTriage:
                     except Exception as e:
                         if "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                             continue
-                            self.logger.exception(e)
+                        self.logger.exception(e)
         return firefox_data
 
     def parse_cookie_data(self, windows_user, cookies_data):
