@@ -137,12 +137,15 @@ class wmi(connection):
             response = MSRPCHeader(buffer)
             bindResp = MSRPCBindAck(response.getData())
             ntlm_info = parse_challenge(bindResp["auth_data"])
-            self.targetDomain = self.domain = ntlm_info["domain"]
-            self.hostname = sanitize_dns(ntlm_info["hostname"], self.logger)
+            dns_hostname = ntlm_info["dns_hostname"] or ""
+            hostname = ntlm_info["hostname"] or dns_hostname.split(".", 1)[0] or self.host
+            domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
+            self.hostname = sanitize_dns(hostname, self.logger)
+            self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
         else:
-            self.hostname = self.host
+            self.hostname = sanitize_dns(self.host, self.logger)
         if self.args.local_auth:
             self.domain = self.hostname
         if self.args.domain:

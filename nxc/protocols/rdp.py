@@ -143,9 +143,9 @@ class rdp(connection):
                     except Exception:
                         pass
                     else:
-                        self.domain = info_domain["dnsdomainname"]
-                        self.hostname = sanitize_dns(info_domain["computername"], self.logger)
-                        self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
+                        self.hostname = sanitize_dns(info_domain.get("computername") or self.host, self.logger)
+                        self.domain = sanitize_dns(info_domain.get("dnsdomainname") or self.host, self.logger)
+                        self.server_os = f"{info_domain.get('os_guess', 'Unknown')} Build {info_domain.get('os_build', 'Unknown')}"
                         self.logger.extra["hostname"] = self.hostname
                     break
 
