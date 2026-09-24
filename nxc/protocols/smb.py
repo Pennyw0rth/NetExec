@@ -2202,10 +2202,18 @@ class smb(connection):
 
         filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
 
-        # create local directory structure regardless of content; download empty folders by default
-        # change the Windows path to Linux and then join it with the base directory to get our actual save path
-        relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
-        local_folder_path = os.path.join(dest, relative_path)
+        # Create a safe local directory structure while retaining the raw remote path for SMB.
+        try:
+            relative_path = ntpath.relpath(folder, base_dir or folder)
+        except ValueError:
+            relative_path = folder
+        relative_parts = [] if relative_path == "." else [sanitize_path_component(part) for part in relative_path.split("\\") if part]
+        local_folder_path = os.path.join(dest, *relative_parts)
+        destination_path = Path(dest).resolve()
+        resolved_folder = Path(local_folder_path).resolve()
+        if resolved_folder != destination_path and destination_path not in resolved_folder.parents:
+            self.logger.fail(f"Path traversal detected in '{folder}', skipping")
+            return
 
         if not filtered_items and ignore_empty:
             self.logger.debug(f"Skipping empty folder '{folder}'")
@@ -2217,10 +2225,7 @@ class smb(connection):
             self.logger.display(f"Created empty directory '{local_folder_path}'")
 
         for item in filtered_items:
-            item_name = sanitize_filename(item.get_longname())
-            if not item_name:
-                self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
-                continue
+            item_name = sanitize_path_component(item.get_longname())
             dir_path = ntpath.normpath(ntpath.join(folder, item_name))
             self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
 
@@ -2232,7 +2237,7 @@ class smb(connection):
                 local_file_path = os.path.join(local_folder_path, item_name)
                 # Defense-in-depth: verify path stays under destination
                 resolved = Path(local_file_path).resolve()
-                if not str(resolved).startswith(str(Path(dest).resolve()) + os.sep):
+                if destination_path not in resolved.parents:
                     self.logger.fail(f"Path traversal detected in '{item_name}', skipping")
                     continue
                 self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
