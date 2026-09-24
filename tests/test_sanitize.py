@@ -1,5 +1,8 @@
+import ntpath
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path, PureWindowsPath
 import re
+from types import SimpleNamespace
 from unicodedata import normalize
 from unittest.mock import patch
 
@@ -7,6 +10,7 @@ import pytest
 from impacket import ntlm
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
+from nxc.helpers.bloodhound import _add_with_domain, _add_without_domain
 from nxc.helpers.misc import sanitize_dns
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.helpers.path import sanitize_path_component
@@ -16,8 +20,24 @@ from nxc.parsers.ldap_results import parse_result_attributes
 class Logger:
     def __init__(self):
         self.messages = []
+        self.extra = {}
 
     def fail(self, message):
+        self.messages.append(message)
+
+    def debug(self, message):
+        self.messages.append(message)
+
+    def highlight(self, message):
+        self.messages.append(message)
+
+    def display(self, message):
+        self.messages.append(message)
+
+    def success(self, message):
+        self.messages.append(message)
+
+    def error(self, message):
         self.messages.append(message)
 
 
@@ -44,6 +64,103 @@ class AVPairs:
 
     def __getitem__(self, key):
         return self.pairs.get(key)
+
+
+class QueryResult:
+    def __init__(self, data):
+        self.result = data
+
+    def data(self):
+        return self.result
+
+
+class Transaction:
+    def __init__(self, responses):
+        self.responses = responses
+        self.calls = []
+
+    def run(self, query, **parameters):
+        self.calls.append((query, parameters))
+        return QueryResult(self.responses.pop(0))
+
+
+class SMBItem:
+    def __init__(self, name, directory=False):
+        self.name = name
+        self.directory = directory
+
+    def get_longname(self):
+        return self.name
+
+    def is_directory(self):
+        return self.directory
+
+
+class SMBConnection:
+    def __init__(self, name):
+        self.item = SMBItem(name)
+        self.remote_path = None
+
+    def listPath(self, share, path):
+        return [self.item]
+
+    def getFile(self, share, remote_path, callback, shareAccessMode=None):
+        self.remote_path = remote_path
+        callback(b"content")
+
+
+class RecursiveSMBConnection:
+    def __init__(self):
+        self.remote_path = None
+
+    def listPath(self, share, path):
+        if path == ntpath.join("root", "*"):
+            return [SMBItem(r"C:\outside", directory=True)]
+        return [SMBItem("proof.txt")]
+
+    def getFile(self, share, remote_path, callback, shareAccessMode=None):
+        self.remote_path = remote_path
+        callback(b"content")
+
+
+class EnumerationSMBConnection:
+    def getSMBServer(self):
+        return SimpleNamespace(get_socket=lambda: SimpleNamespace(getsockname=lambda: ("192.0.2.10", 445)))
+
+    def login(self, username, password):
+        return None
+
+    def getServerDNSHostName(self):
+        return "HOST/../../evil.example"
+
+    def getServerName(self):
+        return "NETBIOS"
+
+    def getServerDNSDomainName(self):
+        return "example\n#injected"
+
+    def getServerOS(self):
+        return "Windows 11"
+
+    def getServerOSMajor(self):
+        return 10
+
+    def getServerOSMinor(self):
+        return 0
+
+    def getServerOSBuild(self):
+        return 26100
+
+    def logoff(self):
+        return None
+
+
+@pytest.fixture(scope="module")
+def smb_class():
+    spec = spec_from_file_location("sanitize_test_smb_protocol", Path(__file__).parents[1] / "nxc" / "protocols" / "smb.py")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.smb
 
 
 @pytest.mark.parametrize(
@@ -176,16 +293,109 @@ def test_parse_challenge_handles_missing_names():
     assert result["domain"] is None
 
 
-def test_ldap_dns_hostname_is_sanitized_at_parse_boundary():
+def test_ldap_dns_hostname_remains_raw_at_parse_boundary():
     entry = ldapasn1_impacket.SearchResultEntry()
     entry["objectName"] = ""
     entry["attributes"][0]["type"] = "dNSHostName"
     entry["attributes"][0]["vals"][0] = "../../evil\n"
 
-    with patch("nxc.parsers.ldap_results.nxc_logger", Logger()):
-        result = parse_result_attributes([entry])
+    result = parse_result_attributes([entry])
 
-    assert result == [{"dNSHostName": ".._.._evil_"}]
+    assert result == [{"dNSHostName": "../../evil\n"}]
+
+
+@pytest.mark.parametrize(
+    ("function", "user_info", "domain", "first_result", "expected"),
+    [
+        (_add_with_domain, {"username": "HOST' OR 1=1$"}, "EXAMPLE' OR 1=1", [{"c": {"owned": False}}], "HOST' OR 1=1.EXAMPLE' OR 1=1"),
+        (_add_without_domain, {"username": "USER' OR 1=1"}, None, [{"c": {"owned": False, "name": "USER' OR 1=1@EXAMPLE"}}], "USER' OR 1=1"),
+    ],
+)
+def test_bloodhound_uses_parameters_for_untrusted_names(function, user_info, domain, first_result, expected):
+    transaction = Transaction([first_result, [{"name": expected}]])
+    if domain is None:
+        function(user_info, transaction, Logger())
+    else:
+        function(user_info, domain, transaction, Logger())
+
+    assert len(transaction.calls) == 2
+    assert all(expected not in query for query, _ in transaction.calls)
+    assert transaction.calls[0][1]["user_owned"] == expected
+    assert transaction.calls[1][1]["user_owned"] in (expected, "USER' OR 1=1@EXAMPLE")
+
+
+def test_smb_hosts_file_sanitizes_at_sink_without_mutating_values(tmp_path, smb_class):
+    connection = smb_class.__new__(smb_class)
+    connection.host = "192.0.2.1"
+    connection.hostname = "../../HOST\n"
+    connection.targetDomain = "[evil]\n"
+    connection.domain = connection.targetDomain
+    connection.signing = False
+    connection.smbv1 = False
+    connection.no_ntlm = False
+    connection.is_guest = False
+    connection.isdc = False
+    connection.null_auth = False
+    connection.server_os = "Windows"
+    connection.os_arch = 64
+    connection.logger = Logger()
+    connection.args = SimpleNamespace(generate_hosts_file=str(tmp_path / "hosts"), generate_krb5_file=None)
+
+    result = connection.print_host_info()
+
+    assert result == (connection.host, "../../HOST\n", "[evil]\n")
+    assert (tmp_path / "hosts").read_text().splitlines() == ["192.0.2.1     .._.._HOST_._evil__ .._.._HOST_"]
+
+
+def test_smb_enum_host_info_sanitizes_remote_names(smb_class):
+    connection = smb_class.__new__(smb_class)
+    connection.conn = EnumerationSMBConnection()
+    connection.host = "192.0.2.10"
+    connection.hostname = connection.host
+    connection.domain = None
+    connection.no_ntlm = False
+    connection.isdc = False
+    connection.os_arch = 0
+    connection.smbv1 = False
+    connection.kerberos = False
+    connection.kdcHost = "192.0.2.10"
+    connection.logger = Logger()
+    connection.db = SimpleNamespace(add_host=lambda *args: None)
+    connection.args = SimpleNamespace(generate_hosts_file=None, generate_krb5_file=None, domain=None, use_kcache=False, local_auth=False)
+    connection.is_host_dc = lambda aggressive_check=False: None
+    connection._is_signing_required = lambda: False
+    connection.get_os_arch = lambda: 64
+
+    connection.enum_host_info()
+
+    assert connection.hostname == "HOST_"
+    assert connection.targetDomain == "example__injected"
+
+
+def test_smb_download_sanitizes_only_the_local_path(tmp_path, smb_class):
+    remote_name = r"..\..\escape.txt"
+    connection = smb_class.__new__(smb_class)
+    connection.conn = SMBConnection(remote_name)
+    connection.logger = Logger()
+    connection.args = SimpleNamespace(share="SHARE", append_host=False)
+
+    connection.download_folder("root", str(tmp_path), silent=True)
+
+    assert connection.conn.remote_path == ntpath.join("root", remote_name)
+    assert (tmp_path / ".._.._escape.txt").read_bytes() == b"content"
+    assert not (tmp_path.parent / "escape.txt").exists()
+
+
+def test_smb_download_sanitizes_recursive_directory_components(tmp_path, smb_class):
+    connection = smb_class.__new__(smb_class)
+    connection.conn = RecursiveSMBConnection()
+    connection.logger = Logger()
+    connection.args = SimpleNamespace(share="SHARE", append_host=False)
+
+    connection.download_folder("root", str(tmp_path), recursive=True, silent=True)
+
+    assert connection.conn.remote_path == ntpath.join(r"C:\outside", "proof.txt")
+    assert (tmp_path / "C_" / "outside" / "proof.txt").read_bytes() == b"content"
 
 
 @pytest.mark.parametrize(
