@@ -6,7 +6,7 @@ import struct
 import ipaddress
 from pathlib import Path
 
-from nxc.helpers.path import sanitize_filename, sanitize_path_component
+from nxc.helpers.path import sanitize_path_component
 from Cryptodome.Hash import MD4
 from textwrap import dedent
 from nxc.helpers.misc import sanitize_dns
@@ -208,17 +208,15 @@ class smb(connection):
         # self.targetDomain is the attribute which gets displayed as host domain
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = self.conn.getServerDNSHostName().upper()
+            dns_hostname = self.conn.getServerDNSHostName()
             if dns_hostname and "." in dns_hostname:
-                hostname = dns_hostname.split(".")[0]
+                hostname = dns_hostname.split(".", 1)[0]
             elif dns_hostname:
                 hostname = dns_hostname
             else:
                 hostname = self.conn.getServerName()
             self.hostname = sanitize_dns(hostname, self.logger)
-            self.targetDomain = self.conn.getServerDNSDomainName()
-            if not self.targetDomain:   # Not sure if that can even happen but now we are safe
-                self.targetDomain = self.hostname
+            self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
