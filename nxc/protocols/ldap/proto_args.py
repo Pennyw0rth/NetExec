@@ -10,6 +10,7 @@ def proto_args(parser, parents):
     ldap_parser.add_argument("--port", type=int, default=389, action=DefaultTrackingAction, help="LDAP port")
     ldap_parser.add_argument("--ldap-timeout", type=int, default=3, help="LDAP connection timeout")
     ldap_parser.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
+    ldap_parser.add_argument("--schannel", action="store_true", help="Authenticate with the certificate using Schannel instead of PKINIT")
 
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")
