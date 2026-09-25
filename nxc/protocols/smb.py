@@ -6,9 +6,10 @@ import struct
 import ipaddress
 from pathlib import Path
 
-from nxc.helpers.path import sanitize_filename
+from nxc.helpers.path import sanitize_path_component
 from Cryptodome.Hash import MD4
 from textwrap import dedent
+from nxc.helpers.misc import sanitize_dns
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
@@ -207,16 +208,15 @@ class smb(connection):
         # self.targetDomain is the attribute which gets displayed as host domain
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = self.conn.getServerDNSHostName().upper()
+            dns_hostname = self.conn.getServerDNSHostName()
             if dns_hostname and "." in dns_hostname:
-                self.hostname = dns_hostname.split(".")[0]
+                hostname = dns_hostname.split(".", 1)[0]
             elif dns_hostname:
-                self.hostname = dns_hostname
+                hostname = dns_hostname
             else:
-                self.hostname = self.conn.getServerName()
-            self.targetDomain = self.conn.getServerDNSDomainName()
-            if not self.targetDomain:   # Not sure if that can even happen but now we are safe
-                self.targetDomain = self.hostname
+                hostname = self.conn.getServerName()
+            self.hostname = sanitize_dns(hostname, self.logger)
+            self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
@@ -2166,10 +2166,10 @@ class smb(connection):
 
     def get_file_single(self, remote_path, download_path, silent=False):
         share_name = self.args.share
+        if self.args.append_host:
+            download_path = sanitize_path_component(f"{self.hostname}-{remote_path}")
         if not silent:
             self.logger.display(f"Copying '{remote_path}' to '{download_path}'")
-        if self.args.append_host:
-            download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
             if self.download_file(share_name, remote_path, file.write):
                 if not silent:
@@ -2202,10 +2202,18 @@ class smb(connection):
 
         filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
 
-        # create local directory structure regardless of content; download empty folders by default
-        # change the Windows path to Linux and then join it with the base directory to get our actual save path
-        relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
-        local_folder_path = os.path.join(dest, relative_path)
+        # Create a safe local directory structure while retaining the raw remote path for SMB.
+        try:
+            relative_path = ntpath.relpath(folder, base_dir or folder)
+        except ValueError:
+            relative_path = folder
+        relative_parts = [] if relative_path == "." else [sanitize_path_component(part) for part in relative_path.split("\\") if part]
+        local_folder_path = os.path.join(dest, *relative_parts)
+        destination_path = Path(dest).resolve()
+        resolved_folder = Path(local_folder_path).resolve()
+        if resolved_folder != destination_path and destination_path not in resolved_folder.parents:
+            self.logger.fail(f"Path traversal detected in '{folder}', skipping")
+            return
 
         if not filtered_items and ignore_empty:
             self.logger.debug(f"Skipping empty folder '{folder}'")
@@ -2217,22 +2225,20 @@ class smb(connection):
             self.logger.display(f"Created empty directory '{local_folder_path}'")
 
         for item in filtered_items:
-            item_name = sanitize_filename(item.get_longname())
-            if not item_name:
-                self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
-                continue
-            dir_path = ntpath.normpath(ntpath.join(folder, item_name))
-            self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
+            remote_item_name = item.get_longname()
+            item_name = sanitize_path_component(remote_item_name)
+            dir_path = ntpath.normpath(ntpath.join(folder, remote_item_name))
+            self.logger.debug(f"Parsing item: {remote_item_name!r}, {dir_path!r}")
 
             if item.is_directory() and recursive:
-                self.logger.debug(f"Found new directory to parse: {dir_path}")
+                self.logger.debug(f"Found new directory to parse: {dir_path!r}")
                 self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
             elif not item.is_directory():
-                remote_file_path = ntpath.join(folder, item_name)
+                remote_file_path = ntpath.join(folder, remote_item_name)
                 local_file_path = os.path.join(local_folder_path, item_name)
                 # Defense-in-depth: verify path stays under destination
                 resolved = Path(local_file_path).resolve()
-                if not str(resolved).startswith(str(Path(dest).resolve()) + os.sep):
+                if destination_path not in resolved.parents:
                     self.logger.fail(f"Path traversal detected in '{item_name}', skipping")
                     continue
                 self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
@@ -2240,7 +2246,7 @@ class smb(connection):
                 try:
                     self.get_file_single(remote_file_path, local_file_path, silent)
                 except FileNotFoundError:
-                    self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+                    self.logger.fail(f"Error downloading file '{remote_file_path!r}' due to file not found (probably a race condition between listing and downloading)")
 
     def get_folder(self):
         recursive = self.args.recursive

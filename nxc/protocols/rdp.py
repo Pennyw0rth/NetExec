@@ -8,6 +8,8 @@ from termcolor import colored
 from impacket.krb5.ccache import CCache
 
 from nxc.connection import connection
+from nxc.helpers.misc import sanitize_dns
+from nxc.helpers.path import sanitize_path_component
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
@@ -141,9 +143,9 @@ class rdp(connection):
                     except Exception:
                         pass
                     else:
-                        self.domain = info_domain["dnsdomainname"]
-                        self.hostname = info_domain["computername"]
-                        self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
+                        self.hostname = sanitize_dns(info_domain.get("computername") or self.host, self.logger)
+                        self.domain = sanitize_dns(info_domain.get("dnsdomainname") or self.host, self.logger)
+                        self.server_os = f"{info_domain.get('os_guess', 'Unknown')} Build {info_domain.get('os_build', 'Unknown')}"
                         self.logger.extra["hostname"] = self.hostname
                     break
 
@@ -590,7 +592,8 @@ class rdp(connection):
             await asyncio.sleep(5)
             if self.conn is not None and self.conn.desktop_buffer_has_data is True:
                 buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
+                filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
+                filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
                 buffer.save(filename, "png")
                 self.logger.highlight(f"Screenshot saved {filename}")
         except Exception as e:
@@ -618,7 +621,8 @@ class rdp(connection):
                 await asyncio.sleep(int(self.args.screentime))
                 if self.conn is not None and self.conn.desktop_buffer_has_data is True:
                     buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                    filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
+                    filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
+                    filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
                     buffer.save(filename, "png")
                     self.logger.highlight(f"NLA Screenshot saved {filename}")
                     return

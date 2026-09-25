@@ -79,26 +79,26 @@ def process_creds(context, connection, credentials_data, dbconnection, cursor, d
         if result["password"] is not None:
             context.log.highlight(f"Found a cleartext password for: {username}:{password}. Adding to the DB and marking user as owned in BH.")
             cursor.execute(
-                "UPDATE admin_users SET password = ? WHERE username LIKE '" + username + "%'",
-                [password],
+                "UPDATE admin_users SET password = ? WHERE upper(substr(username, 1, ?)) = ?",
+                [password, len(username), username.upper()],
             )
             username = f"{username.upper()}@{domain.upper()}"
             dbconnection.commit()
             session = driver.session()
-            session.run('MATCH (u) WHERE (u.name = "' + username + '") SET u.owned=True RETURN u,u.name,u.owned')
+            session.run("MATCH (u) WHERE u.name = $username SET u.owned=True RETURN u,u.name,u.owned", username=username)
         if nthash == "aad3b435b51404eeaad3b435b51404ee" or nthash == "31d6cfe0d16ae931b73c59d7e0c089c0":
             context.log.fail(f"Hash for {username} is expired.")
         elif username not in found_users and nthash is not None:
             context.log.highlight(f"Found hashes for: '{username}:{nthash}'. Adding them to the DB and marking user as owned in BH.")
             found_users.append(username)
             cursor.execute(
-                "UPDATE admin_users SET hash = ? WHERE username LIKE '" + username + "%'",
-                [nthash],
+                "UPDATE admin_users SET hash = ? WHERE upper(substr(username, 1, ?)) = ?",
+                [nthash, len(username), username.upper()],
             )
             dbconnection.commit()
             username = f"{username.upper()}@{domain.upper()}"
             session = driver.session()
-            session.run('MATCH (u) WHERE (u.name = "' + username + '") SET u.owned=True RETURN u,u.name,u.owned')
+            session.run("MATCH (u) WHERE u.name = $username SET u.owned=True RETURN u,u.name,u.owned", username=username)
             path_to_da = session.run("MATCH p=shortestPath((n)-[*1..]->(m)) WHERE n.owned=true AND m.name=~ '.*DOMAIN ADMINS.*' RETURN p")
             paths = list(path_to_da.data())
 
@@ -118,12 +118,12 @@ def initial_run(connection, cursor):
     password = getattr(connection, "password", "")
     nthash = getattr(connection, "nthash", "")
     cursor.execute(
-        "UPDATE admin_users SET password = ? WHERE username LIKE '" + username + "%'",
-        [password],
+        "UPDATE admin_users SET password = ? WHERE upper(substr(username, 1, ?)) = ?",
+        [password, len(username), username.upper()],
     )
     cursor.execute(
-        "UPDATE admin_users SET hash = ? WHERE username LIKE '" + username + "%'",
-        [nthash],
+        "UPDATE admin_users SET hash = ? WHERE upper(substr(username, 1, ?)) = ?",
+        [nthash, len(username), username.upper()],
     )
 
 
@@ -236,7 +236,7 @@ class NXCModule:
         for user in compromised_users:
             for pc in admin_access:
                 if user[0] in pc[1]:
-                    cursor.execute(f"SELECT * FROM pc_and_admins WHERE pc_name = '{pc[0]}' AND dumped NOT LIKE 'TRUE'")
+                    cursor.execute("SELECT * FROM pc_and_admins WHERE pc_name = ? AND dumped NOT LIKE 'TRUE'", [pc[0]])
                     more_to_dump = cursor.fetchall()
                     if len(more_to_dump) > 0:
                         context.log.display(f"User {user[0]} has more access to {pc[0]}. Attempting to dump.")
@@ -247,7 +247,7 @@ class NXCModule:
                         connection.nthash = user[1]
                         try:
                             self.run_lsassy(context, connection, cursor)
-                            cursor.execute("UPDATE pc_and_admins SET dumped = 'TRUE' WHERE pc_name LIKE '" + pc[0] + "%'")
+                            cursor.execute("UPDATE pc_and_admins SET dumped = 'TRUE' WHERE pc_name = ?", [pc[0]])
 
                             process_creds(
                                 context,
