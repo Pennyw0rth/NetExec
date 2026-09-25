@@ -60,9 +60,9 @@ from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
-from nxc.helpers.misc import gen_random_string, validate_ntlm
+from nxc.helpers.misc import gen_random_string, validate_ntlm, parse_argument
 from nxc.logger import NXCAdapter
-from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
+from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket, asreq_user_status
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
 from nxc.protocols.smb.smbexec import SMBEXEC
@@ -104,6 +104,14 @@ smb_error_status = [
     "KDC_ERR_CLIENT_REVOKED",
     "KDC_ERR_PREAUTH_FAILED",
 ]
+
+# The None key is an AS-REP rather than an error, and CLIENT_REVOKED cannot tell a disabled account from a locked one.
+asreq_user_status_messages = {
+    None: ("success", "account vulnerable to asreproast attack", "yellow"),
+    constants.ErrorCodes.KDC_ERR_PREAUTH_REQUIRED.value: ("success", "", "green"),
+    constants.ErrorCodes.KDC_ERR_KEY_EXPIRED.value: ("success", "KDC_ERR_KEY_EXPIRED (password expired)", "yellow"),
+    constants.ErrorCodes.KDC_ERR_CLIENT_REVOKED.value: ("fail", "KDC_ERR_CLIENT_REVOKED (disabled or locked out)", "magenta"),
+}
 
 
 def get_error_string(exception):
@@ -865,6 +873,46 @@ class smb(connection):
             self.logger.success(f"Run the following command to use the ST: export KRB5CCNAME={st_file}")
         except Exception as e:
             self.logger.fail(f"Failed to get ST: {e}")
+
+    def user_enum(self):
+        """Check which of the --user-enum accounts exist via an AS-REQ with no pre-auth data, leaving badPwdCount untouched."""
+        if self.isdc is False:
+            self.logger.fail("Kerberos user enumeration only runs against a Domain Controller, so the KDC is queried once")
+            return
+
+        usernames = parse_argument([self.args.user_enum])
+        if not usernames:
+            self.logger.fail(f"No account to enumerate in {self.args.user_enum}")
+            return
+
+        kdc_host = self.kdcHost or self.host
+        self.logger.display(f"Enumerating {len(usernames)} account(s) over Kerberos, badPwdCount is left untouched")
+        found = []
+
+        for username in usernames:
+            try:
+                status = asreq_user_status(username, self.domain, kdc_host, self.args.smb_timeout)
+            except OSError as e:
+                # The KDC is unreachable for the whole list, no point repeating it per account
+                self.logger.fail(f"{self.domain}\\{username} KDC unreachable: {e}")
+                return
+
+            entry = asreq_user_status_messages.get(status)
+            if entry is None:
+                error_name = constants.ERROR_MESSAGES[status][0] if status in constants.ERROR_MESSAGES else f"KDC error {status}"
+                entry = ("fail", error_name, "red")
+            level, suffix, color = entry
+
+            log = self.logger.success if level == "success" else self.logger.fail
+            log(f"{self.domain}\\{username} {suffix}".rstrip(), color=color)
+            if level == "success":
+                found.append(username)
+
+        if found:
+            export_path = self.output_file_template.format(output_folder="user_enum")
+            with open(export_path, "w") as export_file:
+                export_file.write("\n".join(found) + "\n")
+            self.logger.success(f"Saved {len(found)} valid account(s) to {export_path}")
 
     def is_host_dc(self, aggressive_check=False):
         if self.isdc is not None:
