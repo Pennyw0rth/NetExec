@@ -165,25 +165,25 @@ class HostChecker:
             ConfigCheck("Last successful update age", "Checks how old is the last successful update", checkers=[self.check_last_successful_update]),
             ConfigCheck("LAPS installed", "Checks if LAPS is installed", checkers=[self.check_laps]),
             ConfigCheck("Administrator account renamed", "Checks if Administror user name has been changed", checkers=[self.check_administrator_name]),
-            ConfigCheck("UAC configuration", "Checks if UAC configuration is secure", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "EnableLUA", 1), ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "LocalAccountTokenFilterPolicy", 0)]]),
+            ConfigCheck("UAC configuration", "Checks if UAC configuration is secure", checker_args=[[self, ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "EnableLUA", 1), ("HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System", "LocalAccountTokenFilterPolicy", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False}}]),
             ConfigCheck("LM hash storage disabled", "Checks if storing  hashes in LM format is disabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Lsa", "NoLMHash", 1)]]),
-            ConfigCheck("Always install elevated disabled", "Checks if AlwaysInstallElevated is disabled", checker_args=[[self, ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "AlwaysInstallElevated", 0)]]),
+            ConfigCheck("Always install elevated disabled", "Checks if AlwaysInstallElevated is disabled", checker_args=[[self, ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "AlwaysInstallElevated", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False}}]),
             ConfigCheck("IPv4 preferred over IPv6", "Checks if IPv4 is preferred over IPv6", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters", "DisabledComponents", (32, 255), in_)]]),
             ConfigCheck("Spooler service disabled", "Checks if the spooler service is disabled", checkers=[self.check_spooler_service]),
-            ConfigCheck("WDigest authentication disabled", "Checks if WDigest authentication is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", 0)]]),
-            ConfigCheck("WSUS configuration", "Checks if WSUS configuration uses HTTPS", checkers=[self.check_wsus_running, None], checker_args=[[], [self, ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "WUServer", "https://", startswith), ("HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU", "UseWUServer", 0, operator.eq)]], checker_kwargs=[{}, {"options": {"lastWins": True}}]),
+            ConfigCheck("WDigest authentication disabled", "Checks if WDigest authentication is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest", "UseLogonCredential", 0)]], checker_kwargs=[{"options": {"KOIfMissing": False}}]),
+            ConfigCheck("WSUS configuration", "Checks if WSUS configuration uses HTTPS", checkers=[self.check_wsus_running, self.check_wsus_config], checker_args=[[], []], checker_kwargs=[{}, {}]),
             ConfigCheck("Small LSA cache", "Checks how many logons are kept in the LSA cache", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon", "CachedLogonsCount", 2, le)]]),
             ConfigCheck("AppLocker rules defined", "Checks if there are AppLocker rules defined", checkers=[self.check_applocker]),
             ConfigCheck("RDP expiration time", "Checks RDP session timeout", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt), ("HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services", "MaxDisconnectionTime", 0, operator.gt)]]),
             ConfigCheck("CredentialGuard enabled", "Checks if CredentialGuard is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "EnableVirtualizationBasedSecurity", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LsaCfgFlags", 1)]]),
-            ConfigCheck("Lsass run as PPL", "Checks if lsass runs as a protected process", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1)]]),
-            ConfigCheck("No Powershell v2", "Checks if powershell v2 is available", checker_args=[[self, ("HKLM\\SOFTWARE\\Microsoft\\PowerShell\\3\\PowerShellEngine", "PSCompatibleVersion", "2.0", not_(operator.contains))]]),
+            ConfigCheck("Lsass run as PPL", "Checks if lsass runs as a protected process", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "RunAsPPL", 1, operator.ge)]]),
+            ConfigCheck("No Powershell v2", "Checks if powershell v2 is available", checkers=[self.check_powershell_v2]),
             ConfigCheck("LLMNR disabled", "Checks if LLMNR is disabled", checker_args=[[self, ("HKLM\\Software\\policies\\Microsoft\\Windows NT\\DNSClient", "EnableMulticast", 0)]]),
             ConfigCheck("LmCompatibilityLevel == 5", "Checks if LmCompatibilityLevel is set to 5", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa", "LmCompatibilityLevel", 5, operator.ge)]]),
             ConfigCheck("NBTNS disabled", "Checks if NBTNS is disabled on all interfaces", checkers=[self.check_nbtns]),
             ConfigCheck("mDNS disabled", "Checks if mDNS is disabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\DNScache\\Parameters", "EnableMDNS", 0)]]),
-            ConfigCheck("SMB signing enabled", "Checks if SMB signing is enabled", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "requiresecuritysignature", 1)]]),
-            ConfigCheck("LDAP signing enabled", "Checks if LDAP signing is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters", "LDAPServerIntegrity", 2), ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS", "LdapEnforceChannelBinding", 2)]]),
+            ConfigCheck("SMB signing enabled", "Checks if SMB signing is enabled", checkers=[self.check_smb_signing]),
+            ConfigCheck("LDAP signing enabled", "Checks if LDAP signing is enabled", checkers=[self.check_ldap_signing]),
             ConfigCheck("SMB encryption enabled", "Checks if SMB encryption is enabled", checker_args=[[self, ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "EncryptData", 1)]]),
             ConfigCheck("RDP authentication", "Checks RDP authentication configuration (NLA auth and restricted admin mode)", checker_args=[[self, ("HKLM\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp\\", "UserAuthentication", 1), ("HKLM\\SYSTEM\\CurrentControlSet\\Control\\LSA", "RestrictedAdminMode", 1)]]),
             ConfigCheck("BitLocker configuration", "Checks the BitLocker configuration (based on https://www.stigviewer.com/stig/windows_10/2020-06-15/finding/V-94859)", checker_args=[[self, ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseAdvancedStartup", 1), ("HKLM\\SOFTWARE\\Policies\\Microsoft\\FVE", "UseTPMPIN", 1)]]),
@@ -302,7 +302,7 @@ class HostChecker:
                 nopstring = "{left} == {right}"
             else:
                 opstring = f"{op.__name__}({{left}}, {{right}}) == True"
-                nopstring = f"{op.__name__}({{left}}, {{right}}) == True"
+                nopstring = f"{op.__name__}({{left}}, {{right}}) == False"
 
             value = self.reg_query_value(self.dce, self.connection, key, value_name)
 
@@ -334,6 +334,97 @@ class HostChecker:
                 break
 
         return ok, reasons
+
+    def check_smb_signing(self):
+        """Check if SMB signing is required by the server.
+
+        The requiresecuritysignature registry value is only written when it is
+        explicitly configured (e.g. through the "Microsoft network server:
+        Digitally sign communications (always)" GPO). Since Windows 11 24H2 and
+        Windows Server 2025, SMB signing is required by default without the
+        value being present in the registry, so fall back to the signing
+        requirement negotiated with the server when the value is missing.
+        """
+        ok, reasons = self.check_registry(("HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "requiresecuritysignature", 1))
+
+        if not ok and reasons and all("not found" in reason.lower() for reason in reasons):
+            signing_required = getattr(self.connection, "signing", None)
+            if signing_required:
+                reasons.append("Registry value not set, but SMB signing is required by the server as observed during session negotiation")
+                return True, reasons
+
+        return ok, reasons
+
+    def check_wsus_config(self):
+        """Check that the Windows Update channel uses HTTPS.
+
+        When no WSUS server is configured, or WSUS is disabled
+        (UseWUServer=0), updates are fetched directly from Microsoft Update
+        over HTTPS, which satisfies the check. Otherwise the configured
+        WUServer must use the https:// scheme.
+        """
+        use_wuserver = self.reg_query_value(self.dce, self.connection, "HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU", "UseWUServer")
+        if not isinstance(use_wuserver, DCERPCSessionError) and use_wuserver == 0:
+            return True, ["WSUS disabled (UseWUServer=0), Windows Update uses Microsoft Update over HTTPS"]
+
+        value = self.reg_query_value(self.dce, self.connection, "HKLM\\Software\\Policies\\Microsoft\\Windows\\WindowsUpdate", "WUServer")
+        if isinstance(value, DCERPCSessionError):
+            if value.error_code in (ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND, ERROR_OBJECT_NOT_FOUND):
+                return True, ["No WSUS server configured (Windows Update over HTTPS)"]
+            return False, [f"Error while retrieving WUServer: {value}"]
+        if isinstance(value, str):
+            value = value.rstrip("\x00")
+        if str(value).lower().startswith("https://"):
+            return True, [f"WUServer ({value}) uses HTTPS"]
+        return False, [f"WUServer ({value}) does not use HTTPS"]
+
+    def check_ldap_signing(self):
+        """Check LDAP server signing enforcement.
+
+        LDAPServerIntegrity/LdapEnforceChannelBinding only apply to the LDAP
+        server exposed by domain controllers. On hosts that are not domain
+        controllers the NTDS Parameters key does not exist and there is no
+        local LDAP server to enforce signing on.
+        """
+        ans = self._open_root_key(self.dce, self.connection, "HKLM")
+        if ans is None:
+            return False, ["Could not query remote registry"]
+        try:
+            rrp.hBaseRegOpenKey(self.dce, ans["phKey"], "SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters")
+        except DCERPCSessionError as e:
+            if e.error_code == ERROR_FILE_NOT_FOUND:
+                return True, ["Not a domain controller (no local LDAP server)"]
+            return False, [f"Error while opening NTDS\\Parameters: {e}"]
+        return self.check_registry(
+            ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters", "LDAPServerIntegrity", 2),
+            ("HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters", "LdapEnforceChannelBinding", 2),
+        )
+
+    def check_powershell_v2(self):
+        r"""Check if the legacy PowerShell v2 engine is available.
+
+        PSCompatibleVersion under PowerShell\\3 always lists "2.0" when
+        PowerShell 5.1 is installed (engine compatibility), even when the v2
+        engine itself is not installed. Instead, check for the v1/v2 engine
+        registration and the state of the "PowerShell 2.0 Engine" optional
+        feature.
+        """
+        value = self.reg_query_value(self.dce, self.connection, "HKLM\\SOFTWARE\\Microsoft\\PowerShell\\1\\PowerShellEngine", "PowerShellVersion")
+        if not isinstance(value, DCERPCSessionError):
+            return False, [f"PowerShell v2 engine installed (PowerShell\\1\\PowerShellEngine found, PowerShellVersion {value})"]
+
+        try:
+            records = self.connection.wmi_query(wql="SELECT InstallState FROM Win32_OptionalFeature WHERE Name='MicrosoftWindowsPowerShellV2'", namespace="root\\cimv2")
+        except Exception as e:
+            records = []
+            self.context.log.debug(f"Could not query Win32_OptionalFeature: {e}")
+        if not records:
+            return False, ["Could not determine the PowerShell 2.0 engine state (WMI query failed or returned no data)"]
+
+        state = records[0].get("InstallState", {}).get("value")
+        if state == 1:
+            return False, ["PowerShell 2.0 engine optional feature enabled"]
+        return True, ["PowerShell v2 engine not installed"]
 
     def check_laps(self):
         reasons = []
@@ -735,15 +826,3 @@ def le(reg_sz_string, number):
 
 def in_(obj, seq):
     return obj in seq
-
-
-def startswith(string, start):
-    return string.startswith(start)
-
-
-def not_(boolean_operator):
-    def wrapper(*args, **kwargs):
-        return not boolean_operator(*args, **kwargs)
-
-    wrapper.__name__ = f"not_{boolean_operator.__name__}"
-    return wrapper
