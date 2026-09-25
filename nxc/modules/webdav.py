@@ -5,6 +5,7 @@ from impacket.smb3structs import FILE_READ_DATA
 from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSError
 import contextlib
+from nxc.helpers.opengraph import opengraph
 
 
 class NXCModule:
@@ -38,6 +39,7 @@ class NXCModule:
             remote_file.open_file()
 
             context.log.highlight(self.output.format(connection.conn.getRemoteHost()))
+            opengraph.add_tag(connection.hostname, ["Computer"], "webclientrunning", True)
         except SessionError as e:
             if e.getErrorCode() == nt_errors.STATUS_OBJECT_NAME_NOT_FOUND:
                 return

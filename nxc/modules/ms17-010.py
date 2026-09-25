@@ -6,6 +6,7 @@ from ctypes import c_uint8, c_uint16, c_uint32, c_uint64, Structure
 import socket
 import struct
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.opengraph import opengraph
 from nxc.logger import nxc_logger
 
 
@@ -66,6 +67,7 @@ class NXCModule:
             if self.check(connection.host):
                 context.log.highlight("VULNERABLE")
                 context.log.highlight("Next step: https://www.rapid7.com/db/modules/exploit/windows/smb/ms17_010_eternalblue/")
+                opengraph.add_tag(connection.hostname, ["Computer"], "ms17_010", True)
         except ConnectionResetError as e:
             context.log.debug(f"Error connecting to host when checking for MS17-010: {e!s}")
         except ValueError as e:
