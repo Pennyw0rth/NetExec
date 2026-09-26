@@ -8,6 +8,7 @@ def proto_args(parser, parents):
     mssql_parser.add_argument("--mssql-timeout", help="SQL server connection timeout", type=int, default=5)
     mssql_parser.add_argument("-q", "--query", metavar="QUERY", type=str, help="execute the specified query against the mssql db")
     mssql_parser.add_argument("--database", nargs="?", const=True, metavar="NAME", help="list databases or list tables for NAME")
+    mssql_parser.add_argument("--list-instances", action="store_true", default=False, help="Lists availables MSSQL instances over the SQL browser")
 
     dgroup = mssql_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, help="domain name")
