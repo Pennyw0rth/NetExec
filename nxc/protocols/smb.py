@@ -10,9 +10,18 @@ from nxc.helpers.path import sanitize_filename
 from Cryptodome.Hash import MD4
 from textwrap import dedent
 
+from impacket import ntlm, spnego
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
-from impacket.smb3structs import SMB2_DIALECT_30, SMB2_NEGOTIATE_SIGNING_REQUIRED
+from impacket.smb3 import WIN_VERSIONS
+from impacket.smb3structs import (
+    SMB2_DIALECT_30,
+    SMB2_NEGOTIATE_SIGNING_REQUIRED,
+    SMB2SessionSetup,
+    SMB2SessionSetup_Response,
+    SMB2_SESSION_SETUP,
+    SMB2_NEGOTIATE_SIGNING_ENABLED
+)
 from impacket.examples.secretsdump import (
     RemoteOperations,
     SAMHashes,
@@ -25,6 +34,7 @@ from impacket.examples.regsecrets import (
     LSASecrets as RegSecretsLSASecrets
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
+from impacket.nt_errors import STATUS_MORE_PROCESSING_REQUIRED
 from impacket.dcerpc.v5 import lsat, lsad, scmr, rrp, srvs, wkst
 from impacket.dcerpc.v5.srvs import STYPE_DISKTREE, STYPE_MASK
 from impacket.dcerpc.v5.rpcrt import DCERPCException
@@ -58,7 +68,7 @@ from impacket.smb3structs import (
 )
 from impacket.dcerpc.v5 import tsts as TSTS
 
-from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
+from nxc.config import process_secret, host_info_colors, check_guest_account, check_null_sessions, display_dc
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
@@ -123,7 +133,7 @@ def get_error_string(exception):
 class smb(connection):
     def __init__(self, args, db, host):
         self.domain = None
-        self.server_os = None
+        self.server_os = ""
         self.server_os_major = None
         self.server_os_minor = None
         self.server_os_build = None
@@ -185,38 +195,124 @@ class smb(connection):
 
         return 0
 
+    def _setup_spnego(self):
+        """
+        Simplified version of SMB3.login() from impacket
+        https://github.com/fortra/impacket/blob/master/impacket/smb3.py
+
+        Doesn't go past the second phase of NTLM/SMB protocol
+        """
+        # Setup NTLM Negotiation
+        neg = ntlm.getNTLMSSPType1(workstation="", domain="", signingRequired=False)
+        blob = spnego.SPNEGO_NegTokenInit()
+        blob["MechTypes"] = [spnego.TypesMech["NTLMSSP - Microsoft NTLM Security Support Provider"]]
+        blob["MechToken"] = neg.getData()
+
+        # Setup SMB2 Session
+        ss = SMB2SessionSetup()
+        ss["Flags"] = 0
+        ss["SecurityMode"] = SMB2_NEGOTIATE_SIGNING_ENABLED
+        ss["Capabilities"] = 0
+        ss["Channel"] = 0
+        ss["SecurityBufferLength"] = len(blob)
+        ss["Buffer"] = blob.getData()
+
+        # Final packet
+        pkt = self.conn.getSMBServer().SMB_PACKET()
+        pkt["Command"] = SMB2_SESSION_SETUP
+        pkt["Data"] = ss
+
+        return pkt
+
+    def _get_av_key(self, av, key):
+        # Might be rewrited to be more readable
+        v = av[key]
+        if v is None:
+            return None
+        raw = v[1]
+        if not raw:
+            return None
+        s = raw.decode("utf-16le", errors="replace").rstrip("\x00").strip()
+        return s or None
+
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
 
+        pkt = self._setup_spnego()
+
         try:
-            self.conn.login("", "")
-            self.null_auth = True
+            # Transmitting phase 1 and receiving phase 2
+            # Still increasing timeout to cover RestrictReceivingNTLMTraffic=2
+            # who give 2s delay directly after phase 1
+            with self.increase_auth_timeout():
+                ans = self.conn.getSMBServer().recvSMB(self.conn.getSMBServer().sendSMB(pkt))
+            ans.isValidAnswer(STATUS_MORE_PROCESSING_REQUIRED)
         except BrokenPipeError:
-            self.logger.fail("Broken Pipe Error while attempting to login")
+            self.logger.fail("Broken Pipe Error while attempting to negotiate")
         except Exception as e:
-            self.null_auth = False
             if "STATUS_NOT_SUPPORTED" in str(e):
-                # no ntlm supported
                 self.no_ntlm = True
                 self.logger.debug("NTLM not supported")
 
         aggressive_check = bool(self.args.generate_hosts_file or self.args.generate_krb5_file)
         self.is_host_dc(aggressive_check=aggressive_check)
 
-        # self.domain is the attribute we authenticate with
-        # self.targetDomain is the attribute which gets displayed as host domain
         if not self.no_ntlm:
-            # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = self.conn.getServerDNSHostName().upper()
+            # Lot of things will be extracted/parsed manually as the usual impackets getServerXXX functions
+            # return None if no login() is called
+            resp = SMB2SessionSetup_Response(ans["Data"])
+            chall = ntlm.NTLMAuthChallenge()
+            chall.fromString(spnego.SPNEGO_NegTokenResp(resp["Buffer"])["ResponseToken"])
+            av = ntlm.AV_PAIRS(chall["TargetInfoFields"])
+
+            dns_hostname = self._get_av_key(av, ntlm.NTLMSSP_AV_DNS_HOSTNAME)
             if dns_hostname and "." in dns_hostname:
                 self.hostname = dns_hostname.split(".")[0]
             elif dns_hostname:
                 self.hostname = dns_hostname
             else:
-                self.hostname = self.conn.getServerName()
-            self.targetDomain = self.conn.getServerDNSDomainName()
+                self.hostname = self._get_av_key(av, ntlm.NTLMSSP_AV_HOSTNAME)
+            self.targetDomain = self._get_av_key(av, ntlm.NTLMSSP_AV_DNS_DOMAINNAME)
             if not self.targetDomain:   # Not sure if that can even happen but now we are safe
                 self.targetDomain = self.hostname
+
+            # Moving this part here as we can't rely on getServerXXX functions
+            # Doesn't change the behavior as they would have returned empty strings
+            # if the no_ntlm=True path were taken
+
+            if len(chall["Version"]) >= 4:
+                maj, minr, build = struct.unpack("<BBH", chall["Version"][:4])
+                self.server_os_major = maj
+                self.server_os_minor = minr
+                self.server_os_build = build
+                if build in WIN_VERSIONS:
+                    self.server_os = WIN_VERSIONS[build]
+                else:
+                    self.server_os = f"Windows {maj}.{minr} Build {build}"
+            else:
+                self.logger.debug("Error getting server information...")
+
+            # As of June 2024 Samba will always report the version as "Windows 6.1", apparently due to a bug https://stackoverflow.com/a/67577401/17395725
+            # Together with the reported build version "0" by Samba we can assume that it is a Samba server. Windows should always report a build version > 0
+            # Also only on Windows we should get an OS arch as for that we would need MSRPC
+
+            # Handle cases where server_os is returned as bytes, such as when accidentally scanning a machine running Responder
+            if isinstance(self.server_os.lower(), bytes):
+                self.server_os = self.server_os.decode("utf-8")
+
+            if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
+                self.server_os = "Unix - Samba"
+            elif self.server_os_build == 0 and self.os_arch == 0:
+                self.server_os = "Unix"
+            self.logger.debug(f"Server OS: {self.server_os} {self.server_os_major}.{self.server_os_minor} build {self.server_os_build}")
+
+            self.logger.extra["hostname"] = self.hostname
+
+            try:
+                self.signing = self._is_signing_required()
+            except Exception as e:
+                self.logger.debug(e)
+
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
@@ -254,38 +350,19 @@ class smb(connection):
             self.domain = self.hostname
             self.targetDomain = self.hostname
 
-        # As of June 2024 Samba will always report the version as "Windows 6.1", apparently due to a bug https://stackoverflow.com/a/67577401/17395725
-        # Together with the reported build version "0" by Samba we can assume that it is a Samba server. Windows should always report a build version > 0
-        # Also only on Windows we should get an OS arch as for that we would need MSRPC
-        try:
-            self.server_os = self.conn.getServerOS()
-            self.server_os_major = self.conn.getServerOSMajor()
-            self.server_os_minor = self.conn.getServerOSMinor()
-            self.server_os_build = self.conn.getServerOSBuild()
-        except KeyError:
-            self.logger.debug("Error getting server information...")
-
-        # Handle cases where server_os is returned as bytes, such as when accidentally scanning a machine running Responder
-        if isinstance(self.server_os.lower(), bytes):
-            self.server_os = self.server_os.decode("utf-8")
-
-        if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
-            self.server_os = "Unix - Samba"
-        elif self.server_os_build == 0 and self.os_arch == 0:
-            self.server_os = "Unix"
-        self.logger.debug(f"Server OS: {self.server_os} {self.server_os_major}.{self.server_os_minor} build {self.server_os_build}")
-
-        self.logger.extra["hostname"] = self.hostname
-
-        try:
-            self.signing = self._is_signing_required()
-        except Exception as e:
-            self.logger.debug(e)
-
         self.os_arch = self.get_os_arch()
 
-        # moved at the end because it can cause issues with some DCs if we try to login as guest before checking if dc or not
-        if check_guest_account and not self.no_ntlm:
+        # Rate limiting is configured by default, beginning with Windows Server 2025
+        # and Windows 11, version 24H2. It is therefore useless to spend 2 seconds
+        # per check unless the user explicitly want to test this
+        if check_guest_account or (check_null_sessions and self.no_ntlm):
+            try:
+                self.conn.login("", "")
+                self.logger.debug("Null authentication successful")
+                self.null_auth = True
+            except Exception:
+                self.null_auth = False
+
             try:
                 self.conn.login("Guest", "")
                 self.logger.debug("Guest authentication successful")
