@@ -1378,12 +1378,12 @@ class smb(connection):
     @requires_admin
     def tasklist(self):
         # Formats a row to be printed on screen
-        def format_row(procInfo):
+        def format_row(procInfo, pSid):
             return template.format(
-                procInfo["ImageName"],
-                procInfo["UniqueProcessId"],
-                procInfo["SessionId"],
-                procInfo["pSid"],
+                str(procInfo["ImageName"].getValue()),
+                str(procInfo["UniqueProcessId"]),
+                str(procInfo["SessionId"]),
+                pSid,
                 f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
 
@@ -1399,8 +1399,8 @@ class smb(connection):
                 if not res:
                     return
                 self.logger.success("Enumerated processes")
-                maxImageNameLen = max(len(i["ImageName"]) for i in res)
-                maxSidLen = max(len(i["pSid"]) for i in res)
+                maxImageNameLen = max(len(i.getProcessInfo()["ImageName"].getValue()) for i in res)
+                maxSidLen = max(len(i.getSid()) for i in res)
                 template = f"{{: <{maxImageNameLen}}} {{: <8}} {{: <11}} {{: <{maxSidLen}}} {{: >12}}"
                 self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
                 self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
@@ -1411,12 +1411,12 @@ class smb(connection):
                     # If args.tasklist is not True then a process name was supplied
                     if self.args.tasklist is not True:
                         # So we look for it and print its information if found
-                        if self.args.tasklist.lower() in procInfo["ImageName"].lower():
+                        if self.args.tasklist.lower() in procInfo.getProcessInfo()["ImageName"].lower():
                             found_task = True
-                            self.logger.highlight(format_row(procInfo))
+                            self.logger.highlight(format_row(procInfo.getProcessInfo(), procInfo.getSid()))
                     # Else, no process was supplied, we print the entire list of remote processes
                     else:
-                        self.logger.highlight(format_row(procInfo))
+                        self.logger.highlight(format_row(procInfo.getProcessInfo(), procInfo.getSid()))
 
                 # If a process was suppliad to args.tasklist and it was not found, we print a fail message
                 if self.args.tasklist is not True and not found_task:
