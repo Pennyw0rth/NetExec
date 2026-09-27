@@ -1219,19 +1219,11 @@ class ldap(connection):
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
-        for entry in resp:
-            # LDAP responses can include non-entry objects (e.g.
-            # SearchResultReference); skip anything that is not a real entry
-            # instead of indexing it, which previously crashed with a TypeError
-            # when such an object appeared in the result set (see #1349).
-            if not isinstance(entry, ldapasn1_impacket.SearchResultEntry):
-                continue
+        # A search response also holds SearchResultReference objects, which carry no attributes and must not be indexed like an entry.
+        entries = [item for item in resp if isinstance(item, ldapasn1_impacket.SearchResultEntry)]
+        for entry, attribute_map in zip(entries, parse_result_attributes(entries), strict=True):
             self.logger.success(f"Response for object: {entry['objectName']}")
-            parsed = parse_result_attributes([entry])
-            if not parsed:
-                continue
-            for attribute in parsed[0]:
-                value = parsed[0][attribute]
+            for attribute, value in attribute_map.items():
                 if isinstance(value, list) and value:
                     # Display first item in the same line as attribute
                     self.logger.highlight(f"{attribute:<20} {value.pop(0)}")
