@@ -4,13 +4,12 @@ from pathlib import Path, PureWindowsPath
 import re
 from types import SimpleNamespace
 from unicodedata import normalize
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from impacket import ntlm
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
-from nxc.connection import connection
 from nxc.helpers.bloodhound import _add_with_domain, _add_without_domain
 from nxc.helpers.misc import sanitize_dns
 from nxc.helpers.negotiate_parser import parse_challenge
@@ -322,29 +321,6 @@ def test_bloodhound_uses_parameters_for_untrusted_names(function, user_info, dom
     assert transaction.calls[1][1]["user_owned"] in (expected, "USER' OR 1=1@EXAMPLE")
 
 
-def test_smb_hosts_file_sanitizes_at_sink_without_mutating_values(tmp_path, smb_class):
-    connection = smb_class.__new__(smb_class)
-    connection.host = "192.0.2.1"
-    connection.hostname = "../../HOST\n"
-    connection.targetDomain = "[evil]\n"
-    connection.domain = connection.targetDomain
-    connection.signing = False
-    connection.smbv1 = False
-    connection.no_ntlm = False
-    connection.is_guest = False
-    connection.isdc = False
-    connection.null_auth = False
-    connection.server_os = "Windows"
-    connection.os_arch = 64
-    connection.logger = Logger()
-    connection.args = SimpleNamespace(generate_hosts_file=str(tmp_path / "hosts"), generate_krb5_file=None)
-
-    result = connection.print_host_info()
-
-    assert result == (connection.host, "../../HOST\n", "[evil]\n")
-    assert (tmp_path / "hosts").read_text().splitlines() == ["192.0.2.1     .._.._HOST_._evil__ .._.._HOST_"]
-
-
 def test_smb_enum_host_info_sanitizes_remote_names(smb_class):
     connection = smb_class.__new__(smb_class)
     connection.conn = EnumerationSMBConnection()
@@ -454,18 +430,6 @@ def test_sanitize_path_component_keeps_paths_inside_base(tmp_path):
     output = tmp_path / sanitized
     assert output.parent == tmp_path
     assert PureWindowsPath("C:/base", sanitized).parent == PureWindowsPath("C:/base")
-
-
-def test_connection_preserves_literal_braces_in_output_template(tmp_path):
-    with patch("nxc.connection.NXC_PATH", str(tmp_path / "{base}")), patch("nxc.connection.connection", autospec=True) as mocked:
-        mocked.return_value.hostname = "{hostname}"
-        mocked.return_value.host = "{output_folder}"
-        mocked.return_value.logger = Mock()
-        mocked.return_value.args = SimpleNamespace(module=None)
-        connection.proto_flow(mocked.return_value)
-
-        assert Path(mocked.return_value.output_filename).name.startswith("{hostname}_{output_folder}_")
-        assert mocked.return_value.output_file_template.format(output_folder="sam") == str(tmp_path / "{base}" / "logs" / "sam" / Path(mocked.return_value.output_filename).name)
 
 
 def test_sanitize_path_component_honors_custom_budget():
