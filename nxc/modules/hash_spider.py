@@ -188,7 +188,7 @@ class NXCModule:
         )
         if session.smb_session is None:
             context.log.fail("Couldn't connect to remote host. Password likely expired/changed. Removing from DB.")
-            cursor.execute(f"UPDATE admin_users SET hash = NULL WHERE username LIKE '{username}'")
+            cursor.execute("UPDATE admin_users SET hash = NULL WHERE username = ? COLLATE NOCASE", [f"{username}@{domain_name}"])
             return False
         dumper = Dumper(session, timeout=10, time_between_commands=7).load(self.method)
         if dumper is None:
