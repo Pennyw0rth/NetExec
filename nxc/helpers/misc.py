@@ -64,11 +64,6 @@ def sanitize_dns(hostname, logger=nxc_logger):
     if sanitized.endswith(".") or normalize("NFKC", sanitized[-1]).endswith("."):
         sanitized = f"{sanitized[:-1]}_"
 
-    # Avoid Windows device names when the result is used as a filename.
-    normalized_stem = normalize("NFKC", sanitized).split(".", 1)[0].upper()
-    if normalized_stem in {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"} or re.fullmatch(r"(?:COM|LPT)[1-9]", normalized_stem):
-        sanitized = f"_{sanitized}"
-
     # Bound filename length while retaining a stable identifier for long names.
     if len(sanitized.encode("utf-8")) > 253:
         suffix = f"_{hashlib.sha256(hostname.encode('utf-8', errors='surrogatepass')).hexdigest()[:12]}"
@@ -91,7 +86,6 @@ def sanitize_dns(hostname, logger=nxc_logger):
         or len(sanitized.encode("utf-8")) > 253
         or normalized in (".", "..")
         or normalized.endswith(".")
-        or normalized_stem in {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
         or re.fullmatch(r"(?:COM|LPT)[1-9]", normalized_stem)
         or any(
             not character.isprintable()
