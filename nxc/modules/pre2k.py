@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5.ccache import CCache
 from impacket.krb5.types import Principal
@@ -138,7 +139,10 @@ class NXCModule:
         try:
             ccache = CCache()
             ccache.fromTGT(ticket, sessionKey, sessionKey)
-            ccache_filename = os.path.join(ccache_base_dir, f"{username}.ccache")
+            ccache_filename = Path(ccache_base_dir, sanitize_path_component(f"{username}.ccache")).resolve()
+            if Path(ccache_base_dir).resolve() not in ccache_filename.parents:
+                context.log.fail(f"Path traversal detected in ticket filename for {username!r}, skipping")
+                return
             ccache.saveFile(ccache_filename)
             context.log.info(f"Saved ticket in {ccache_filename}")
         except Exception as e:
