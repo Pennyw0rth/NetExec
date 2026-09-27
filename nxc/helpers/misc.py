@@ -79,14 +79,12 @@ def sanitize_dns(hostname, logger=nxc_logger):
 
     # Fail closed if a future change violates any output invariant.
     normalized = normalize("NFKC", sanitized)
-    normalized_stem = normalized.split(".", 1)[0].upper()
     if (
         not sanitized
         or not normalized
         or len(sanitized.encode("utf-8")) > 253
         or normalized in (".", "..")
         or normalized.endswith(".")
-        or re.fullmatch(r"(?:COM|LPT)[1-9]", normalized_stem)
         or any(
             not character.isprintable()
             or character.isspace()

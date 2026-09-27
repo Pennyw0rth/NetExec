@@ -4,12 +4,13 @@ from pathlib import Path, PureWindowsPath
 import re
 from types import SimpleNamespace
 from unicodedata import normalize
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from impacket import ntlm
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
+from nxc.connection import connection
 from nxc.helpers.bloodhound import _add_with_domain, _add_without_domain
 from nxc.helpers.misc import sanitize_dns
 from nxc.helpers.negotiate_parser import parse_challenge
@@ -219,9 +220,9 @@ def test_sanitize_dns_replaces_config_and_control_characters():
     assert r"\x1b" in logger.messages[0]
 
 
-@pytest.mark.parametrize("name", ["CON", "NUL.txt", "PRN", "AUX.log", "COM1", "LPT9.txt", "COM¹.txt", "CONIN$", "CONOUT$"])
-def test_sanitize_dns_neutralizes_windows_device_names(name):
-    assert sanitize_dns(name, Logger()).startswith("_")
+@pytest.mark.parametrize("name", ["CON", "NUL.txt", "PRN", "AUX.log", "COM1", "LPT9.txt", "COM¹.txt", "CONIN$", "CONOUT$", "aux.example.com", "com1.example.com", "lpt9.example.com"])
+def test_sanitize_dns_preserves_windows_device_names(name):
+    assert sanitize_dns(name, Logger()) == name
 
 
 def test_sanitize_dns_bounds_long_values_with_stable_hash():
@@ -250,7 +251,6 @@ def test_sanitize_dns_always_returns_a_string():
 def test_sanitize_dns_postconditions(hostname):
     sanitized = sanitize_dns(hostname, Logger())
     normalized = normalize("NFKC", sanitized)
-    normalized_stem = normalized.split(".", 1)[0].upper()
     assert isinstance(sanitized, str)
     assert sanitized
     assert len(sanitized.encode("utf-8")) <= 253
@@ -265,8 +265,6 @@ def test_sanitize_dns_postconditions(hostname):
     )
     assert normalized not in (".", "..")
     assert not normalized.endswith(".")
-    assert normalized_stem not in {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
-    assert re.fullmatch(r"(?:COM|LPT)[1-9]", normalized_stem) is None
     assert sanitize_dns(sanitized, Logger()) == sanitized
 
 
@@ -405,7 +403,10 @@ def test_smb_download_sanitizes_recursive_directory_components(tmp_path, smb_cla
         ("NUL.txt", "_NUL.txt"),
         ("../pwn", ".._pwn"),
         (r"..\pwn", ".._pwn"),
-        ("{hostname}", "_hostname_"),
+        ("{hostname}", "{hostname}"),
+        ("report{1}.txt", "report{1}.txt"),
+        ("report_1_.txt", "report_1_.txt"),
+        ("report\uff5b1\uff5d.txt", "report\uff5b1\uff5d.txt"),
         ("host\u202ename", "host_name"),
         ("münchen.example", "münchen.example"),
         ("CON .txt", "_CON .txt"),
@@ -427,9 +428,9 @@ def test_sanitize_path_component_postconditions(name):
     assert sanitized
     assert len(sanitized.encode("utf-8")) <= 255
     assert all(character.isprintable() for character in sanitized)
-    assert not any(character in '<>:"/\\|?*{}' for character in sanitized)
+    assert not any(character in '<>:"/\\|?*' for character in sanitized)
     assert all(
-        normalized_character.isprintable() and normalized_character not in '<>:"/\\|?*{}'
+        normalized_character.isprintable() and normalized_character not in '<>:"/\\|?*'
         for character in sanitized
         for normalized_character in normalize("NFKC", character)
     )
@@ -455,9 +456,16 @@ def test_sanitize_path_component_keeps_paths_inside_base(tmp_path):
     assert PureWindowsPath("C:/base", sanitized).parent == PureWindowsPath("C:/base")
 
 
-def test_sanitize_path_component_is_safe_in_output_template(tmp_path):
-    template = str(Path(tmp_path) / "{output_folder}" / sanitize_path_component("{hostname}"))
-    assert template.format(output_folder="sam") == str(Path(tmp_path) / "sam" / "_hostname_")
+def test_connection_preserves_literal_braces_in_output_template(tmp_path):
+    with patch("nxc.connection.NXC_PATH", str(tmp_path / "{base}")), patch("nxc.connection.connection", autospec=True) as mocked:
+        mocked.return_value.hostname = "{hostname}"
+        mocked.return_value.host = "{output_folder}"
+        mocked.return_value.logger = Mock()
+        mocked.return_value.args = SimpleNamespace(module=None)
+        connection.proto_flow(mocked.return_value)
+
+        assert Path(mocked.return_value.output_filename).name.startswith("{hostname}_{output_folder}_")
+        assert mocked.return_value.output_file_template.format(output_folder="sam") == str(tmp_path / "{base}" / "logs" / "sam" / Path(mocked.return_value.output_filename).name)
 
 
 def test_sanitize_path_component_honors_custom_budget():

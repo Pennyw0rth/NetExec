@@ -18,8 +18,8 @@ def sanitize_path_component(name, max_bytes=255):
     if not name:
         return "_"
 
-    # Replace path, formatting, control, and Unicode-equivalent metacharacters.
-    unsafe_characters = '<>:"/\\|?*{}'  # Portable filename and format-string metacharacters
+    # Replace path, control, and Unicode-equivalent metacharacters.
+    unsafe_characters = '<>:"/\\|?*'  # Portable filename metacharacters
     sanitized = "".join(
         character if character.isprintable()
         and character not in unsafe_characters
