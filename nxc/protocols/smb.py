@@ -1264,7 +1264,7 @@ class smb(connection):
                     self.logger.error("Could not get process list")
                     return
 
-                pidList = [i["UniqueProcessId"] for i in res if i["ImageName"].lower() == self.args.taskkill.lower()]
+                pidList = [i.getProcessInfo()["UniqueProcessId"] for i in res if i.getProcessInfo()["ImageName"].getValue().lower() == self.args.taskkill.lower()]
                 if not pidList:
                     self.logger.fail(f"Could not find process named {self.args.taskkill}")
                     return
@@ -1411,7 +1411,7 @@ class smb(connection):
                     # If args.tasklist is not True then a process name was supplied
                     if self.args.tasklist is not True:
                         # So we look for it and print its information if found
-                        if self.args.tasklist.lower() in procInfo.getProcessInfo()["ImageName"].lower():
+                        if self.args.tasklist.lower() in procInfo.getProcessInfo()["ImageName"].getValue().lower():
                             found_task = True
                             self.logger.highlight(format_row(procInfo.getProcessInfo(), procInfo.getSid()))
                     # Else, no process was supplied, we print the entire list of remote processes
