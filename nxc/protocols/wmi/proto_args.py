@@ -10,6 +10,10 @@ def proto_args(parser, parents):
     dgroup.add_argument("--local-auth", action="store_true", help="Authenticate locally to each target")
 
     cred_gathering_group = wmi_parser.add_argument_group("Credential Gathering")
+    cred_gathering_group.add_argument("--dpapi", choices={"cookies"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
+    cred_gathering_group.add_argument("--sccm", action="store_true", help="dump SCCM secrets from target systems")
+    cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
+    cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
 
     egroup = wmi_parser.add_argument_group("Mapping/Enumeration")

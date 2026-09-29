@@ -101,7 +101,7 @@ class NXCModule:
                     context.log.fail("Invalid token ID submitted")
 
         except Exception as e:
-            context.log.fail(f"Error runing command: {e}")
+            context.log.fail(f"Error running command: {e}")
         finally:
             try:
                 connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.impersonate}")

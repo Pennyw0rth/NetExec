@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from termcolor import colored
 from nxc.connection import connection
 from nxc.logger import NXCAdapter
@@ -773,6 +775,89 @@ class nfs(connection):
             content = [x for x in content if x["name"].decode() == sub_path]
             path = path.rsplit("/", 1)[0]   # Remove the file from the path
         self.print_directory(content, path)
+
+    def cat(self):
+        # Connect to NFS
+        nfs_port = self.portmap.getport(NFS_PROGRAM, NFS_V3)
+        self.nfs3 = NFSv3(self.host, nfs_port, self.args.nfs_timeout, self.auth)
+        self.nfs3.connect()
+
+        # Remove leading or trailing slashes
+        self.args.cat = self.args.cat.lstrip("/").rstrip("/")
+
+        # NORMAL LS CALL (without root escape)
+        if self.args.share:
+            mount_info = self.mount.mnt(self.args.share, self.auth)
+            if mount_info["status"] != 0:
+                self.logger.fail(f"Could not mount share {self.args.share}: {NFSSTAT3[mount_info['status']]}")
+                return
+            else:
+                mount_fh = mount_info["mountinfo"]["fhandle"]
+        elif self.root_escape:
+            # Interestingly we don't actually have to mount the share if we already got the handle
+            self.logger.success(f"Successful escape on share: {self.escape_share}")
+            mount_fh = self.escape_fh
+        else:
+            self.logger.fail("No root escape possible, please specify a share")
+            return
+
+        # We got a path to look up
+        curr_fh = mount_fh
+        is_file = False     # If the last path is a file
+
+        # If ls is "" or "/" without filter we would get one item with [""]
+        for sub_path in list(filter(None, self.args.cat.split("/"))):
+            # Update UID and GID for the path
+            self.update_auth(curr_fh)
+            res = self.nfs3.lookup(curr_fh, sub_path, auth=self.auth)
+
+            if "resfail" in res and res["status"] == NFS3ERR_NOENT:
+                self.logger.fail(f"Unknown path: {self.args.cat!r}")
+                return
+            elif "resfail" in res:
+                self.logger.fail(f"Error on looking up path '{sub_path}': {NFSSTAT3[res['status']]}")
+                return
+
+            curr_fh = res["resok"]["object"]["data"]
+
+            # If file then break and only display file
+            if res["resok"]["obj_attributes"]["attributes"]["type"] == NF3REG:
+                is_file = True
+                break
+
+        # Update the UID and GID for the file/dir
+        self.update_auth(curr_fh)
+
+        if not is_file:
+            self.logger.fail(f"Path '{self.args.cat}' is not a file!")
+            return
+
+        buf = BytesIO()
+        # Handle files over the default chunk size of 1024 * 1024
+        offset = 0
+        eof = False
+        while not eof:
+            file_data = self.nfs3.read(curr_fh, offset, auth=self.auth)
+
+            if "resfail" in file_data:
+                self.logger.fail(f"Failed to retrieve data for '{self.args.cat}': {NFSSTAT3[file_data['status']]}")
+                return
+
+            else:
+                # Get the data and append it to the total file data
+                data = file_data["resok"]["data"]
+                eof = file_data["resok"]["eof"]
+
+                # Update the offset to read the next chunk
+                offset += len(data)
+                # Write the file data to the local file
+                buf.write(data)
+
+        try:
+            for line in buf.getvalue().decode().splitlines():
+                self.logger.highlight(line)
+        except UnicodeDecodeError as e:
+            self.logger.fail(f"File is not in UTF-8: {e}")
 
     def print_directory(self, content, path):
         """
