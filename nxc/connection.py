@@ -222,6 +222,9 @@ class connection:
     def print_host_info(self):
         return
 
+    def opengraph_host_info(self):
+        pass
+
     def create_conn_obj(self):
         return
 
@@ -258,6 +261,9 @@ class connection:
 
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+                # Collect host info for opengraph
+                if self.args.opengraph:
+                    self.opengraph_host_info()
                 self.logger.debug("Calling command arguments")
                 self.call_cmd_args()
                 if self.args.module:

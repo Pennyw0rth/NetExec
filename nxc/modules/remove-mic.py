@@ -20,6 +20,7 @@ from impacket import ntlm
 from impacket import nt_errors
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.opengraph import opengraph
 
 
 class NXCModule:
@@ -51,6 +52,7 @@ class NXCModule:
                 context.log.info("Unexpected Exception while authentication")
         else:
             context.log.highlight("Potentially vulnerable to CVE-2019-1040, next step: https://dirkjanm.io/exploiting-CVE-2019-1040-relay-vulnerabilities-for-rce-and-domain-admin/")
+            opengraph.add_tag(connection.hostname, ["Computer"], "cve_2019_1040", True)
 
 
 class Modify_Func:
