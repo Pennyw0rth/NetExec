@@ -1225,22 +1225,21 @@ class ldap(connection):
         self.logger.debug(f"Querying LDAP server with filter: {search_filter} and attributes: {attributes}")
         try:
             resp = self.search(search_filter, attributes, 0)
-            resp_parsed = parse_result_attributes(resp)
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
-        for idx, entry in enumerate(resp_parsed):
-            if not isinstance(resp[idx], ldapasn1_impacket.SearchResultEntry):
-                idx += 1  # Skip non-entry responses
-            self.logger.success(f"Response for object: {resp[idx]['objectName']}")
-            for attribute in entry:
-                if isinstance(entry[attribute], list) and entry[attribute]:
+        # A search response also holds SearchResultReference objects, which carry no attributes and must not be indexed like an entry.
+        entries = [item for item in resp if isinstance(item, ldapasn1_impacket.SearchResultEntry)]
+        for entry, attribute_map in zip(entries, parse_result_attributes(entries), strict=True):
+            self.logger.success(f"Response for object: {entry['objectName']}")
+            for attribute, value in attribute_map.items():
+                if isinstance(value, list) and value:
                     # Display first item in the same line as attribute
-                    self.logger.highlight(f"{attribute:<20} {entry[attribute].pop(0)}")
-                    for item in entry[attribute]:
+                    self.logger.highlight(f"{attribute:<20} {value.pop(0)}")
+                    for item in value:
                         self.logger.highlight(f"{'':<20} {item}")
                 else:
-                    self.logger.highlight(f"{attribute:<20} {entry[attribute]}")
+                    self.logger.highlight(f"{attribute:<20} {value}")
 
     def find_delegation(self):
         def printTable(items, header):
