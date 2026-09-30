@@ -14,6 +14,7 @@ from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
+from nxc.helpers.path import sanitize_path_component
 from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
@@ -251,7 +252,7 @@ class connection:
 
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
-            filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            filename_pattern = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=220)
             self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
             # Default output filename for logs
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
