@@ -1,5 +1,4 @@
 import os
-import re
 import struct
 import binascii
 from Cryptodome.Hash import MD4
@@ -398,7 +397,6 @@ class wmi(connection):
             iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
             obj = iWbemClassObject.getProperties()
 
-            
             file_data = None
             for prop_name, prop_value in obj.items():
                 if prop_name == "FileData":
@@ -412,12 +410,12 @@ class wmi(connection):
             file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
             return bytes(file_data[4:4 + file_length])
         except DCERPCSessionError as e:
-            if e.error_code == 0x80041006: # WBEM_E_OUT_OF_MEMORY
-                # With the PS_ModuelFile technique, the file will be loaded into 
+            if e.error_code == 0x80041006:  # WBEM_E_OUT_OF_MEMORY
+                # With the PS_ModuelFile technique, the file will be loaded into
                 # WMI process memory. By default, a specific memory space is allocated
-                # to each WMI provider host process (WMIPrvse.exe). This value can be 
+                # to each WMI provider host process (WMIPrvse.exe). This value can be
                 # found by querying MemoryPerHost in __ProviderHostQuotaConfiguration class
-                # in root namespace. Default is 512MB, but tests showed that starting from 70MB, the download can fail  
+                # in root namespace. Default is 512MB, but tests showed that starting from 70MB, the download can fail
                 # File is too big, let's try to copy it the dirty way
 
                 # Check file size
@@ -445,13 +443,13 @@ class wmi(connection):
                         data += base64.b64decode(output)
                     return data
                 except Exception as e2:
-                    self.logger.debug(f"Error while downloading {remote_path}: {e}")
+                    self.logger.debug(f"Error while downloading {remote_path}: {e2}")
                     self.logger.fail(f"Could not download {remote_path}")
 
-            elif e.error_code == 0x80041002: # WBEM_E_NOT_FOUND
+            elif e.error_code == 0x80041002:  # WBEM_E_NOT_FOUND
                 self.logger.fail(f"Cannot find file '{remote_path}'")
             else:
-                self.logger.debug(f"Error while downloading {remote_path}: {e}")        
+                self.logger.debug(f"Error while downloading {remote_path}: {e}")
         return None
 
     def get_file_single(self, remote_path, download_path):
