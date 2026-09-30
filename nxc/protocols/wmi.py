@@ -1,4 +1,5 @@
 import os
+import re
 import struct
 import binascii
 from Cryptodome.Hash import MD4
@@ -391,29 +392,13 @@ class wmi(connection):
         if powershellv3_namespace is None:
             return None
 
-        # Check file size
-        def callback_func(iEnumWbemClassObject, records):
-            wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
-            record = dict(wmi_results.getProperties())
-            callback_func.size = record["FileSize"]["value"]
-
-        callback_func.size = 0
-
-        wql = f"SELECT FileSize FROM CIM_DataFile WHERE Name = '{escaped_path}'"
-        self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
-        # If file is bigger than 70MB, print a warning
-        if callback_func.size < 73400320:  # 70MB
-            # Read the file
-            try:
-                object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
-                iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
-            except DCERPCSessionError as e:
-                if e.error_code == 0x80041002:
-                    self.logger.fail(f"Cannot find file '{remote_path}'")
-                return None
-
+        # Read the file
+        try:
+            object_path = f'PS_ModuleFile.InstanceID="{escaped_path}"'
+            iWbemClassObject, _ = powershellv3_namespace.GetObject(object_path)
             obj = iWbemClassObject.getProperties()
 
+            
             file_data = None
             for prop_name, prop_value in obj.items():
                 if prop_name == "FileData":
@@ -426,23 +411,47 @@ class wmi(connection):
             # Unpack it
             file_length = struct.unpack(">I", bytes(file_data[:4]))[0]
             return bytes(file_data[4:4 + file_length])
-        else:
-            self.logger.fail(f"{remote_path} filesize is {callback_func.size / 1024**2:.2f} Mo. The download will take some time and use wmi command execution.")
-            # Read file dirty
-            data = b""
-            chunk_size = 1 * 1024 * 1024  # 5MB - Could not do bigger or it crash
-            chunk_count = (callback_func.size + chunk_size - 1) // chunk_size
-            try:
-                for i in range(chunk_count):
-                    offset = i * chunk_size
-                    self.logger.debug(f"Reading bytes from {offset} to {offset + chunk_size if offset + chunk_size < callback_func.size else callback_func.size}")
-                    powershell_command = f"$fs=[IO.File]::OpenRead('{remote_path}');try {{ $fs.Seek({offset},[IO.SeekOrigin]::Begin)|Out-Null;$b=[byte[]]::new({chunk_size});$n=$fs.Read($b,0,$b.Length);Write-Output ([Convert]::ToBase64String($b,0,$n)) }} finally {{ $fs.Dispose() }}"
-                    output = self.execute_psh(powershell_command, get_output=True)
-                    data += base64.b64decode(output)
-                return data
-            except Exception as e:
-                self.logger.debug(f"Error while downloading {remote_path}: {e}")
-                self.logger.fail(f"Could not download {remote_path}")
+        except DCERPCSessionError as e:
+            if e.error_code == 0x80041006: # WBEM_E_OUT_OF_MEMORY
+                # With the PS_ModuelFile technique, the file will be loaded into 
+                # WMI process memory. By default, a specific memory space is allocated
+                # to each WMI provider host process (WMIPrvse.exe). This value can be 
+                # found by querying MemoryPerHost in __ProviderHostQuotaConfiguration class
+                # in root namespace. Default is 512MB, but tests showed that starting from 70MB, the download can fail  
+                # File is too big, let's try to copy it the dirty way
+
+                # Check file size
+                def callback_func(iEnumWbemClassObject, records):
+                    wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
+                    record = dict(wmi_results.getProperties())
+                    callback_func.size = record["FileSize"]["value"]
+
+                callback_func.size = 0
+
+                wql = f"SELECT FileSize FROM CIM_DataFile WHERE Name = '{escaped_path}'"
+                self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
+
+                # Get the file chunk by chunk with command exec
+                self.logger.fail(f"{remote_path} filesize is {callback_func.size / 1024**2:.0f}MB. The download will take some time and use wmi command execution.")
+                data = b""
+                chunk_size = 1 * 1024 * 1024  # 1MB - Could not do bigger or it can crash
+                chunk_count = (callback_func.size + chunk_size - 1) // chunk_size
+                try:
+                    for i in range(chunk_count):
+                        offset = i * chunk_size
+                        self.logger.debug(f"Reading bytes from {offset} to {offset + chunk_size if offset + chunk_size < callback_func.size else callback_func.size}")
+                        powershell_command = f"$fs=[IO.File]::OpenRead('{remote_path}');try {{ $fs.Seek({offset},[IO.SeekOrigin]::Begin)|Out-Null;$b=[byte[]]::new({chunk_size});$n=$fs.Read($b,0,$b.Length);Write-Output ([Convert]::ToBase64String($b,0,$n)) }} finally {{ $fs.Dispose() }}"
+                        output = self.execute_psh(powershell_command, get_output=True)
+                        data += base64.b64decode(output)
+                    return data
+                except Exception as e2:
+                    self.logger.debug(f"Error while downloading {remote_path}: {e}")
+                    self.logger.fail(f"Could not download {remote_path}")
+
+            elif e.error_code == 0x80041002: # WBEM_E_NOT_FOUND
+                self.logger.fail(f"Cannot find file '{remote_path}'")
+            else:
+                self.logger.debug(f"Error while downloading {remote_path}: {e}")        
         return None
 
     def get_file_single(self, remote_path, download_path):
