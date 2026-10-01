@@ -1,4 +1,5 @@
 import os
+import re
 import struct
 import binascii
 from Cryptodome.Hash import MD4
@@ -418,6 +419,13 @@ class wmi(connection):
                 # in root namespace. Default is 512MB, but tests showed that starting from 70MB, the download can fail
                 # File is too big, let's try to copy it the dirty way
 
+                live_path = re.sub(
+                    r"^\\\\\\\\\?\\\\GLOBALROOT\\\\Device\\\\HarddiskVolumeShadowCopy\d+",
+                    "C:",
+                    escaped_path,
+                    flags=re.IGNORECASE,
+                )
+
                 # Check file size
                 def callback_func(iEnumWbemClassObject, records):
                     wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
@@ -426,7 +434,7 @@ class wmi(connection):
 
                 callback_func.size = 0
 
-                wql = f"SELECT FileSize FROM CIM_DataFile WHERE Name = '{escaped_path}'"
+                wql = f"SELECT FileSize FROM CIM_DataFile WHERE Name = '{live_path}'"
                 self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
 
                 # Get the file chunk by chunk with command exec
