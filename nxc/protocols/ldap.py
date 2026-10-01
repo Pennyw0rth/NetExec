@@ -41,7 +41,7 @@ from impacket.ntlm import getNTLMSSPType1
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument, sanitize_dns
 from nxc.logger import NXCAdapter
 from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
@@ -226,13 +226,13 @@ class ldap(connection):
         except Exception as e:
             self.logger.fail(f"Failed to enumerate host info for {self.host}, error: {e!s}")
 
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        self.target = target
-        self.targetDomain = target_domain
+        self.target = sanitize_dns(target or self.host, self.logger)
+        self.targetDomain = sanitize_dns(target_domain or (target.split(".", 1)[1] if "." in target else target), self.logger)
         self.baseDN = base_dn
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
 
         # Parse hostname and remoteName
-        self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
+        self.hostname = sanitize_dns(self.target.split(".", 1)[0].upper() or self.host, self.logger)
         self.remoteName = self.target
 
         # Parse NTLM challenge
@@ -940,8 +940,7 @@ class ldap(connection):
         resp_parse = parse_result_attributes(resp)
         for item in resp_parse:
             if "dNSHostName" in item:  # Get dNSHostName attribute
-                name = item["dNSHostName"]
-                resolve_and_display_hostname(name)
+                resolve_and_display_hostname(item["dNSHostName"])
 
         # Find all trusted domains
         self.logger.info("Enumerating Trusted Domains...")

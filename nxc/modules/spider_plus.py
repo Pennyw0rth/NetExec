@@ -2,9 +2,10 @@ import json
 import errno
 from os.path import abspath, join, exists, splitext, getsize
 from os import makedirs, remove, stat
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import time
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
@@ -172,13 +173,13 @@ class SMBSpiderPlus:
     def get_file_save_path(self, remote_file):
         r"""Processes the remote file path to extract the filename and the folder path where the file should be saved locally.
 
-        Creates a PurePosixPath and replaces UNC parts, then cleans it of any path traversal (see issue #1120)
+        Sanitizes each local path component and verifies containment in the output folder.
         """
         self.logger.debug(f"Remote file: {remote_file}")
-        raw_path = PurePosixPath(remote_file._RemoteFile__share, remote_file._RemoteFile__fileName.replace("\\", "/"))
-        self.logger.debug(f"Raw path: {remote_file}")
-        clean_parts = [p for p in raw_path.parts if p not in ("..", ".")]
-        resolved = Path(self.output_folder).joinpath(self.host, *clean_parts)
+        clean_parts = [sanitize_path_component(part) for part in remote_file._RemoteFile__fileName.replace("\\", "/").split("/") if part]
+        resolved = Path(self.output_folder).joinpath(sanitize_path_component(self.host), sanitize_path_component(remote_file._RemoteFile__share), *clean_parts).resolve()
+        if Path(self.output_folder).resolve() not in resolved.parents:
+            raise ValueError(f"Path traversal detected in {remote_file!s}")
         self.logger.debug(f"Resolved path: {resolved}")
         return str(resolved.parent), resolved.name
 
@@ -308,7 +309,12 @@ class SMBSpiderPlus:
             return
 
         # Check if the file is already downloaded and up-to-date.
-        file_dir, file_name = self.get_file_save_path(remote_file)
+        try:
+            file_dir, file_name = self.get_file_save_path(remote_file)
+        except ValueError as e:
+            self.logger.fail(str(e))
+            self.stats["num_get_fail"] += 1
+            return
         download_path = join(file_dir, file_name)
         needs_update_flag = False
         if exists(download_path):
@@ -324,7 +330,7 @@ class SMBSpiderPlus:
         try:
             self.logger.info(f'Downloading file "{file_path}" => "{download_path}".')
             remote_file.open_file()
-            self.save_file(remote_file, share_name)
+            self.save_file(remote_file, share_name, download_path)
             remote_file.close()
             download_success = True
         except SessionError as e:
@@ -341,7 +347,7 @@ class SMBSpiderPlus:
         else:
             self.stats["num_get_fail"] += 1
 
-    def save_file(self, remote_file, share_name):
+    def save_file(self, remote_file, share_name, download_path):
         """Reads the `remote_file` in chunks using the `read_chunk` method.
 
         Each chunk is then written to the local file until the entire file is saved.
@@ -350,12 +356,9 @@ class SMBSpiderPlus:
         # Reset the remote_file to point to the beginning of the file.
         remote_file.seek(0, 0)
 
-        folder, filename = self.get_file_save_path(remote_file)
-        download_path = join(folder, filename)
-
         # Create the subdirectories based on the share name and file path.
-        self.logger.debug(f"Creating folder '{folder}'")
-        make_dirs(folder)
+        self.logger.debug(f"Creating folder '{Path(download_path).parent}'")
+        make_dirs(Path(download_path).parent)
 
         try:
             with open(download_path, "wb") as fd:

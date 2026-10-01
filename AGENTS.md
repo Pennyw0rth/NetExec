@@ -36,6 +36,7 @@
 # Filesystem and source conventions
 
 - Assume that the underlying operating system and its storage are fully secure. Files and other data produced by NetExec may intentionally contain readable plaintext credentials; do not add encryption, redaction, restrictive permission handling, or permission warnings unless explicitly requested.
+- Before opening, creating, writing, renaming, moving, or deleting a file or directory, sanitize every path component derived from untrusted data and verify that the resulting path cannot traverse outside its intended base directory.
 - Place every file and directory produced by NetExec under `NXC_PATH` by default, using `TMP_PATH` for temporary artifacts. An explicit user-provided output path or task requirement may override this default.
 - `NXC_PATH` defaults to `~/.nxc` but may be overridden by the environment. Import and use `NXC_PATH` or its derived path constants instead of hardcoding `~/.nxc`.
 - Place imports at the top of files unless explicitly instructed otherwise.
