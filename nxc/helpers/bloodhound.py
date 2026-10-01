@@ -43,7 +43,7 @@ def add_user_bh(user, domain, logger, config):
             with driver.session().begin_transaction() as tx:
                 for user_info in users_owned:
                     distinguished_name = "".join([f"DC={dc}," for dc in user_info["domain"].split(".")]).rstrip(",")
-                    domain_query = tx.run(f"MATCH (d:Domain) WHERE d.distinguishedname STARTS WITH '{distinguished_name}' RETURN d").data()
+                    domain_query = tx.run("MATCH (d:Domain) WHERE d.distinguishedname STARTS WITH $distinguished_name RETURN d", distinguished_name=distinguished_name).data()
                     if not domain_query:
                         logger.debug(f"Domain {user_info['domain']} not found in BloodHound. Falling back to domainless query.")
                         _add_without_domain(user_info, tx, logger)
@@ -68,14 +68,14 @@ def _add_with_domain(user_info, domain, tx, logger):
         user_owned = f"{user_info['username']}@{domain}"
         account_type = "User"
 
-    result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) RETURN c").data()
+    result = tx.run(f"MATCH (c:{account_type} {{name: $user_owned}}) RETURN c", user_owned=user_owned).data()
 
     if len(result) == 0:
         logger.fail("Account not found in the BloodHound database.")
         return
     if result[0]["c"].get("owned") in (False, None):
         logger.debug(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{user_owned}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
+        result = tx.run(f"MATCH (c:{account_type} {{name: $user_owned}}) SET c.owned=True RETURN c.name AS name", user_owned=user_owned).data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")
 
 
@@ -87,7 +87,7 @@ def _add_without_domain(user_info, tx, logger):
         user_owned = user_info["username"]
         account_type = "User"
 
-    result = tx.run(f"MATCH (c:{account_type}) WHERE c.name STARTS WITH '{user_owned}' RETURN c").data()
+    result = tx.run(f"MATCH (c:{account_type}) WHERE c.name STARTS WITH $user_owned RETURN c", user_owned=user_owned).data()
 
     if len(result) == 0:
         logger.fail("Account not found in the BloodHound database.")
@@ -97,5 +97,5 @@ def _add_without_domain(user_info, tx, logger):
         return
     elif result[0]["c"].get("owned") in (False, None):
         logger.debug(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name")
-        result = tx.run(f"MATCH (c:{account_type} {{name:'{result[0]['c']['name']}'}}) SET c.owned=True RETURN c.name AS name").data()[0]
+        result = tx.run(f"MATCH (c:{account_type} {{name: $user_owned}}) SET c.owned=True RETURN c.name AS name", user_owned=result[0]["c"]["name"]).data()[0]
         logger.highlight(f"Node {result['name']} successfully set as owned in BloodHound")

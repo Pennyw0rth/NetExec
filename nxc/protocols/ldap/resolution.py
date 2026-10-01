@@ -5,6 +5,7 @@ from OpenSSL.SSL import SysCallError
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 
+from nxc.helpers.misc import sanitize_dns
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.logger import nxc_logger
 
@@ -18,6 +19,7 @@ class LDAPResolution:
         target = ""
         target_domain = ""
         base_dn = ""
+        machine_name = ""
         try:
             ldap_url = f"ldap://{self.host}"
             nxc_logger.info(f"Connecting to {ldap_url} with no baseDN")
@@ -60,5 +62,7 @@ class LDAPResolution:
             else:
                 nxc_logger.error(f"Error getting ldap info {e}")
 
+        machine_name = sanitize_dns(machine_name, nxc_logger)
+        target_domain = sanitize_dns(target_domain, nxc_logger)
         nxc_logger.debug(f"Target: {machine_name}.{target_domain}; target_domain: {target_domain}; base_dn: {base_dn}")
         return machine_name, target_domain

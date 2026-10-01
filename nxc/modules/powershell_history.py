@@ -1,6 +1,8 @@
 from os import makedirs
-from os.path import join, abspath
+from os.path import join
+from pathlib import Path
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 from io import BytesIO
 
@@ -46,9 +48,12 @@ class NXCModule:
                             for line in file_content.splitlines():
                                 context.log.highlight(f"\t{line}")
                             if self.export:
-                                filename = f"{connection.host}_{directory.get_longname()}_powershell_history.txt"
+                                filename = sanitize_path_component(f"{connection.host}_{directory.get_longname()}_powershell_history.txt")
                                 export_path = join(NXC_PATH, "modules", "powershell_history")
-                                path = abspath(join(export_path, filename))
+                                path = Path(export_path, filename).resolve()
+                                if Path(export_path).resolve() not in path.parents:
+                                    context.log.fail(f"Path traversal detected in {filename!r}, skipping")
+                                    continue
                                 makedirs(export_path, exist_ok=True)
                                 try:
                                     with open(path, "w+") as file:

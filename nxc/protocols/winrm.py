@@ -19,7 +19,7 @@ from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.dpapi import DPAPITriage
-from nxc.helpers.misc import gen_random_string
+from nxc.helpers.misc import gen_random_string, sanitize_dns
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
@@ -68,8 +68,11 @@ class winrm(connection):
             self.no_ntlm = True
             return False
 
-        self.targetDomain = self.domain = ntlm_info["domain"]
-        self.hostname = ntlm_info["hostname"]
+        dns_hostname = ntlm_info["dns_hostname"] or ""
+        hostname = ntlm_info["hostname"] or dns_hostname.split(".", 1)[0] or self.host
+        domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
+        self.hostname = sanitize_dns(hostname, self.logger)
+        self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
         self.server_os = ntlm_info["os_version"]
         self.logger.extra["hostname"] = self.hostname
 
