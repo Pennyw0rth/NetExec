@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: Security"
 ]
 dependencies = [
-    "aardwolf>=0.2.8",
+    "aardwolf>=0.2.14",
     "argcomplete>=3.1.4",
     "asyauth>=0.0.20",
     "beautifulsoup4>=4.11,<5",
