@@ -438,7 +438,7 @@ class wmi(connection):
                 self.wmi_query(wql=wql, namespace="//./root/cimv2", callback_func=callback_func)
 
                 # Get the file chunk by chunk with command exec
-                self.logger.fail(f"{remote_path} filesize is {callback_func.size / 1024**2:.0f}MB. The download will take some time and use wmi command execution.")
+                self.logger.fail(f"{remote_path} filesize is {callback_func.size / 1024**2:.0f}MB. The download might take a LOT of time and use wmi command execution.")
                 data = b""
                 chunk_size = 1 * 1024 * 1024  # 1MB - Could not do bigger or it can crash
                 chunk_count = (callback_func.size + chunk_size - 1) // chunk_size
