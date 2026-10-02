@@ -2502,9 +2502,7 @@ class smb(connection):
             is_remote = False
             output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", sanitize_path_component(self.hostname)))
             os.makedirs(output_folder, exist_ok=True)
-            sam_path, system_path, security_path, NTDSFileName = (
-                self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
-            )
+            sam_path, system_path, security_path, NTDSFileName = self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
             localOps = LocalOperations(system_path)
             self.bootkey = localOps.getBootKey()
 
