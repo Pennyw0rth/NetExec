@@ -15,6 +15,7 @@ from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
 from impacket.smb3structs import SMB2_DIALECT_30, SMB2_NEGOTIATE_SIGNING_REQUIRED
 from impacket.examples.secretsdump import (
+    LocalOperations,
     RemoteOperations,
     SAMHashes,
     LSASecrets,
@@ -63,6 +64,7 @@ from nxc.config import process_secret, host_info_colors, check_guest_account, di
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
+from nxc.paths import NXC_PATH
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -2440,6 +2442,7 @@ class smb(connection):
 
     def ntds(self):
         self.enable_remoteops()
+        is_remote = True
         use_vss_method = False
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
@@ -2494,20 +2497,21 @@ class smb(connection):
         add_hash.kerb_secrets = 0
         add_hash.added_to_db = 0
 
-        if self.remote_ops:
-            try:
-                if self.args.ntds == "vss":
-                    NTDSFileName = self.remote_ops.saveNTDS()
-                    use_vss_method = True
-            except Exception as e:
-                self.logger.fail(e)
+        if self.args.ntds == "vss":
+            use_vss_method = True
+            is_remote = False
+            output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", sanitize_path_component(self.hostname)))
+            os.makedirs(output_folder, exist_ok=True)
+            sam_path, system_path, security_path, NTDSFileName = self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
+            localOps = LocalOperations(system_path)
+            self.bootkey = localOps.getBootKey()
 
         self.output_filename = self.output_file_template.format(output_folder="ntds")
 
         NTDS = NTDSHashes(
             NTDSFileName,
             self.bootkey,
-            isRemote=True,
+            isRemote=is_remote,
             history=self.args.history,
             noLMHash=True,
             remoteOps=self.remote_ops,
