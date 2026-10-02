@@ -468,7 +468,7 @@ class rdp(connection):
                             clipboard_ready = True
                             self.logger.debug("Clipboard is ready!")
                             break
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         timeout_counter += 1
                         continue
                     except (ConnectionResetError, ConnectionError, OSError) as e:

@@ -3,7 +3,7 @@ name = "netexec"
 dynamic = ["version"]
 description = "The Network Execution tool"
 readme = "README.md"
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.11,<4.0"
 license = { text = "BSD-2-Clause" }
 authors = [
     { name = "Marshall Hallenbeck", email = "marshall.hallenbeck@gmail.com" },
@@ -100,12 +100,6 @@ dev = [
 exclude-newer = "1 day"
 
 [tool.ruff]
-target-version = "py310"
-exclude = [
-    ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg", ".mypy_cache",
-    ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
-    "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
-]
 preview = true
 
 [tool.ruff.lint]
