@@ -1,7 +1,11 @@
 import re
 import os
+from os.path import join
 from io import BytesIO
+import zipfile
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
+from nxc.paths import NXC_PATH
 
 
 CRED_KEYWORDS = [
@@ -23,13 +27,6 @@ WIM_REGEX = re.compile(r"\.wim$", re.I)
 # WinPE boot images are typically 300-600 MB; install.wim easily exceeds 5 GB.
 # Anything under 1 GB is almost certainly a PE, not an OS image.
 WIM_MAX_SIZE = 1 * 1024 * 1024 * 1024
-
-# REMINST/REMOTEINSTALL: readable by any authenticated domain user by default.
-WDS_SHARES_PUBLIC = {"reminst", "remoteinstall"}
-
-# DeploymentShare$: MDT share (hidden by default, requires admin rights or misconfigured ACLs).
-# If we can list it, it's either intentional access or a misconfiguration worth noting.
-WDS_SHARES_AUTH = {"deploymentshare$"}
 
 
 def _extract_key_values(content, keys):
@@ -154,41 +151,25 @@ class NXCModule:
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """
-        DOWNLOAD  Download all found files (INI/XML + WinPE .wim < 1 GB)  (default: false)
-        OUTDIR    Local folder for downloaded files                       (default: wds_mdt_loot)
-        """
+        """DOWNLOAD  Download all found files (INI/XML + WinPE .wim < 1 GB)  (default: false)"""
         self.download = module_options.get("DOWNLOAD", "false").lower() == "true"
-        self.outdir = module_options.get("OUTDIR", "wds_mdt_loot")
+        self.output_path = join(NXC_PATH, "modules", "wds_mdt")
 
     def on_login(self, context, connection):
-        # Use impacket directly - connection.shares() triggers NXC's native
-        # share enumeration output, which we want to suppress here.
-        try:
-            raw_shares = connection.conn.listShares()
-        except Exception as e:
-            context.log.debug(f"listShares() failed: {e}")
-            return
+        self.context = context
+        self.connection = connection
+        os.makedirs(self.output_path, exist_ok=True)
 
-        targets = []
-        for share in raw_shares:
-            name = share["shi1_netname"][:-1]  # strip SMB null terminator
+        for share in connection.conn.listShares():
+            name = share["shi1_netname"].rstrip("\x00")
             name_lower = name.lower()
-            if name_lower in WDS_SHARES_PUBLIC:
-                targets.append(name)
-            elif name_lower in WDS_SHARES_AUTH:
-                # Probe access silently - failure is expected on hardened configs
-                try:
-                    connection.conn.listPath(name, "\\*")
-                    targets.append(name)
-                except Exception:
-                    context.log.debug(f"{name} found but not readable (expected for protected MDT share)")
+            if name_lower in {"reminst", "remoteinstall"}:
+                self.explore_wds(name)
+            elif name_lower in {"deploymentshare$"}:
+                self.explore_mdt(name)
 
-        if not targets:
-            context.log.debug("No WDS/REMINST share found")
-            return
 
-        for wds_share in targets:
+        for wds_share in ["REMINST", "REMOTEINSTALL", "DeploymentShare$"]:
             is_privileged = wds_share.lower() in WDS_SHARES_AUTH
             access_note = "admin access or misconfigured ACLs" if is_privileged else "standard user access"
             context.log.success(f"Found share: {wds_share} ({access_note})")
@@ -258,6 +239,51 @@ class NXCModule:
                     local = _download(context, connection, wds_share, "\\" + path, self.outdir)
                     if local:
                         context.log.success(f"Saved: {local}")
+
+    def explore_wds(self, share):
+        """
+        Shares to explore: REMINST/REMOTEINSTALL
+        Note: Readable by any authenticated domain user by default.
+        """
+        self.context.log.success(f"Found share: {share} (admin access or misconfigured ACLs)")
+        extract_files = []
+        for path in ("\\Boot\\x64\\Images\\*", "\\Boot\\x86\\Images\\*"):
+            content = self.connection.conn.listPath(share, path)
+            wmi_files = [entry for entry in content if re.compile(r"\.wim$", re.I).search(entry.get_longname())]
+            for entry in wmi_files:
+                self.context.log.success(f"Found WinPE image: {path}\\{entry.get_longname()} ({entry.get_filesize() / (1024 * 1024):.0f} MB)")
+                if entry.get_filesize() < WIM_MAX_SIZE:
+                    try:
+                        os.makedirs(join(self.output_path, "wmi_files"), exist_ok=True)
+                        with open(join(self.output_path, "wmi_files", sanitize_path_component(f"{self.connection.host}_{entry.get_longname()}")), "wb") as fh:
+                            self.connection.conn.getFile(share, path.rstrip("\\*") + "\\" + entry.get_longname(), fh.write)
+                        extract_files.append(join(self.output_path, "wmi_files", sanitize_path_component(f"{self.connection.host}_{entry.get_longname()}")))
+                        self.context.log.success(f"Saved WinPE: {path}\\{entry.get_longname()}")
+                    except Exception as e:
+                        self.context.log.fail(f"Failed to download {path}\\{entry.get_longname()}: {e}")
+        for file in extract_files:
+            try:
+                with zipfile.ZipFile(file) as zip_ref:
+                    filename = os.path.basename(file)
+                    os.makedirs(join(self.output_path, "wmi_files", "extracted"), exist_ok=True)
+                    zip_ref.extractall(join(self.output_path, "wmi_files", "extracted", filename))
+            except Exception as e:
+                self.context.log.fail(f"Failed to extract {file}: {e}")
+
+    def explore_mdt(self, share):
+        """
+        Shares to explore: DeploymentShare$
+        Note: Hidden by default, requires admin rights or misconfigured ACLs.
+        If we can list it, it's either intentional access or a misconfiguration worth noting.
+        """
+        self.context.log.success(f"Found share: {share} (standard user access)")
+        # Probe access silently - failure is expected on hardened configs
+        try:
+            # print(self.connection.conn.listPath(share, "\\*"))
+            pass
+        except Exception:
+            self.context.log.debug(f"{share} found but not readable (expected for protected MDT share)")
+            return
 
 
 def _parse_creds(hits):
