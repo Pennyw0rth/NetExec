@@ -4,13 +4,14 @@ import random
 from six import b
 
 from pyasn1.codec.der import decoder, encoder
+from pyasn1.error import PyAsn1Error
 from pyasn1.type.univ import noValue
 
-from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, \
+from impacket.krb5.asn1 import AP_REQ, AS_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, \
     seq_set, seq_set_iter, PA_FOR_USER_ENC, Ticket as TicketAsn1, EncTGSRepPart, \
-    PA_PAC_OPTIONS
+    PA_PAC_OPTIONS, KERB_PA_PAC_REQUEST, KRB_ERROR
 from impacket.krb5.types import Principal, KerberosTime, Ticket
-from impacket.krb5.kerberosv5 import sendReceive, getKerberosTGT
+from impacket.krb5.kerberosv5 import sendReceive, getKerberosTGT, KerberosError
 from impacket.krb5.ccache import CCache
 from impacket.krb5.crypto import Key, _enctype_table, _HMACMD5
 from impacket.krb5 import constants
@@ -312,3 +313,46 @@ def kerberos_altservice(tgs, new_spn):
     new_tgs["cipher"] = tgs["cipher"]
     new_tgs["sessionKey"] = tgs["sessionKey"]
     return new_tgs
+
+
+def asreq_user_status(username, domain, kdc_host, timeout=None):
+    """Probe a principal with an AS-REQ carrying no PA-ENC-TIMESTAMP, so badPwdCount stays untouched."""
+    realm = domain.upper()
+
+    as_req = AS_REQ()
+    as_req["pvno"] = 5
+    as_req["msg-type"] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+
+    pac_request = KERB_PA_PAC_REQUEST()
+    pac_request["include-pac"] = False
+    as_req["padata"] = noValue
+    as_req["padata"][0] = noValue
+    as_req["padata"][0]["padata-type"] = int(constants.PreAuthenticationDataTypes.PA_PAC_REQUEST.value)
+    as_req["padata"][0]["padata-value"] = encoder.encode(pac_request)
+
+    req_body = seq_set(as_req, "req-body")
+    req_body["kdc-options"] = constants.encodeFlags([constants.KDCOptions.forwardable.value, constants.KDCOptions.renewable.value, constants.KDCOptions.renewable_ok.value])
+    seq_set(req_body, "cname", Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value).components_to_asn1)
+    seq_set(req_body, "sname", Principal(f"krbtgt/{realm}", type=constants.PrincipalNameType.NT_PRINCIPAL.value).components_to_asn1)
+    req_body["realm"] = realm
+
+    now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1)
+    req_body["till"] = KerberosTime.to_asn1(now)
+    req_body["rtime"] = KerberosTime.to_asn1(now)
+    req_body["nonce"] = random.getrandbits(31)
+
+    # Offer every etype: an RC4-only request answers ETYPE_NOSUPP on a hardened DC, which says nothing about the account.
+    seq_set_iter(req_body, "etype", (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.rc4_hmac.value)))
+
+    try:
+        response = sendReceive(encoder.encode(as_req), realm, kdc_host, timeout=timeout)
+    except KerberosError as e:
+        return e.getErrorCode()
+
+    # sendReceive returns bytes for two cases only: a KDC_ERR_PREAUTH_REQUIRED error, or a real AS-REP.
+    # So bytes that still decode as a KRB-ERROR mean the account exists, and anything else is an AS-REP.
+    try:
+        decoder.decode(response, asn1Spec=KRB_ERROR())[0]
+    except PyAsn1Error:
+        return None
+    return constants.ErrorCodes.KDC_ERR_PREAUTH_REQUIRED.value

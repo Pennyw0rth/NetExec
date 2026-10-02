@@ -32,6 +32,7 @@ def first_run_setup(logger=nxc_logger):
         "lsa",
         "ntds",
         "dpapi",
+        "user_enum",
     )
     for subfolder in log_subfolders:
         if not exists(path_join(NXC_PATH, f"logs/{subfolder}")):
