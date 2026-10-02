@@ -188,7 +188,7 @@ class myPKINIT:
         else:
             cname = [self.cname]
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
 
         kdc_req_body_data = {}
         kdc_req_body_data["kdc-options"] = KDCOptions(kdcopts)

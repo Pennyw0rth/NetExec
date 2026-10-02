@@ -300,7 +300,7 @@ class NXCModule:
     def _createBasicValidationInfo(self, username: str, domain: str, domain_sid: str, groups: list[int], user_rid: int) -> VALIDATION_INFO:
         kerbdata = KERB_VALIDATION_INFO()
 
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_utc = datetime.datetime.now(datetime.UTC)
         now_unix = timegm(now_utc.timetuple())
         now_filetime = self._getFileTime(now_unix)
 
@@ -451,7 +451,7 @@ class NXCModule:
         pac_infos[PAC_LOGON_INFO] = validation_info.getData() + validation_info.getDataReferents()
 
     def _buildEncParts(self, as_rep: AS_REP, domain: str, username: str, duration_hours: int, enctype_value: int, pac_infos: dict, key_size: int) -> tuple[EncASRepPart, EncTicketPart, dict]:
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_utc = datetime.datetime.now(datetime.UTC)
         end_utc = now_utc + datetime.timedelta(hours=duration_hours)
 
         enc_ticket_part = EncTicketPart()
