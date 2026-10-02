@@ -2500,7 +2500,7 @@ class smb(connection):
         if self.args.ntds == "vss":
             use_vss_method = True
             is_remote = False
-            output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", self.hostname))
+            output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", sanitize_path_component(self.hostname)))
             os.makedirs(output_folder, exist_ok=True)
             sam_path, system_path, security_path, NTDSFileName = (
                 self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
