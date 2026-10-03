@@ -64,3 +64,5 @@ docs/_build/
 
 # PyBuilder
 target/
+nxc/.DS_Store
+.DS_Store
