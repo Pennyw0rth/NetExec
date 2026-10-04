@@ -3,6 +3,7 @@ from Cryptodome.Cipher import AES
 from io import BytesIO
 from nxc.helpers.misc import CATEGORY
 
+CRT_IV_LENGTH = 16 # AES-256-CRT uses 16-byte IV
 
 class NXCModule:
     name = "rclone"
@@ -76,8 +77,8 @@ class NXCModule:
 
     def deobscure(self, obscured):
         encrypted_password = self.base64_urlsafedecode(obscured)
-        iv = encrypted_password[:AES.block_size]
-        buf = encrypted_password[AES.block_size:]
+        iv = encrypted_password[:CRT_IV_LENGTH]
+        buf = encrypted_password[CRT_IV_LENGTH:]
         SECRET_KEY = b"\x9c\x93\x5b\x48\x73\x0a\x55\x4d\x6b\xfd\x7c\x63\xc8\x86\xa9\x2b\xd3\x90\x19\x8e\xb8\x12\x8a\xfb\xf4\xde\x16\x2b\x8b\x95\xf6\x38"
         crypter = AES.new(key=SECRET_KEY, mode=AES.MODE_CTR, initial_value=iv, nonce=b"")
         return crypter.decrypt(buf).decode("utf-8")
