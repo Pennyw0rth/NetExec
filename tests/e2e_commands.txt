@@ -381,3 +381,9 @@ netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
 netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
+##### MCP
+netexec mcp TARGET_HOST -u "" -p "" --list
+netexec mcp TARGET_HOST -u "" -p "" --resource "resource://test"
+netexec mcp TARGET_HOST -u "" -p "" --resource "test://test"
+netexec mcp TARGET_HOST -u "" -p "" --tools "test_tool" --tool-args '{"test_key": "test_value"}'
+netexec mcp TARGET_HOST -u "" -p "" --prompt "test_prompt" --prompt-args '{"test_key": "test_value"}'

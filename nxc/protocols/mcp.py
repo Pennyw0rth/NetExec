@@ -11,7 +11,6 @@ from fastmcp.client.transports import StreamableHttpTransport
 
 from nxc.config import process_secret
 from nxc.connection import connection
-from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
 
 
@@ -119,8 +118,11 @@ class mcp(connection):
         self.username = username
         self.password = password
 
-        banner = json.dumps(self.server_info) if self.server_info else ""
-        self.db.add_host(self.host, self.port, banner)
+        if isinstance(self.server_info, dict) and self.server_info:
+            name = self.server_info.get("name", "unknown")
+        else:
+            name = ""
+        self.db.add_host(self.host, self.port, name)
 
         cred_id = self.db.add_credential(username, password)
         host_id = self.db.get_hosts(self.host)[0].id
