@@ -1,5 +1,5 @@
 import base64
-from Crypto.Cipher import AES
+from Cryptodome.Cipher import AES
 from io import BytesIO
 from nxc.helpers.misc import CATEGORY
 
@@ -83,6 +83,6 @@ class NXCModule:
         return crypter.decrypt(buf).decode("utf-8")
 
     def base64_urlsafedecode(self, string):
-        padding = 4 - (len(string) % 4)
+        padding = (4 - len(string) % 4) % 4
         string += "=" * padding
         return base64.urlsafe_b64decode(string)
