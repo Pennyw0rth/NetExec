@@ -1,0 +1,25 @@
+# Sensitive file extensions for NetExec sensitive_files module
+# Add or remove extensions as needed
+.kdbx
+.pfx
+.p12
+.pem
+.key
+.ppk
+.ovpn
+.config
+.conf
+.cfg
+.xml
+.ini
+.env
+.rdp
+.id_rsa
+.vnc
+.p7b
+.crt
+.cer
+.der
+.jks
+.keystore
+.asc
