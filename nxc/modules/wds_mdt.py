@@ -261,14 +261,10 @@ class NXCModule:
                         self.context.log.success(f"Saved WinPE: {path}\\{entry.get_longname()}")
                     except Exception as e:
                         self.context.log.fail(f"Failed to download {path}\\{entry.get_longname()}: {e}")
-        for file in extract_files:
-            try:
-                with zipfile.ZipFile(file) as zip_ref:
-                    filename = os.path.basename(file)
-                    os.makedirs(join(self.output_path, "wmi_files", "extracted"), exist_ok=True)
-                    zip_ref.extractall(join(self.output_path, "wmi_files", "extracted", filename))
-            except Exception as e:
-                self.context.log.fail(f"Failed to extract {file}: {e}")
+        # for file in extract_files:
+        #     pass
+        if extract_files:
+            self.context.log.display("You need to manually extract the image to try gathering credentials (use 7zip or wimlib-imagex).")
 
     def explore_mdt(self, share):
         """
