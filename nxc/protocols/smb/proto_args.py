@@ -54,6 +54,7 @@ def proto_args(parser, parents):
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
     shares_arg = mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
+    mapping_enum_group.add_argument("--show-acls", action="store_true", dest="show_acls", help="With --shares or --dir, also list which principals (groups/users) are granted access")
     mapping_enum_group.add_argument("--exclude-shares", nargs="+", help="List of shares to exclude from enumeration (e.g., C$ Admin$ IPC$)")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
     mapping_enum_group.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
