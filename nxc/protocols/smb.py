@@ -208,13 +208,16 @@ class smb(connection):
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
+        # self.remoteName is the attribute which gets used in the SPN
+
+        self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = self.conn.getServerDNSHostName()
-            if dns_hostname and "." in dns_hostname:
-                hostname = dns_hostname.split(".", 1)[0]
-            elif dns_hostname:
-                hostname = dns_hostname
+            self.remoteName = self.conn.getServerDNSHostName()
+            if self.remoteName and "." in self.remoteName:
+                hostname = self.remoteName.split(".", 1)[0]
+            elif self.remoteName:
+                hostname = self.remoteName
             else:
                 hostname = self.conn.getServerName()
             self.hostname = sanitize_dns(hostname, self.logger)
@@ -223,7 +226,7 @@ class smb(connection):
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
-                    self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
+                    self.hostname, self.domain, self.remoteName = LDAPResolution(self.host).get_resolution()
                     self.targetDomain = self.domain
                 # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
                 else:
@@ -312,9 +315,6 @@ class smb(connection):
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
-
-        # DCOM connection with kerberos needed
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
