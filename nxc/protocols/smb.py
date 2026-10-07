@@ -426,6 +426,8 @@ class smb(connection):
                 if self.args.generate_st:
                     self.save_st(tgs, sk, spn if self.args.spn else None)
 
+            if not tgs and not useCache:
+                self.logger.debug(f"TGS for cifs/{self.remoteName} will be requested")
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
 
             if self.args.generate_st:
