@@ -213,14 +213,13 @@ class smb(connection):
         self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            self.remoteName = self.conn.getServerDNSHostName()
+            self.remoteName = sanitize_dns(self.conn.getServerDNSHostName(), self.logger)
             if self.remoteName and "." in self.remoteName:
-                hostname = self.remoteName.split(".", 1)[0]
+                self.hostname = self.remoteName.split(".", 1)[0]
             elif self.remoteName:
-                hostname = self.remoteName
+                self.hostname = self.remoteName
             else:
-                hostname = self.conn.getServerName()
-            self.hostname = sanitize_dns(hostname, self.logger)
+                self.hostname = sanitize_dns(self.conn.getServerName(), self.logger)
             self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
         else:
             try:
