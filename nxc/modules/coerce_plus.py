@@ -165,7 +165,7 @@ class NXCModule:
                         context.log.debug("Target is vulnerable to PrinterBug")
                         context.log.highlight("VULNERABLE, PrinterBug")
                         if self.listener is not None:  # exploit
-                            exploit_status = printerbugclass.exploit(printerbugconnect, self.listener, target, self.always_continue, pipe)
+                            exploit_status = printerbugclass.exploit(printerbugconnect, self.listener, connection.remoteName, self.always_continue, pipe)
                             if not self.always_continue and exploit_status:
                                 break
                         printerbugconnect.disconnect()
