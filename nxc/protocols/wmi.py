@@ -133,6 +133,7 @@ class wmi(connection):
         except Exception:
             buffer = 0
 
+        self.remoteName = self.host
         if buffer != 0:
             response = MSRPCHeader(buffer)
             bindResp = MSRPCBindAck(response.getData())
@@ -142,6 +143,7 @@ class wmi(connection):
             domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
             self.hostname = sanitize_dns(hostname, self.logger)
             self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
+            self.remoteName = sanitize_dns(dns_hostname, self.logger) if self.kerberos else self.host
             self.server_os = ntlm_info["os_version"]
             self.logger.extra["hostname"] = self.hostname
         else:
@@ -150,9 +152,6 @@ class wmi(connection):
             self.domain = self.hostname
         if self.args.domain:
             self.domain = self.args.domain
-
-        # DCOM connection with kerberos needed
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)

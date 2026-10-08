@@ -143,8 +143,9 @@ class rdp(connection):
                     except Exception:
                         pass
                     else:
-                        self.hostname = sanitize_dns(info_domain.get("computername") or self.host, self.logger)
-                        self.domain = sanitize_dns(info_domain.get("dnsdomainname") or self.host, self.logger)
+                        self.hostname = sanitize_dns(info_domain.get("computername"), self.logger)
+                        self.domain = sanitize_dns(info_domain.get("dnsdomainname"), self.logger)
+                        self.remoteName = sanitize_dns(info_domain.get("dnscomputername"), self.logger) if self.kerberos else self.host
                         self.server_os = f"{info_domain.get('os_guess', 'Unknown')} Build {info_domain.get('os_build', 'Unknown')}"
                         self.logger.extra["hostname"] = self.hostname
                     break
@@ -153,8 +154,6 @@ class rdp(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
-
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
