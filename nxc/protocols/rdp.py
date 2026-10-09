@@ -38,11 +38,12 @@ class rdp(connection):
             SUPP_PROTOCOLS.RDP,
         ]
         self.protoflags = [
-            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
+            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
+        self.selected_proto = None
         self.iosettings = RDPIOSettings()
         self.iosettings.clipboard_use_pyperclip = False
         width, height = args.res.upper().split("X")
@@ -107,8 +108,11 @@ class rdp(connection):
 
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
-        if self.domain is None:
-            self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+        if self.server_os is None:
+            if self.selected_proto == SUPP_PROTOCOLS.RDP:
+                self.logger.display(f"Standard RDP Security only, no server info available ({nla})")
+            else:
+                self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
             try:
@@ -135,9 +139,18 @@ class rdp(connection):
                     if "TCPSocket" in str(e):
                         return False
                     if "Reason:" not in str(e):
+                        self.selected_proto = proto
                         break  # CredSSP ran, enum_host_info() reads the NTLM challenge
+                else:
+                    self.selected_proto = proto  # accepted: without CredSSP the dummy credentials cannot fail here
+                    break
                 finally:
                     self.disconnect()
+
+            if self.selected_proto is None:
+                self.logger.debug("Server rejected every protocol we offered")
+            else:
+                self.iosettings.supported_protocols = self.selected_proto
             return True
 
         iosettings = self.iosettings.clone_for_connection()
@@ -173,6 +186,8 @@ class rdp(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
+        if self.domain is None:
+            self.domain = self.hostname
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
@@ -205,12 +220,31 @@ class rdp(connection):
         """
         self.disconnect()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
         self.create_conn_obj(self.auth)
+        self.runner.run(self.check_logon())
         try:
             self.runner.run(asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout))
             return True
         except TimeoutError:
             self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
             return False
+
+    async def check_logon(self):
+        """Tell whether the credentials were accepted when the handshake itself did not check them.
+
+        Only CredSSP authenticates during the handshake. Elsewhere the server takes the connection
+        whatever we send, then reports a successful logon with a Save Session Info PDU. A refused
+        logon gets no PDU at all on current Windows, hence the wait for --rdp-logon-timeout.
+        """
+        if SUPP_PROTOCOLS.HYBRID in self.conn.x224_protocol or SUPP_PROTOCOLS.HYBRID_EX in self.conn.x224_protocol:
+            return
+        try:
+            await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_logon_timeout)
+        except TimeoutError:
+            if self.conn.logon_error is None:
+                self.logger.debug("Server sent no Save Session Info PDU, the logon never completed")
+                raise Exception("STATUS_LOGON_FAILURE") from None
+        if self.conn.logon_error is not None:
+            raise Exception(f"Logon refused by the server: {self.conn.logon_error.name}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
