@@ -43,11 +43,12 @@ class rdp(connection):
             SUPP_PROTOCOLS.RDP,
         ]
         self.protoflags = [
-            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
+            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
+        self.selected_proto = None
         width, height = args.res.upper().split("X")
         height = int(height)
         width = int(width)
@@ -107,8 +108,11 @@ class rdp(connection):
 
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
-        if self.domain is None:
-            self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+        if self.server_os is None:
+            if self.selected_proto == SUPP_PROTOCOLS.RDP:
+                self.logger.display(f"Standard RDP Security only, no server info available ({nla})")
+            else:
+                self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
             try:
@@ -147,11 +151,22 @@ class rdp(connection):
                         self.domain = sanitize_dns(info_domain.get("dnsdomainname") or self.host, self.logger)
                         self.server_os = f"{info_domain.get('os_guess', 'Unknown')} Build {info_domain.get('os_build', 'Unknown')}"
                         self.logger.extra["hostname"] = self.hostname
+                    self.selected_proto = proto
                     break
+            else:
+                self.selected_proto = proto   # accepted: without CredSSP the dummy credentials cannot fail here
+                break
+
+        if self.selected_proto is None:
+            self.logger.debug("Server rejected every protocol we offered")
+        else:
+            self.iosettings.supported_protocols = self.selected_proto
 
         if self.args.domain:
             self.domain = self.args.domain
         if self.args.local_auth:
+            self.domain = self.hostname
+        if self.domain is None:
             self.domain = self.hostname
 
         self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
@@ -219,6 +234,32 @@ class rdp(connection):
         finally:
             await self.terminate_conn()
 
+    async def check_logon(self):
+        """Tell whether the credentials were accepted when the handshake itself did not check them.
+
+        Only CredSSP authenticates during the handshake. Elsewhere the server takes the connection
+        whatever we send, then reports a successful logon with a Save Session Info PDU. A refused
+        logon gets no PDU at all on current Windows, hence the wait for --rdp-logon-timeout.
+        """
+        if SUPP_PROTOCOLS.HYBRID in self.conn.x224_protocol or SUPP_PROTOCOLS.HYBRID_EX in self.conn.x224_protocol:
+            return
+        try:
+            await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_logon_timeout)
+        except TimeoutError:
+            if self.conn.logon_error is None:
+                self.logger.debug("Server sent no Save Session Info PDU, the logon never completed")
+                raise Exception("STATUS_LOGON_FAILURE") from None
+        if self.conn.logon_error is not None:
+            raise Exception(f"Logon refused by the server: {self.conn.logon_error.name}")
+
+    async def connect_rdp_and_check_logon(self):
+        """Connect, make sure the logon really happened, and always terminate the connection on exit"""
+        try:
+            await self.connect_rdp()
+            await self.check_logon()
+        finally:
+            await self.terminate_conn()
+
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         try:
             lmhash = ""
@@ -272,7 +313,7 @@ class rdp(connection):
                 stype=stype,
             )
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            asyncio.run(self.connect_rdp_and_check_logon())
 
             self.admin_privs = True
             self.logger.success(
@@ -328,7 +369,7 @@ class rdp(connection):
                 stype=asyauthSecret.PASS,
             )
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            asyncio.run(self.connect_rdp_and_check_logon())
 
             self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
@@ -362,7 +403,7 @@ class rdp(connection):
                 stype=asyauthSecret.NT,
             )
             self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup())
+            asyncio.run(self.connect_rdp_and_check_logon())
 
             self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
