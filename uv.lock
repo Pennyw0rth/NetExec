@@ -3,12 +3,12 @@ revision = 3
 requires-python = ">=3.11, <4.0"
 
 [options]
-exclude-newer = "2026-10-09T20:37:42.883772672Z"
+exclude-newer = "2026-10-10T13:56:17.397976536Z"
 exclude-newer-span = "P1D"
 
 [[package]]
 name = "aardwolf"
-version = "0.2.14"
+version = "0.2.16"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arc4" },
@@ -22,7 +22,12 @@ dependencies = [
     { name = "tqdm" },
     { name = "unicrypto" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/92/88/b1a7e3dd1e727245fe893bb707520ba91cc980443c0c261f730b35244b62/aardwolf-0.2.14.tar.gz", hash = "sha256:360a1a3d046dc2814c2e58339939a8f311ae330c0d1d962790edf45d726af4a6", size = 973985, upload-time = "2026-06-20T21:07:04.498Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/0f/79f2acb31e1144a3895d17ad9136272d2b75ed3bd24eb1c415129d5e089d/aardwolf-0.2.16.tar.gz", hash = "sha256:52cba79817af963108dcd39e82513deec742387f2fab01a9138abe56f94e7ad2", size = 1013103, upload-time = "2026-10-04T18:44:46.704Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/8d/a0cfa361e4077c56bcda4b820c462dbea4a11ff60110bc8486c1f051b660/aardwolf-0.2.16-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:fbde3046d4cdd3a5596dfcc988965b85527632cee46db2522961893d101fcbc7", size = 2169322, upload-time = "2026-10-04T18:44:41.102Z" },
+    { url = "https://files.pythonhosted.org/packages/15/7b/079c9087a742763141d3e2e4b000f34c3962aa6cb67599158fcb08c9aaaa/aardwolf-0.2.16-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:69bedfad4b68b855a9d0df928c78eb0bbdc642c22f9845778c9df77a8fe9c259", size = 2241815, upload-time = "2026-10-04T18:44:43.011Z" },
+    { url = "https://files.pythonhosted.org/packages/71/43/b51e73133aae6a3e56bfb79174e8a4edc99f8ef051202b0e7173053a0886/aardwolf-0.2.16-cp311-abi3-win_amd64.whl", hash = "sha256:b4d6032110ee238cf11c1f5efa86636462d7dc2e972b8464e949da82df58f3a6", size = 1966337, upload-time = "2026-10-04T18:44:45.294Z" },
+]
 
 [[package]]
 name = "aesedb"
@@ -1309,7 +1314,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aardwolf", specifier = ">=0.2.14" },
+    { name = "aardwolf", specifier = ">=0.2.16" },
     { name = "argcomplete", specifier = ">=3.1.4" },
     { name = "asyauth", specifier = ">=0.0.20" },
     { name = "beautifulsoup4", specifier = ">=4.11,<5" },
