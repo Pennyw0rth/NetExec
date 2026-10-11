@@ -1,6 +1,7 @@
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -9,6 +10,7 @@ class NXCModule:
     name = "hyperv-host"
     description = "Performs a registry query on the VM to lookup its HyperV Host"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

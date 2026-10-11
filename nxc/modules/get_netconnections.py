@@ -1,5 +1,7 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
+from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 import json
 
@@ -14,13 +16,14 @@ class NXCModule:
     name = "get_netconnections"
     description = "Uses WMI to query network connections."
     supported_protocols = ["smb", "wmi"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """No options available"""
 
     def on_admin_login(self, context, connection):
         data = []
-        cards = connection.wmi("select DNSDomainSuffixSearchOrder, IPAddress from win32_networkadapterconfiguration")
+        cards = connection.wmi_query("select DNSDomainSuffixSearchOrder, IPAddress from win32_networkadapterconfiguration")
         if cards:
             for c in cards:
                 if c["IPAddress"].get("value"):
@@ -28,6 +31,6 @@ class NXCModule:
 
             data.append(cards)
 
-        log_name = f"network-connections-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
+        log_name = sanitize_path_component(f"network-connections-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         write_log(json.dumps(data), log_name)
         context.log.display(f"Saved raw output to {NXC_PATH}/logs/{log_name}")

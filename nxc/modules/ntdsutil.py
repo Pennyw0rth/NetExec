@@ -6,7 +6,7 @@ import time
 from impacket.examples.secretsdump import LocalOperations, NTDSHashes
 
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import validate_ntlm
+from nxc.helpers.misc import CATEGORY, validate_ntlm
 
 
 class NXCModule:
@@ -19,6 +19,7 @@ class NXCModule:
     name = "ntdsutil"
     description = "Dump NTDS with ntdsutil"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """

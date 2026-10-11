@@ -2,6 +2,7 @@ from base64 import b64decode
 from sys import exit
 from os.path import abspath, join, isfile
 from datetime import datetime
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import DATA_PATH, TMP_PATH
 
 
@@ -14,6 +15,7 @@ class NXCModule:
     name = "pi"
     description = "Run command as logged on users via Process Injection"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         r"""

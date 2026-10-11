@@ -6,7 +6,7 @@ import time
 
 from impacket.system_errors import ERROR_NO_MORE_ITEMS, ERROR_FILE_NOT_FOUND, ERROR_OBJECT_NOT_FOUND
 from termcolor import colored
-
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from nxc.paths import NXC_PATH
 from impacket.dcerpc.v5 import rrp, samr, scmr
@@ -92,6 +92,7 @@ class NXCModule:
     name = "wcc"
     description = "Check various security configuration items on Windows machines"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.context = None
@@ -679,8 +680,8 @@ class HostChecker:
         return success, reasons
 
     def check_last_successful_update(self):
-        records = self.connection.wmi(wmi_query="Select TimeGenerated FROM Win32_ReliabilityRecords Where EventIdentifier=19", namespace="root\\cimv2")
-        if isinstance(records, bool) or len(records) == 0:
+        records = self.connection.wmi_query(wql="Select TimeGenerated FROM Win32_ReliabilityRecords Where EventIdentifier=19", namespace="root\\cimv2")
+        if not records:
             return False, ["No update found"]
         most_recent_update_date = records[0]["TimeGenerated"]["value"]
         most_recent_update_date = most_recent_update_date.split(".")[0]

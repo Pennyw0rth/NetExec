@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Enables or disables xp_cmdshell in MSSQL Server.
@@ -7,6 +10,7 @@ class NXCModule:
     name = "enable_cmdshell"
     description = "Enable or disable xp_cmdshell in MSSQL Server"
     supported_protocols = ["mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.mssql_conn = None
@@ -42,8 +46,7 @@ class NXCModule:
 
     def backup_show_advanced_options(self):
         """Backs up the current state of 'show advanced options'."""
-        query = "SELECT CAST(value AS INT) AS value FROM sys.configurations WHERE name = 'show advanced options'"
-        res = self.mssql_conn.sql_query(query)
+        res = self.mssql_conn.sql_query("SELECT CAST(value AS INT) AS value FROM sys.configurations WHERE name = 'show advanced options'")
         if res:
             self.advanced_options_backup = int(res[0]["value"])  # Convert to integer
 
@@ -55,6 +58,7 @@ class NXCModule:
     def toggle_xp_cmdshell(self, enable: bool):
         """Enables or disables xp_cmdshell while preserving 'show advanced options' state."""
         state = "1" if enable else "0"
+        action_text = "enabled" if enable else "disabled"
 
         # Backup 'show advanced options' state
         self.backup_show_advanced_options()
@@ -65,8 +69,10 @@ class NXCModule:
         try:
             # Enable or disable xp_cmdshell
             self.mssql_conn.sql_query(f"EXEC sp_configure 'xp_cmdshell', '{state}'; RECONFIGURE;")
-            action_text = "enabled" if enable else "disabled"
-            self.context.log.success(f"xp_cmdshell successfully {action_text}.")
+            if self.mssql_conn.lastError:
+                self.context.log.fail(f"Failed to {action_text[:-1]} xp_cmdshell: {self.mssql_conn.lastError}")
+            else:
+                self.context.log.success(f"xp_cmdshell successfully {action_text}.")
         except Exception as e:
             self.context.log.fail(f"Failed to execute command: {e}")
 

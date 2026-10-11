@@ -1,3 +1,6 @@
+from nxc.helpers.misc import CATEGORY
+
+
 class NXCModule:
     """
     Run xp_cmdshell commands on a linked SQL server
@@ -7,6 +10,7 @@ class NXCModule:
     name = "link_xpcmd"
     description = "Run xp_cmdshell commands on a linked SQL server"
     supported_protocols = ["mssql"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.linked_server = None
@@ -36,7 +40,7 @@ class NXCModule:
             output_lines = []
             for row in result:
                 output_value = row.get("output")
-                if output_value and output_value != "NULL":
+                if output_value:
                     output_lines.append(str(output_value))
 
             if output_lines:

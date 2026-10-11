@@ -1,3 +1,4 @@
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SearchResultEntry
@@ -15,6 +16,7 @@ class NXCModule:
     name = "find-computer"
     description = "Finds computers in the domain via the provided text"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """

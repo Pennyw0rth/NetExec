@@ -17,106 +17,22 @@ run_dir = os.getcwd()
 
 def get_cli_args():
     parser = argparse.ArgumentParser(description="Script for running end to end tests for nxc")
-    parser.add_argument(
-        "--executable",
-        default="netexec"
-    )
-    parser.add_argument(
-        "-t",
-        "--target",
-        required=True
-    )
-    parser.add_argument(
-        "-u",
-        "--user",
-        "--username",
-        dest="username",
-        required=True
-    )
-    parser.add_argument(
-        "-p",
-        "--pass",
-        "--password",
-        dest="password",
-        required=True
-    )
-    parser.add_argument(
-        "-k",
-        "--kerberos",
-        action="store_true",
-        required=False,
-        help="Use kerberos authentication",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        required=False,
-        help="Display full command output",
-    )
-    parser.add_argument(
-        "-e",
-        "--errors",
-        action="store_true",
-        required=False,
-        help="Display errors from commands",
-    )
-    parser.add_argument(
-        "--not-tested",
-        action="store_true",
-        required=False,
-        help="Display commands that didn't get tested",
-    )
-    parser.add_argument(
-        "--poetry",
-        action="store_true",
-        required=False,
-        help="Use poetry to run commands",
-    )
-    parser.add_argument(
-        "--protocols",
-        nargs="+",
-        default=[],
-        required=False,
-        help="Protocols to test",
-    )
-    parser.add_argument(
-        "--line-nums",
-        nargs="+",
-        type=parse_line_nums,
-        required=False,
-        help="Specify line numbers or ranges to run commands from",
-    )
-    parser.add_argument(
-        "--test-user-file",
-        required=False,
-        default=normpath(join(script_dir, "data", "test_users.txt")),
-        help="Path to the file containing test usernames",
-    )
-    parser.add_argument(
-        "--test-password-file",
-        required=False,
-        default=normpath(join(script_dir, "data", "test_passwords.txt")),
-        help="Path to the file containing test passwords",
-    )
-    parser.add_argument(
-        "--amsi-bypass-file",
-        required=False,
-        default=normpath(join(script_dir, "data", "test_amsi_bypass.txt")),
-        help="Path to the file containing AMSI bypasses",
-    )
-    parser.add_argument(
-        "--test-normal-file",
-        required=False,
-        default=normpath(join(script_dir, "data", "test_file.txt")),
-        help="Path to file to upload/download"
-    )
-    parser.add_argument(
-        "--dns-server",
-        action="store",
-        required=False,
-        help="Specify DNS server",
-    )
+    parser.add_argument("--executable", default="netexec")
+    parser.add_argument("-t", "--target", required=True)
+    parser.add_argument("-u", "--user", "--username", dest="username", required=True)
+    parser.add_argument("-p", "--pass", "--password", dest="password", required=True)
+    parser.add_argument("-k", "--kerberos", action="store_true", required=False, help="Use kerberos authentication")
+    parser.add_argument("-v", "--verbose", action="store_true", required=False, help="Display full command output")
+    parser.add_argument("-e", "--errors", action="store_true", required=False, help="Display errors from commands")
+    parser.add_argument("--not-tested", action="store_true", required=False, help="Display commands that didn't get tested")
+    parser.add_argument("--poetry", action="store_true", required=False, help="Use poetry to run commands")
+    parser.add_argument("--protocols", nargs="+", default=[], required=False, help="Protocols to test")
+    parser.add_argument("--line-nums", nargs="+", type=parse_line_nums, required=False, help="Specify line numbers or ranges to run commands from")
+    parser.add_argument("--test-user-file", required=False, default=normpath(join(script_dir, "data", "test_users.txt")), help="Path to the file containing test usernames")
+    parser.add_argument("--test-password-file", required=False, default=normpath(join(script_dir, "data", "test_passwords.txt")), help="Path to the file containing test passwords")
+    parser.add_argument("--amsi-bypass-file", required=False, default=normpath(join(script_dir, "data", "test_amsi_bypass.txt")), help="Path to the file containing AMSI bypasses")
+    parser.add_argument("--test-normal-file", required=False, default=normpath(join(script_dir, "data", "test_file.txt")), help="Path to file to upload/download")
+    parser.add_argument("--dns-server", action="store", required=False, help="Specify DNS server")
     return parser.parse_args()
 
 

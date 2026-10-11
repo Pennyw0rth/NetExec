@@ -1,6 +1,9 @@
 from os import makedirs
+from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
-from os.path import join, abspath
+from os.path import join
+from pathlib import Path
 from impacket.dcerpc.v5 import rrp
 from impacket.dcerpc.v5.rrp import DCERPCSessionError
 from impacket.examples.secretsdump import RemoteOperations
@@ -13,6 +16,7 @@ class NXCModule:
     name = "recyclebin"
     description = "Lists and exports users' recycle bins"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """No options available"""
@@ -71,8 +75,11 @@ class NXCModule:
 
                                     # Formatting the destination filename
                                     file_path = path.split("$")[-1].replace("/", "_")
-                                    filename = f"{connection.host}_{username if username else sid_directory.get_longname()}_recyclebin_{file_path}"
-                                    dest_path = abspath(join(export_path, filename))
+                                    filename = sanitize_path_component(f"{connection.host}_{username if username else sid_directory.get_longname()}_recyclebin_{file_path}")
+                                    dest_path = Path(export_path, filename).resolve()
+                                    if Path(export_path).resolve() not in dest_path.parents:
+                                        context.log.fail(f"Path traversal detected in {filename!r}, skipping")
+                                        continue
                                     try:
                                         with open(dest_path, "wb+") as file:
                                             connection.conn.getFile("C$", path, file.write)

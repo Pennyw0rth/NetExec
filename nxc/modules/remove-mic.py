@@ -2,7 +2,7 @@
 #  Dirk-jan Mollema (@_dirkjan)
 #  dlive (@D1iv3)
 #
-# Refernece:
+# Reference:
 #  - https://dirkjanm.io/exploiting-CVE-2019-1040-relay-vulnerabilities-for-rce-and-domain-admin/
 #  - https://github.com/fox-it/cve-2019-1040-scanner
 #  - https://github.com/Dliv3/cve-2019-1040-scanner
@@ -19,12 +19,14 @@ import string
 from impacket import ntlm
 from impacket import nt_errors
 from impacket.smbconnection import SessionError
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "remove-mic"
     description = "Check if host vulnerable to CVE-2019-1040"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

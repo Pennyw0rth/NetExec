@@ -1,10 +1,16 @@
+from contextlib import suppress
+from enum import Enum
+import hashlib
 import random
 import string
 import re
 import inspect
 import os
-
+from unicodedata import normalize
+from termcolor import colored
 from ipaddress import ip_address
+from nxc.logger import nxc_logger
+from time import strftime, gmtime
 
 
 def identify_target_file(target_file):
@@ -21,6 +27,91 @@ def identify_target_file(target_file):
 
 def gen_random_string(length=10):
     return "".join(random.sample(string.ascii_letters, int(length)))
+
+
+def sanitize_dns(hostname, logger=nxc_logger):
+    """Return an untrusted hostname or domain as a safe, nonempty string."""
+    # Always provide a safe fallback, even for missing or unstringable input.
+    if hostname is None:
+        return "_"
+
+    try:
+        hostname = hostname.decode("utf-8", errors="surrogateescape") if isinstance(hostname, bytes) else str(hostname)
+    except Exception:
+        return "_"
+    if not hostname:
+        return "_"
+
+    # Replace path, configuration, formatting, whitespace, and control characters.
+    unsafe_characters = '<>:"/\\|?*{}[]=#;\''  # Portable paths, format strings, hosts files, and krb5.conf
+    sanitized = "".join(
+        character if character.isprintable()
+        and not character.isspace()
+        and character not in unsafe_characters
+        and all(
+            normalized_character.isprintable()
+            and not normalized_character.isspace()
+            and normalized_character not in unsafe_characters
+            for normalized_character in normalize("NFKC", character)
+        )
+        else "_"
+        for character in hostname
+    )
+
+    # Neutralize traversal segments and Windows-trimmed trailing dots.
+    if normalize("NFKC", sanitized) in (".", ".."):
+        sanitized = "_" * len(sanitized)
+    if sanitized.endswith(".") or normalize("NFKC", sanitized[-1]).endswith("."):
+        sanitized = f"{sanitized[:-1]}_"
+
+    # Bound filename length while retaining a stable identifier for long names.
+    if len(sanitized.encode("utf-8")) > 253:
+        suffix = f"_{hashlib.sha256(hostname.encode('utf-8', errors='surrogatepass')).hexdigest()[:12]}"
+        byte_length = 0
+        truncated = []
+        for character in sanitized:
+            character_length = len(character.encode("utf-8"))
+            if byte_length + character_length > 253 - len(suffix):
+                break
+            truncated.append(character)
+            byte_length += character_length
+        sanitized = f"{''.join(truncated)}{suffix}"
+
+    # Fail closed if a future change violates any output invariant.
+    normalized = normalize("NFKC", sanitized)
+    if (
+        not sanitized
+        or not normalized
+        or len(sanitized.encode("utf-8")) > 253
+        or normalized in (".", "..")
+        or normalized.endswith(".")
+        or any(
+            not character.isprintable()
+            or character.isspace()
+            or character in unsafe_characters
+            or any(
+                not normalized_character.isprintable()
+                or normalized_character.isspace()
+                or normalized_character in unsafe_characters
+                for normalized_character in normalize("NFKC", character)
+            )
+            for character in sanitized
+        )
+    ):
+        sanitized = "_"
+
+    # Report changed input without allowing logging failures to affect safety.
+    if sanitized != hostname:
+        received = ascii(hostname[:256])
+        result = ascii(sanitized)
+        if len(hostname) > 256 or len(received) > 256:
+            received = f"{received[:253]}..."
+        if len(result) > 256:
+            result = f"{result[:253]}..."
+        if logger is not None:
+            with suppress(Exception):
+                logger.fail(f"Unsafe hostname or domain received: {received}; using {result}")
+    return sanitized
 
 
 def validate_ntlm(data):
@@ -145,3 +236,109 @@ def detect_if_ip(target):
         return True
     except Exception:
         return False
+
+
+def d2b(a):
+    """
+    Function used to convert password property flags from decimal to binary
+    format for easier interpretation of individual flag bits.
+    """
+    tbin = []
+    while a:
+        tbin.append(a % 2)
+        a //= 2
+
+    t2bin = tbin[::-1]
+    if len(t2bin) != 8:
+        for _x in range(6 - len(t2bin)):
+            t2bin.insert(0, 0)
+    return "".join([str(g) for g in t2bin])
+
+
+def convert(low, high, lockout=False):
+    """
+    Convert Windows FILETIME (64-bit) values to human-readable time strings.
+
+    Windows stores time intervals as 64-bit values representing 100-nanosecond
+    intervals since January 1, 1601. This function converts these values to
+    readable format like "30 days 5 hours 15 minutes".
+
+    Args:
+        low (int): Low 32 bits of the FILETIME value
+        high (int): High 32 bits of the FILETIME value
+        lockout (bool): If True, treats the value as a lockout duration (simpler conversion)
+
+    Returns:
+        str: Human-readable time string (e.g., "42 days 5 hours 30 minutes") or
+             special values like "Not Set", "None", or "[-] Invalid TIME"
+    """
+    time = ""
+    tmp = 0
+
+    if (low == 0 and high == -0x8000_0000) or (low == 0 and high == -0x8000_0000_0000_0000):
+        return "Not Set"
+    if low == 0 and high == 0:
+        return "None"
+
+    if not lockout:
+        if low != 0:
+            high = abs(high + 1)
+        else:
+            high = abs(high)
+            low = abs(low)
+
+        tmp = low + (high << 32)  # convert to 64bit int
+        tmp *= 1e-7  # convert to seconds
+    else:
+        tmp = abs(high) * (1e-7)
+
+    try:
+        minutes = int(strftime("%M", gmtime(tmp)))
+        hours = int(strftime("%H", gmtime(tmp)))
+        days = int(strftime("%j", gmtime(tmp))) - 1
+    except ValueError:
+        return "[-] Invalid TIME"
+
+    if days > 1:
+        time += f"{days} days "
+    elif days == 1:
+        time += f"{days} day "
+    if hours > 1:
+        time += f"{hours} hours "
+    elif hours == 1:
+        time += f"{hours} hour "
+    if minutes > 1:
+        time += f"{minutes} minutes "
+    elif minutes == 1:
+        time += f"{minutes} minute "
+    return time
+
+
+def parse_argument(argument: list) -> list:
+    """Parse input from an argparse argument, which can be either a value or a file containing values."""
+    parsed_items = []
+    for item in argument:
+        if os.path.isfile(item):
+            with open(item) as f:
+                parsed_items.extend(line.strip() for line in f if line.strip())
+        else:
+            parsed_items.append(item.strip())
+    return parsed_items
+
+
+def display_modules(args, modules):
+    for category, color in {CATEGORY.ENUMERATION: "green", CATEGORY.CREDENTIAL_DUMPING: "cyan", CATEGORY.PRIVILEGE_ESCALATION: "magenta"}.items():
+        # Add category filter for module listing
+        if args.list_modules and args.list_modules.lower() != category.name.lower():
+            continue
+        if len([module for module in modules.values() if module["category"] == category]) > 0:
+            nxc_logger.highlight(colored(f"{category.name}", color, attrs=["bold"]))
+        for name, props in sorted(modules.items()):
+            if props["category"] == category:
+                nxc_logger.display(f"{name:<25} {props['description']}")
+
+
+class CATEGORY(Enum):
+    ENUMERATION = "Enumeration"
+    CREDENTIAL_DUMPING = "Credential Dumping"
+    PRIVILEGE_ESCALATION = "Privilege Escalation"

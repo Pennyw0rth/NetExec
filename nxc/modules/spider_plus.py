@@ -1,8 +1,11 @@
 import json
 import errno
-from os.path import abspath, join, split, exists, splitext, getsize, sep
+from os.path import abspath, join, exists, splitext, getsize
 from os import makedirs, remove, stat
+from pathlib import Path
 import time
+from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 from nxc.protocols.smb.remotefile import RemoteFile
 from impacket.smb3structs import FILE_READ_DATA
@@ -123,6 +126,10 @@ class SMBSpiderPlus:
                 self.logger.debug(f'Cannot list files in folder "{subfolder}".')
             elif "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
                 self.logger.debug(f"The folder {subfolder} does not exist.")
+            elif "STATUS_STOPPED_ON_SYMLINK" in str(e):
+                self.logger.debug(f"The folder {subfolder} is a symlink that cannot be followed. Skipping.")
+            elif "STATUS_NO_SUCH_FILE" in str(e):
+                self.logger.debug(f"The folder {subfolder} is empty.")
             elif self.reconnect():
                 filelist = self.list_path(share, subfolder)
         except NetBIOSTimeout as e:
@@ -166,19 +173,15 @@ class SMBSpiderPlus:
     def get_file_save_path(self, remote_file):
         r"""Processes the remote file path to extract the filename and the folder path where the file should be saved locally.
 
-        It converts forward slashes (/) and backslashes (\) in the remote file path to the appropriate path separator for the local file system.
-        The folder path and filename are then obtained separately.
+        Sanitizes each local path component and verifies containment in the output folder.
         """
-        # Remove the backslash before the remote host part and replace slashes with the appropriate path separator
-        remote_file_path = str(remote_file)[2:].replace("/", sep).replace("\\", sep)
-
-        # Split the path to obtain the folder path and the filename
-        folder, filename = split(remote_file_path)
-
-        # Join the output folder with the folder path to get the final local folder path
-        folder = join(self.output_folder, folder)
-
-        return folder, filename
+        self.logger.debug(f"Remote file: {remote_file}")
+        clean_parts = [sanitize_path_component(part) for part in remote_file._RemoteFile__fileName.replace("\\", "/").split("/") if part]
+        resolved = Path(self.output_folder).joinpath(sanitize_path_component(self.host), sanitize_path_component(remote_file._RemoteFile__share), *clean_parts).resolve()
+        if Path(self.output_folder).resolve() not in resolved.parents:
+            raise ValueError(f"Path traversal detected in {remote_file!s}")
+        self.logger.debug(f"Resolved path: {resolved}")
+        return str(resolved.parent), resolved.name
 
     def spider_shares(self):
         """Enumerates all available shares for the SMB connection, spiders through the readable shares, and saves the metadata of the shares to a JSON file"""
@@ -306,7 +309,12 @@ class SMBSpiderPlus:
             return
 
         # Check if the file is already downloaded and up-to-date.
-        file_dir, file_name = self.get_file_save_path(remote_file)
+        try:
+            file_dir, file_name = self.get_file_save_path(remote_file)
+        except ValueError as e:
+            self.logger.fail(str(e))
+            self.stats["num_get_fail"] += 1
+            return
         download_path = join(file_dir, file_name)
         needs_update_flag = False
         if exists(download_path):
@@ -322,12 +330,12 @@ class SMBSpiderPlus:
         try:
             self.logger.info(f'Downloading file "{file_path}" => "{download_path}".')
             remote_file.open_file()
-            self.save_file(remote_file, share_name)
+            self.save_file(remote_file, share_name, download_path)
             remote_file.close()
             download_success = True
         except SessionError as e:
             if "STATUS_SHARING_VIOLATION" in str(e):
-                pass
+                self.logger.debug(f"Sharing violation while downloading file: {file_path}")
         except Exception as e:
             self.logger.fail(f'Failed to download file "{file_path}". Error: {e!s}')
 
@@ -339,7 +347,7 @@ class SMBSpiderPlus:
         else:
             self.stats["num_get_fail"] += 1
 
-    def save_file(self, remote_file, share_name):
+    def save_file(self, remote_file, share_name, download_path):
         """Reads the `remote_file` in chunks using the `read_chunk` method.
 
         Each chunk is then written to the local file until the entire file is saved.
@@ -348,12 +356,9 @@ class SMBSpiderPlus:
         # Reset the remote_file to point to the beginning of the file.
         remote_file.seek(0, 0)
 
-        folder, filename = self.get_file_save_path(remote_file)
-        download_path = join(folder, filename)
-
         # Create the subdirectories based on the share name and file path.
-        self.logger.debug(f"Creating folder '{folder}'")
-        make_dirs(folder)
+        self.logger.debug(f"Creating folder '{Path(download_path).parent}'")
+        make_dirs(Path(download_path).parent)
 
         try:
             with open(download_path, "wb") as fd:
@@ -472,6 +477,7 @@ class NXCModule:
     name = "spider_plus"
     description = "List files recursively and save a JSON share-file metadata to the 'OUTPUT_FOLDER'. See module options for finer configuration."
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """

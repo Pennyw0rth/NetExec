@@ -7,6 +7,7 @@ from base64 import b64decode
 from os import path
 import sys
 from datetime import datetime
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import DATA_PATH
 
 
@@ -14,6 +15,7 @@ class NXCModule:
     name = "impersonate"
     description = "List and impersonate tokens to run command as locally logged on users"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
@@ -99,7 +101,7 @@ class NXCModule:
                     context.log.fail("Invalid token ID submitted")
 
         except Exception as e:
-            context.log.fail(f"Error runing command: {e}")
+            context.log.fail(f"Error running command: {e}")
         finally:
             try:
                 connection.conn.deleteFile(self.share, f"{self.tmp_share}{self.impersonate}")

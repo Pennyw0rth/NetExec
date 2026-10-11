@@ -13,6 +13,7 @@ from asyauth.common.credentials.kerberos import KerberosCredential
 
 from asysocks.unicomm.common.target import UniTarget, UniProto
 import contextlib
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -25,6 +26,7 @@ class NXCModule:
     name = "ldap-checker"
     description = "[REMOVED] Checks whether LDAP signing and channel binding are required and / or enforced"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """No options available."""

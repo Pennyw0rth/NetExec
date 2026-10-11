@@ -14,6 +14,7 @@ from lsassy.session import Session
 from impacket.krb5.ccache import CCache
 
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import NXC_PATH
 
 
@@ -21,6 +22,7 @@ class NXCModule:
     name = "lsassy"
     description = "Dump lsass and parse the result remotely with lsassy"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -65,7 +67,7 @@ class NXCModule:
         session.get_session(
             address=host,
             target_ip=host,
-            port=445,
+            port=connection.port,
             lmhash=lmhash,
             nthash=nthash,
             username=username,
@@ -185,7 +187,7 @@ class NXCModule:
                     context.log.fail(f"Error writing ticket {filename}: {e}")
 
         if ticket_count > 0:
-            context.log.highlight(f"Saved {ticket_count} Kerberos ticket(s) to {self.save_dir}")
+            context.log.success(f"Saved {ticket_count} Kerberos ticket(s) to {self.save_dir}")
         else:
             context.log.display("No tickets were saved")
 

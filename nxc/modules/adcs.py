@@ -1,6 +1,7 @@
 import re
 from impacket.ldap import ldap, ldapasn1
 from impacket.ldap.ldap import LDAPSearchError
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -13,6 +14,7 @@ class NXCModule:
     name = "adcs"
     description = "Find PKI Enrollment Services in Active Directory and Certificate Templates Names"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

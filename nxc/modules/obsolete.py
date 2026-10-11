@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
 from datetime import datetime, timedelta
+from os.path import join
+from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 import socket
 
@@ -13,6 +16,7 @@ class NXCModule:
     name = "obsolete"
     description = "Extract all obsolete operating systems from LDAP"
     supported_protocols = ["ldap"]
+    category = CATEGORY.ENUMERATION
 
     def ldap_time_to_datetime(self, ldap_time):
         """Convert an LDAP timestamp to a datetime object."""
@@ -69,7 +73,7 @@ class NXCModule:
 
         if answers:
             obsolete_hosts_count = len(answers)
-            filename = f"{NXC_PATH}/logs/{connection.domain}.obsoletehosts.txt"
+            filename = join(NXC_PATH, "logs", sanitize_path_component(f"{connection.domain}.obsoletehosts.txt"))
             context.log.display(f"{obsolete_hosts_count} Obsolete hosts will be saved to {filename}")
             with open(filename, "w") as f:
                 for dns_hostname, ip_address, os, pwd_last_set_readable in answers:

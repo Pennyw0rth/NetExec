@@ -1,5 +1,6 @@
 from impacket.ldap import ldap as ldap_impacket
 import re
+from nxc.helpers.misc import CATEGORY
 from nxc.logger import nxc_logger
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -11,8 +12,9 @@ class NXCModule:
     """
 
     name = "get-desc-users"
-    description = "Get description of the users. May contained password"
+    description = "Get description of the users. May contain password"
     supported_protocols = ["ldap"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
         """
@@ -61,7 +63,7 @@ class NXCModule:
         if len(answers) > 0:
             context.log.success("Found following users: ")
             for answer in answers:
-                context.log.highlight(f"User: {answer[0]} description: {answer[1]}")
+                context.log.highlight(f"User: {answer[0]:<20} description: {answer[1]}")
 
     def filter_answer(self, context, answers):
         # No option to filter

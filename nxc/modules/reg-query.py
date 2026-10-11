@@ -1,12 +1,14 @@
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
     name = "reg-query"
     description = "Performs a registry query on the machine"
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context

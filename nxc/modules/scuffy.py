@@ -1,5 +1,6 @@
 import ntpath
 from sys import exit
+from nxc.helpers.misc import CATEGORY
 from nxc.paths import TMP_PATH
 
 
@@ -13,6 +14,7 @@ class NXCModule:
     name = "scuffy"
     description = "Creates and dumps an arbitrary .scf file with the icon property containing a UNC path to the declared SMB server against all writeable shares"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self, context=None, module_options=None):
         self.context = context
@@ -57,11 +59,7 @@ class NXCModule:
     def on_login(self, context, connection):
         shares = connection.shares()
         for share in shares:
-            if "WRITE" in share["access"] and share["name"] not in [
-                "C$",
-                "ADMIN$",
-                "NETLOGON",
-            ]:
+            if "WRITE" in share["access"] and share["name"] not in ["C$", "ADMIN$", "NETLOGON", "SYSVOL"]:
                 context.log.success(f"Found writable share: {share['name']}")
                 if not self.cleanup:
                     with open(self.scf_path, "rb") as scf:

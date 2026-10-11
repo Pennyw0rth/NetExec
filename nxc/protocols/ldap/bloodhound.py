@@ -107,4 +107,60 @@ class BloodHound:
             computer_enum.enumerate_computers(self.ad.computers, num_workers=num_workers, timestamp=timestamp, fileNamePrefix=fileNamePrefix)
         end_time = time.time()
         minutes, seconds = divmod(int(end_time - start_time), 60)
-        self.logger.highlight(f"Done in {minutes}M {seconds}S")
+        self.logger.highlight(f"Bloodhound data collection completed in {minutes}M {seconds}S")
+
+
+def resolve_collection_methods(methods, logger):
+    """Convert methods (string) to list of validated methods to resolve"""
+    valid_methods = [
+        "group",
+        "localadmin",
+        "session",
+        "trusts",
+        "default",
+        "all",
+        "loggedon",
+        "objectprops",
+        "experimental",
+        "acl",
+        "dcom",
+        "rdp",
+        "psremote",
+        "dconly",
+        "container",
+        "adcs",
+    ]
+    default_methods = ["group", "localadmin", "session", "trusts", "adcs"]
+    # Similar to SharpHound, All includes everything including LoggedOn and ADCS
+    all_methods = [
+        "group",
+        "localadmin",
+        "session",
+        "trusts",
+        "loggedon",
+        "objectprops",
+        "acl",
+        "dcom",
+        "rdp",
+        "psremote",
+        "container",
+        "adcs",
+    ]
+    # DC only, does not collect to computers
+    dconly_methods = ["group", "trusts", "objectprops", "acl", "container"]
+
+    validated_methods = []
+    for method in [method.lower() for method in methods.split(",")]:
+        if method not in valid_methods:
+            logger.error("Invalid collection method specified: %s", method)
+            return [], []
+
+        if method == "default":
+            validated_methods += default_methods
+        elif method == "all":
+            validated_methods += all_methods
+        elif method == "dconly":
+            validated_methods += dconly_methods
+        else:
+            validated_methods.append(method)
+    return set(validated_methods), set(all_methods) - set(validated_methods)

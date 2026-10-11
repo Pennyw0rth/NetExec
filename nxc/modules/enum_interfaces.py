@@ -4,6 +4,7 @@ import contextlib
 from impacket.examples.secretsdump import RemoteOperations
 from impacket.dcerpc.v5 import rrp
 from impacket.dcerpc.v5.rpcrt import DCERPCException
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -17,6 +18,7 @@ class NXCModule:
     description = "Retrieve the list of network interfaces info (Name, IP Address, Subnet Mask, Default Gateway) from remote Windows registry (formerly --interfaces)"
     supported_protocols = ["smb"]
     opsec_safe = False
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.context = None

@@ -6,6 +6,7 @@ from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 import traceback
 from base64 import b64encode
+from nxc.helpers.misc import CATEGORY
 from nxc.helpers.powershell import get_ps_script
 
 
@@ -15,6 +16,7 @@ class NXCModule:
     name = "veeam"
     description = "Extracts credentials from local Veeam SQL Database"
     supported_protocols = ["smb"]
+    category = CATEGORY.CREDENTIAL_DUMPING
 
     def __init__(self):
         with open(get_ps_script("veeam_dump_module/veeam_dump_mssql.ps1")) as psFile:

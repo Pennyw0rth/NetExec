@@ -3,6 +3,7 @@ from select import select
 from time import time
 from socket import socket, AF_INET, SOCK_DGRAM
 from struct import pack, unpack
+from nxc.helpers.misc import CATEGORY
 
 
 def hashcat_format(rid, hashval, salt):
@@ -23,6 +24,7 @@ class NXCModule:
     name = "timeroast"
     description = "Timeroasting exploits Windows NTP authentication to request password hashes of any computer or trust account"
     supported_protocols = ["smb"]
+    category = CATEGORY.PRIVILEGE_ESCALATION
 
     def __init__(self):
         self.context = None
@@ -95,7 +97,7 @@ class NXCModule:
                 if ready:
                     reply = sock.recvfrom(120)[0]
 
-                    # Extract RID, hash and "salt" if succesful.
+                    # Extract RID, hash and "salt" if successful.
                     if len(reply) == 68:
                         salt = reply[:48]
                         answer_rid = unpack("<I", reply[-20:-16])[0] ^ keyflag

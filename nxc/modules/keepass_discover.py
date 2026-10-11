@@ -1,4 +1,5 @@
 from csv import reader
+from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
@@ -12,6 +13,7 @@ class NXCModule:
     name = "keepass_discover"
     description = "Search for KeePass-related files and process."
     supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
 
     def __init__(self):
         self.search_type = "ALL"
