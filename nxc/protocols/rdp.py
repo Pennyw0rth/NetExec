@@ -11,12 +11,14 @@ from termcolor import colored
 from impacket.krb5.ccache import CCache
 
 from nxc.connection import connection
+from nxc.helpers.misc import sanitize_dns
+from nxc.helpers.path import sanitize_path_component
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
 from nxc.paths import NXC_PATH
 
-from aardwolf.connection import RDPConnection
+from aardwolf.connection import RDPConnection, AUTHZ_ACCESS_DENIED
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
 from aardwolf.commons.iosettings import RDPIOSettings
@@ -130,7 +132,7 @@ class rdp(connection):
         )
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
+        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
         asyncio.run(self.check_nla())
@@ -153,9 +155,9 @@ class rdp(connection):
                     except Exception:
                         pass
                     else:
-                        self.domain = info_domain["dnsdomainname"]
-                        self.hostname = info_domain["computername"]
-                        self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
+                        self.hostname = sanitize_dns(info_domain.get("computername") or self.host, self.logger)
+                        self.domain = sanitize_dns(info_domain.get("dnsdomainname") or self.host, self.logger)
+                        self.server_os = f"{info_domain.get('os_guess', 'Unknown')} Build {info_domain.get('os_build', 'Unknown')}"
                         self.logger.extra["hostname"] = self.hostname
                     break
 
@@ -178,7 +180,11 @@ class rdp(connection):
             domain=self.domain,
             dc_ip=self.domain,
             timeout=self.args.rdp_timeout,
+            unsafe_ssl=True,
         )
+
+        # Reset so aardwolf negotiates on its own (restricted admin + HYBRID_EX), the loop above pinned it
+        self.iosettings.supported_protocols = None
 
         return True
 
@@ -210,6 +216,7 @@ class rdp(connection):
         _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout)
         if err is not None:
             raise err
+        self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
 
     async def terminate_conn(self):
         """Terminate the RDP connection with a timeout so cleanup doesn't hang."""
@@ -223,6 +230,30 @@ class rdp(connection):
             await self.connect_rdp(auth_only=auth_only)
         finally:
             await self.terminate_conn()
+
+    async def login_and_confirm(self):
+        """Connect and return whether a real session opened (Save Session Info PDU), always cleaning up.
+
+        That PDU never comes when access is authorized but the logon is refused (restricted admin).
+        """
+        try:
+            await self.connect_rdp()
+            try:
+                await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
+                return True
+            except TimeoutError:
+                self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
+                return False
+        finally:
+            await self.terminate_conn()
+
+    def rdp_access_denied(self):
+        """Whether the Early User Authorization Result PDU says the account has no RDP access right at all.
+
+        Distinct from a valid right whose logon is later refused (restricted admin), which yields no such PDU.
+        """
+        self.logger.debug(f"authz_result from Early User Authorization Result PDU: {self.conn.authz_result}")
+        return self.conn.authz_result == AUTHZ_ACCESS_DENIED
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         try:
@@ -281,9 +312,13 @@ class rdp(connection):
                 stype=stype,
             )
             self.conn = self._create_rdp_connection(self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup(auth_only=self._execution_pending()))
+            if self._execution_pending():
+                # Execution opens its own session in execute_cmd; here only verify the
+                # credentials (auth_only) to avoid a full session and Win11 clipboard issues.
+                asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+            else:
+                self.admin_privs = asyncio.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(
                 "{}\\{}{} {}".format(
                     domain,
@@ -311,8 +346,11 @@ class rdp(connection):
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
-            elif "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{(process_secret(password))} {self.mark_pwned()}")
+            elif self.rdp_access_denied():
+                self.logger.success(f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             elif "No such file" in str(e):
                 self.logger.fail(e)
             else:
@@ -341,11 +379,13 @@ class rdp(connection):
                 stype=asyauthSecret.PASS,
             )
             self.conn = self._create_rdp_connection(self.auth)
-            # When execution follows, use auth_only to verify credentials
-            # without creating a full session (avoids Win11 clipboard issues).
-            asyncio.run(self.connect_rdp_with_cleanup(auth_only=self._execution_pending()))
+            if self._execution_pending():
+                # Execution opens its own session in execute_cmd; here only verify the
+                # credentials (auth_only) to avoid a full session and Win11 clipboard issues.
+                asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+            else:
+                self.admin_privs = asyncio.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
@@ -353,8 +393,11 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
+            if self.rdp_access_denied():
+                self.logger.success(f"{domain}\\{username}:{process_secret(password)}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             else:
                 reason = None
                 for word in self.rdp_error_status:
@@ -377,9 +420,13 @@ class rdp(connection):
                 stype=asyauthSecret.NT,
             )
             self.conn = self._create_rdp_connection(self.auth)
-            asyncio.run(self.connect_rdp_with_cleanup(auth_only=self._execution_pending()))
+            if self._execution_pending():
+                # Execution opens its own session in execute_cmd; here only verify the
+                # credentials (auth_only) to avoid a full session and Win11 clipboard issues.
+                asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+            else:
+                self.admin_privs = asyncio.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
@@ -387,8 +434,11 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
+            if self.rdp_access_denied():
+                self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             else:
                 reason = None
                 for word in self.rdp_error_status:
@@ -698,7 +748,8 @@ Add-Type -AssemblyName System.Windows.Forms
             await asyncio.sleep(5)
             if self.conn is not None and self.conn.desktop_buffer_has_data is True:
                 buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
+                filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
+                filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
                 buffer.save(filename, "png")
                 self.logger.highlight(f"Screenshot saved {filename}")
         except Exception as e:
@@ -727,7 +778,8 @@ Add-Type -AssemblyName System.Windows.Forms
                 await asyncio.sleep(int(self.args.screentime))
                 if self.conn is not None and self.conn.desktop_buffer_has_data is True:
                     buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                    filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
+                    filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
+                    filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
                     buffer.save(filename, "png")
                     self.logger.highlight(f"NLA Screenshot saved {filename}")
                     return
