@@ -6,8 +6,10 @@ from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5 import rrp
 from impacket.examples.secretsdump import RemoteOperations
 from os import makedirs
+from pathlib import Path
 from nxc.helpers.logger import highlight
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 import re
 
@@ -160,7 +162,10 @@ class NXCModule:
                 makedirs(f"{NXC_PATH}/modules/PuTTY", exist_ok=True)
                 share = session["private_key_path"].split(":")[0] + "$"
                 file_path = session["private_key_path"].split(":")[1]
-                download_path = f"{NXC_PATH}/modules/PuTTY/putty_{session['user']}_{session['session_name']}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.sec"
+                download_path = Path(NXC_PATH, "modules", "PuTTY", sanitize_path_component(f"putty_{session['user']}_{session['session_name']}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.sec")).resolve()
+                if Path(NXC_PATH, "modules", "PuTTY").resolve() not in download_path.parents:
+                    self.context.log.fail(f"Path traversal detected in PuTTY session {session['session_name']!r}, skipping")
+                    continue
 
                 buf = BytesIO()
                 with open(download_path, "wb") as file:
