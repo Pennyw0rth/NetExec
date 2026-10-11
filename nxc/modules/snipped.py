@@ -1,7 +1,9 @@
 import ntpath
 import os
 from os.path import join, getsize, exists
+from pathlib import Path
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
 
@@ -84,9 +86,11 @@ class NXCModule:
                                 continue
 
                             remote_file_path = ntpath.join(screenshot_path, remote_file_name)
-                            sanitized_path = screenshot_path.replace("\\", "_").replace("/", "_")
-                            local_file_name = f"{folder_name}_{sanitized_path}_{remote_file_name}"
-                            local_file_path = join(user_output_dir, local_file_name)
+                            local_file_path = Path(user_output_dir, sanitize_path_component(f"{screenshot_path}_{remote_file_name}")).resolve()
+                            if Path(user_output_dir).resolve() not in local_file_path.parents:
+                                context.log.fail(f"Path traversal detected in {remote_file_path!r}, skipping")
+                                continue
+                            context.log.debug(f"{local_file_path=}")
 
                             try:
                                 with open(local_file_path, "wb") as local_file:
@@ -107,7 +111,7 @@ class NXCModule:
                                 context.log.debug(f"Failed to download '{remote_file_path}' for user {folder_name}: {e}")
 
         if total_files_downloaded > 0 and host_output_path:
-            context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}.")
+            context.log.success(f"{total_files_downloaded} file(s) downloaded from host {connection.host} to {host_output_path}/")
 
     def find_screenshots_folders(self, user_folder_name):
         """

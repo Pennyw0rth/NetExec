@@ -1,6 +1,7 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
 
@@ -29,7 +30,7 @@ class NXCModule:
     def on_admin_login(self, context, connection):
         if not self.domains:
             domains = []
-            output = connection.wmi("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
+            output = connection.wmi_query("Select Name FROM MicrosoftDNS_Zone", "root\\microsoftdns")
             domains = [result["Name"]["value"] for result in output] if output else []
             context.log.success(f"Domains retrieved: {domains}")
         else:
@@ -37,8 +38,8 @@ class NXCModule:
         data = ""
 
         for domain in domains:
-            output = connection.wmi(
-                f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = {domain}",
+            output = connection.wmi_query(
+                f"Select TextRepresentation FROM MicrosoftDNS_ResourceRecord WHERE DomainName = '{domain}'",
                 "root\\microsoftdns",
             )
 
@@ -63,6 +64,6 @@ class NXCModule:
                         context.log.highlight("\t" + d)
                         data += "\t" + d + "\n"
 
-        log_name = f"DNS-Enum-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
+        log_name = sanitize_path_component(f"DNS-Enum-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         write_log(data, log_name)
         context.log.display(f"Saved raw output to {NXC_PATH}/logs/{log_name}")

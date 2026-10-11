@@ -3,10 +3,10 @@ from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
-    """Execute arbitrary SQL commands on the target MSSQL server"""
+    """Made by @lodos2005"""
 
     name = "mssql_coerce"
-    description = "Execute arbitrary SQL commands on the target MSSQL server"
+    description = "Execute SQL commands To interact with a specified LISTENER for coercion/exfiltration"
     supported_protocols = ["mssql"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
