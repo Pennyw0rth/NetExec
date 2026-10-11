@@ -233,7 +233,7 @@ class rdp(connection):
             try:
                 await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
                 return True
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
                 return False
         finally:
