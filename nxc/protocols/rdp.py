@@ -313,9 +313,17 @@ class rdp(connection):
             )
             self.conn = self._create_rdp_connection(self.auth)
             if self._execution_pending():
-                # Execution opens its own session in execute_cmd; here only verify the
-                # credentials (auth_only) to avoid a full session and Win11 clipboard issues.
-                asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                # auth_only verifies creds without opening a full session, which on single-session
+                # Win11 hosts would be left disconnected and break the clipboard execute_shell uses
+                # (commit ac6f5814). It needs CredSSP/NLA; if the server doesn't negotiate it aardwolf
+                # raises, so fall back to a full confirm on a FRESH connection (the failed one is
+                # already torn down and cannot be reconnected), which also sets admin_privs.
+                try:
+                    asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                except RuntimeError as e:
+                    self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
+                    self.conn = self._create_rdp_connection(self.auth)
+                    self.admin_privs = asyncio.run(self.login_and_confirm())
             else:
                 self.admin_privs = asyncio.run(self.login_and_confirm())
 
@@ -380,9 +388,17 @@ class rdp(connection):
             )
             self.conn = self._create_rdp_connection(self.auth)
             if self._execution_pending():
-                # Execution opens its own session in execute_cmd; here only verify the
-                # credentials (auth_only) to avoid a full session and Win11 clipboard issues.
-                asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                # auth_only verifies creds without opening a full session, which on single-session
+                # Win11 hosts would be left disconnected and break the clipboard execute_shell uses
+                # (commit ac6f5814). It needs CredSSP/NLA; if the server doesn't negotiate it aardwolf
+                # raises, so fall back to a full confirm on a FRESH connection (the failed one is
+                # already torn down and cannot be reconnected), which also sets admin_privs.
+                try:
+                    asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                except RuntimeError as e:
+                    self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
+                    self.conn = self._create_rdp_connection(self.auth)
+                    self.admin_privs = asyncio.run(self.login_and_confirm())
             else:
                 self.admin_privs = asyncio.run(self.login_and_confirm())
 
@@ -421,9 +437,17 @@ class rdp(connection):
             )
             self.conn = self._create_rdp_connection(self.auth)
             if self._execution_pending():
-                # Execution opens its own session in execute_cmd; here only verify the
-                # credentials (auth_only) to avoid a full session and Win11 clipboard issues.
-                asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                # auth_only verifies creds without opening a full session, which on single-session
+                # Win11 hosts would be left disconnected and break the clipboard execute_shell uses
+                # (commit ac6f5814). It needs CredSSP/NLA; if the server doesn't negotiate it aardwolf
+                # raises, so fall back to a full confirm on a FRESH connection (the failed one is
+                # already torn down and cannot be reconnected), which also sets admin_privs.
+                try:
+                    asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                except RuntimeError as e:
+                    self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
+                    self.conn = self._create_rdp_connection(self.auth)
+                    self.admin_privs = asyncio.run(self.login_and_confirm())
             else:
                 self.admin_privs = asyncio.run(self.login_and_confirm())
 
