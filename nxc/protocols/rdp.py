@@ -570,7 +570,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise asyncio.TimeoutError
+                raise TimeoutError
 
             data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=remaining)
             if data is None:
@@ -587,7 +587,7 @@ Add-Type -AssemblyName System.Windows.Forms
         if not self.conn.desktop_buffer_has_data:
             try:
                 await self._wait_for_event({"VIDEO"}, self.args.cmd_delay)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.logger.debug("No desktop update received before command execution; continuing")
 
         remaining_delay = self.args.cmd_delay - (loop.time() - started_at)
@@ -627,7 +627,7 @@ Add-Type -AssemblyName System.Windows.Forms
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise asyncio.TimeoutError
+                raise TimeoutError
 
             data = await self._wait_for_event({"CLIPBOARD_DATA_TXT"}, remaining)
             result = self._parse_execution_result(data.data, marker)
@@ -656,7 +656,7 @@ Add-Type -AssemblyName System.Windows.Forms
                 self.logger.success("Waiting for clipboard to be ready...")
                 try:
                     await self._wait_for_event({"CLIPBOARD_READY"}, self.args.clipboard_delay)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
                     return None
 
@@ -677,7 +677,7 @@ Add-Type -AssemblyName System.Windows.Forms
             if get_output:
                 try:
                     await self._submit_run_command(command)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.fail(
                         "Remote session did not acknowledge the clipboard command data"
                     )
@@ -692,7 +692,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
             try:
                 exit_code, output = await self._wait_for_command_result(marker)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.logger.fail("Timed out waiting for command output on the RDP clipboard")
                 return None
 
