@@ -320,6 +320,7 @@ class mssql(connection):
                 self.logger.fail(self.conn.lastError)
             else:
                 for data in raw_output:
+                    self.logger.highlight("--------------------")
                     for key, value in data.items():
                         if key:
                             self.logger.highlight(f"{key}:{value}")
