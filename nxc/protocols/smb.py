@@ -209,18 +209,19 @@ class smb(connection):
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
         # self.remoteName is the attribute which gets used in the SPN
-
         self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            self.remoteName = sanitize_dns(self.conn.getServerDNSHostName(), self.logger)
-            if self.remoteName and "." in self.remoteName:
-                self.hostname = self.remoteName.split(".", 1)[0]
-            elif self.remoteName:
-                self.hostname = self.remoteName
+            dns_hostname = sanitize_dns(self.conn.getServerDNSHostName(), self.logger)
+            if dns_hostname and "." in dns_hostname:
+                self.hostname = dns_hostname.split(".", 1)[0]
+            elif dns_hostname:
+                self.hostname = dns_hostname
             else:
                 self.hostname = sanitize_dns(self.conn.getServerName(), self.logger)
             self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
+            # Preserve IP as target if not required by Kerberos to avoid issues when DNS is not resolvable
+            self.remoteName = self.host if self.kerberos else dns_hostname
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
