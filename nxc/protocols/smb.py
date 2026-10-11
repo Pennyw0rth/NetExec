@@ -209,6 +209,8 @@ class smb(connection):
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
         # self.remoteName is the attribute which gets used in the SPN
+        self.hostname = self.host
+        self.targetDomain = self.host
         self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
@@ -234,19 +236,12 @@ class smb(connection):
                     import socket
                     socket.inet_aton(self.host)
                     self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
-                    self.hostname = self.host
-                    self.targetDomain = self.host
             except OSError:
                 if self.host.count(".") >= 1:
                     self.hostname = self.host.split(".")[0]
                     self.targetDomain = ".".join(self.host.split(".")[1:])
-                else:
-                    self.hostname = self.host
-                    self.targetDomain = self.host
             except Exception as e:
                 self.logger.debug(f"Error getting hostname from LDAP: {e}")
-                self.hostname = self.host
-                self.targetDomain = self.host
 
         if self.args.domain:
             self.domain = self.args.domain
