@@ -132,6 +132,11 @@ class UserSamrDump:
 
             user_info = info_user_resp["All"]
             samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
+            # SAMR's own UserAccountControl field uses the MS-SAMR 2.2.1.12 "USER_ACCOUNT"
+            # flags (USER_ACCOUNT_DISABLED = 0x1), not the UF_* / ADS_UF_* flags LDAP's
+            # userAccountControl attribute uses (UF_ACCOUNTDISABLE = 0x2). The two map
+            # 1:1 per MS-SAMR 3.1.5.14.2, but are numerically different - using UF_ACCOUNTDISABLE
+            # here would silently never match.
             if active_only and (int(user_info["UserAccountControl"]) & USER_ACCOUNT_DISABLED):
                 continue
 
