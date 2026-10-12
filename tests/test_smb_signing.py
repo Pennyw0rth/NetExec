@@ -60,7 +60,7 @@ def test_smb311_signing_enabled_not_required_reports_false(smb_module):
         server_security_mode=SMB2_NEGOTIATE_SIGNING_ENABLED,
         require_signing=True,
     )
-    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is False
+    assert smb_module.smb._is_signing_required(SimpleNamespace(smbv1=False, conn=conn)) is False
 
 
 def test_smb311_signing_required_reports_true(smb_module):
@@ -69,7 +69,7 @@ def test_smb311_signing_required_reports_true(smb_module):
         server_security_mode=SMB2_NEGOTIATE_SIGNING_ENABLED | SMB2_NEGOTIATE_SIGNING_REQUIRED,
         require_signing=True,
     )
-    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is True
+    assert smb_module.smb._is_signing_required(SimpleNamespace(smbv1=False, conn=conn)) is True
 
 
 def test_smb30_signing_not_required_reports_false(smb_module):
@@ -78,7 +78,7 @@ def test_smb30_signing_not_required_reports_false(smb_module):
         server_security_mode=SMB2_NEGOTIATE_SIGNING_ENABLED,
         require_signing=False,
     )
-    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is False
+    assert smb_module.smb._is_signing_required(SimpleNamespace(smbv1=False, conn=conn)) is False
 
 
 def test_smb21_falls_back_to_require_signing(smb_module):
@@ -89,9 +89,9 @@ def test_smb21_falls_back_to_require_signing(smb_module):
         server_security_mode=0,
         require_signing=True,
     )
-    assert smb_module.smb._is_signing_required(None, conn, smbv1=False) is True
+    assert smb_module.smb._is_signing_required(SimpleNamespace(smbv1=False, conn=conn)) is True
 
 
 def test_smbv1_uses_session_signing_flag(smb_module):
-    assert smb_module.smb._is_signing_required(None, make_smbv1_conn(True), smbv1=True) is True
-    assert smb_module.smb._is_signing_required(None, make_smbv1_conn(False), smbv1=True) is False
+    assert smb_module.smb._is_signing_required(SimpleNamespace(smbv1=True, conn=make_smbv1_conn(True))) is True
+    assert smb_module.smb._is_signing_required(SimpleNamespace(smbv1=True, conn=make_smbv1_conn(False))) is False
