@@ -398,3 +398,5 @@ netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LO
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --roles
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --tablespaces
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME -q "SELECT user FROM dual"
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --dblinks
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --sysdba --dump-hashes

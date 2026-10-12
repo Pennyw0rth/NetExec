@@ -201,6 +201,36 @@ class oracle(connection):
             self.logger.highlight(f"  {row[0]:<40} {row_count:<15}")
         self.logger.highlight(f"  Total: {len(rows)} table(s)")
 
+    def dblinks(self):
+        """Enumerate database links — a classic lateral movement vector.
+
+        DBA_DB_LINKS exposes the remote username and target host/connect string, but Oracle
+        never exposes the stored password via SQL (even to SYSDBA), so none is shown here.
+        """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT owner, db_link, username, host FROM dba_db_links ORDER BY owner, db_link")
+            rows = cursor.fetchall()
+            cursor.close()
+        except oracledb.Error:
+            rows = None
+
+        if rows is None:
+            columns, rows = self.query_execute("SELECT NULL, db_link, username, host FROM all_db_links ORDER BY db_link")
+            if rows is None:
+                return
+
+        if not rows:
+            self.logger.display("No database links found")
+            return
+
+        self.logger.success(f"Database links ({len(rows)}):")
+        for owner, db_link, username, host in rows:
+            owner_prefix = f"{owner}." if owner else ""
+            self.logger.highlight(f"  {owner_prefix}{db_link}")
+            self.logger.highlight(f"    Remote user: {username or '(none / CURRENT_USER)'}")
+            self.logger.highlight(f"    Target:      {host}")
+
     def database(self):
         """Handle --database flag: no value lists PDBs, a value lists tables in that schema."""
         if self.args.database is True:
@@ -292,6 +322,87 @@ class oracle(connection):
             for row in rows:
                 self.logger.highlight(f"  {row[0]}")
             self.logger.display("Note: use a DBA account to see status and sizes")
+
+    # SPARE4 verifier segments and the hashcat mode each maps to.
+    # See Oracle's documented password verifier format (SEC_CASE_SENSITIVE_LOGON /
+    # allowed logon versions): S: is the 11g SHA-1 verifier, T: is the 12c+ SHA-512/PBKDF2
+    # verifier, and a legacy H: segment can also appear when older compatibility is enabled.
+    HASH_VERIFIER_TYPES = (
+        ("S", 112, "SHA1/11g"),
+        ("T", 12300, "SHA512/12c+"),
+        ("H", 3100, "DES-compat"),
+    )
+
+    # Literal markers Oracle writes into sys.user$.password instead of a real hash, for
+    # accounts that don't authenticate with a local verifier at all.
+    NON_LOCAL_AUTH_MARKERS = {"EXTERNAL", "GLOBAL"}
+
+    def dump_hashes(self):
+        """Dump password verifiers from sys.user$ for offline cracking. Requires SYSDBA.
+
+        Oracle stores up to three verifier types depending on version/config: a legacy DES
+        hash (PASSWORD column), an 11g SHA-1 verifier, and a 12c+ SHA-512/PBKDF2 verifier
+        (both in SPARE4). type# = 1 filters out roles (sys.user$ also stores role entries,
+        e.g. CONNECT, DBA, which have no password of their own). Accounts that authenticate
+        externally/globally carry a literal marker instead of a hash and are reported as such,
+        not as crackable DES hashes. Values are extracted exactly as Oracle stores them —
+        verify the exact input format your hashcat/john version expects for each mode.
+        """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT u.name, u.password, u.spare4, du.account_status "
+                "FROM sys.user$ u LEFT JOIN dba_users du ON du.username = u.name "
+                "WHERE u.type# = 1 ORDER BY u.name"
+            )
+            rows = cursor.fetchall()
+            cursor.close()
+        except oracledb.Error as e:
+            hint = " — this typically requires --sysdba" if self.auth_mode != oracledb.AUTH_MODE_SYSDBA else ""
+            self.logger.fail(f"Cannot read sys.user$: {self.format_oracle_error(e)}{hint}")
+            return
+
+        accounts = []
+        non_local = []
+        for name, password, spare4, status in rows:
+            if password and password.upper() in self.NON_LOCAL_AUTH_MARKERS:
+                non_local.append((name, password, status))
+                continue
+            verifiers = []
+            if password:
+                verifiers.append(("DES/legacy", 3100, password))
+            for key, mode, label in self.HASH_VERIFIER_TYPES:
+                match = re.search(rf"{key}:([0-9A-Fa-f]+)", spare4 or "")
+                if match:
+                    verifiers.append((label, mode, match.group(1)))
+            if verifiers:
+                accounts.append((name, status, verifiers))
+
+        if not accounts and not non_local:
+            self.logger.fail("No extractable password verifiers found")
+            return
+
+        if accounts:
+            self.logger.success(f"Password hashes for {len(accounts)} account(s):")
+            hashcat_lines = {}
+            for name, status, verifiers in accounts:
+                status_tag = f" [{status}]" if status else ""
+                self.logger.highlight(f"  {name}{status_tag}")
+                for label, mode, value in verifiers:
+                    self.logger.highlight(f"    [{label}, hashcat -m {mode}] {value}")
+                    hashcat_lines.setdefault(mode, []).append(f"{name}:{value}")
+
+            self.logger.display("Lines below are ready to save as hashcat input files, one per mode:")
+            for mode, lines in sorted(hashcat_lines.items()):
+                self.logger.highlight(f"  -- hashcat -m {mode} --")
+                for line in lines:
+                    self.logger.highlight(f"  {line}")
+
+        if non_local:
+            self.logger.display(f"{len(non_local)} account(s) use external/global authentication (no local hash):")
+            for name, marker, status in non_local:
+                status_tag = f" [{status}]" if status else ""
+                self.logger.highlight(f"  {name}{status_tag} ({marker})")
 
     def query(self):
         """Execute an arbitrary SQL query supplied via -q/--query."""

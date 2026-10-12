@@ -16,6 +16,8 @@ def proto_args(parser, parents):
     egroup.add_argument("--users", action="store_true", help="enumerate database users/accounts")
     egroup.add_argument("--roles", action="store_true", help="show current session roles and system privileges")
     egroup.add_argument("--tablespaces", action="store_true", help="list tablespaces")
+    egroup.add_argument("--dblinks", action="store_true", help="enumerate database links")
+    egroup.add_argument("--dump-hashes", action="store_true", help="dump password hashes from sys.user$ (requires --sysdba)")
     egroup.add_argument("-q", "--query", metavar="QUERY", type=str, help="execute the specified SQL query")
 
     rgroup = oracle_parser.add_argument_group("Connection Privilege")

