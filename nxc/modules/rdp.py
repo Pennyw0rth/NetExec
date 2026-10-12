@@ -113,74 +113,81 @@ class RdpSmb:
         self.logger = context.log
 
     def rdp_wrapper(self, action):
-        remote_ops = RemoteOperations(self.__smbconnection, False)
-        remote_ops.enableRegistry()
+        remote_ops = None
+        try:
+            remote_ops = RemoteOperations(self.__smbconnection, False)
+            remote_ops.enableRegistry()
 
-        if remote_ops._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
+            if remote_ops._RemoteOperations__rrp:
+                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                reg_handle = ans["phKey"]
 
-            ans = rrp.hBaseRegOpenKey(
-                remote_ops._RemoteOperations__rrp,
-                reg_handle,
-                "SYSTEM\\CurrentControlSet\\Control\\Terminal Server",
-            )
-            key_handle = ans["phkResult"]
+                ans = rrp.hBaseRegOpenKey(
+                    remote_ops._RemoteOperations__rrp,
+                    reg_handle,
+                    "SYSTEM\\CurrentControlSet\\Control\\Terminal Server",
+                )
+                key_handle = ans["phkResult"]
 
-            ans = rrp.hBaseRegSetValue(
-                remote_ops._RemoteOperations__rrp,
-                key_handle,
-                "fDenyTSConnections",
-                rrp.REG_DWORD,
-                0 if action == "enable" else 1,
-            )
+                ans = rrp.hBaseRegSetValue(
+                    remote_ops._RemoteOperations__rrp,
+                    key_handle,
+                    "fDenyTSConnections",
+                    rrp.REG_DWORD,
+                    0 if action == "enable" else 1,
+                )
 
-            rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "fDenyTSConnections")
+                rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "fDenyTSConnections")
 
-            if int(data) == 0:
-                self.logger.success("Enable RDP via SMB(ncacn_np) successfully")
-            elif int(data) == 1:
-                self.logger.success("Disable RDP via SMB(ncacn_np) successfully")
+                if int(data) == 0:
+                    self.logger.success("Enable RDP via SMB(ncacn_np) successfully")
+                elif int(data) == 1:
+                    self.logger.success("Disable RDP via SMB(ncacn_np) successfully")
 
-            self.firewall_cmd(action)
+                self.firewall_cmd(action)
 
-            if action == "enable":
-                self.query_rdp_port(remote_ops, reg_handle)
-        with contextlib.suppress(Exception):
-            remote_ops.finish()
+                if action == "enable":
+                    self.query_rdp_port(remote_ops, reg_handle)
+        finally:
+            if remote_ops is not None:
+                with contextlib.suppress(Exception):
+                    remote_ops.finish()
 
     def rdp_ram_wrapper(self, action):
-        remote_ops = RemoteOperations(self.__smbconnection, False)
-        remote_ops.enableRegistry()
+        remote_ops = None
+        try:
+            remote_ops = RemoteOperations(self.__smbconnection, False)
+            remote_ops.enableRegistry()
 
-        if remote_ops._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
+            if remote_ops._RemoteOperations__rrp:
+                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                reg_handle = ans["phKey"]
 
-            ans = rrp.hBaseRegOpenKey(
-                remote_ops._RemoteOperations__rrp,
-                reg_handle,
-                "System\\CurrentControlSet\\Control\\Lsa",
-            )
-            key_handle = ans["phkResult"]
+                ans = rrp.hBaseRegOpenKey(
+                    remote_ops._RemoteOperations__rrp,
+                    reg_handle,
+                    "System\\CurrentControlSet\\Control\\Lsa",
+                )
+                key_handle = ans["phkResult"]
 
-            rrp.hBaseRegSetValue(
-                remote_ops._RemoteOperations__rrp,
-                key_handle,
-                "DisableRestrictedAdmin",
-                rrp.REG_DWORD,
-                0 if action == "enable-ram" else 1,
-            )
+                rrp.hBaseRegSetValue(
+                    remote_ops._RemoteOperations__rrp,
+                    key_handle,
+                    "DisableRestrictedAdmin",
+                    rrp.REG_DWORD,
+                    0 if action == "enable-ram" else 1,
+                )
 
-            rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "DisableRestrictedAdmin")
+                rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "DisableRestrictedAdmin")
 
-            if int(data) == 0:
-                self.logger.success("Enable RDP Restricted Admin Mode via SMB(ncacn_np) succeed")
-            elif int(data) == 1:
-                self.logger.success("Disable RDP Restricted Admin Mode via SMB(ncacn_np) succeed")
-
-        with contextlib.suppress(Exception):
-            remote_ops.finish()
+                if int(data) == 0:
+                    self.logger.success("Enable RDP Restricted Admin Mode via SMB(ncacn_np) succeed")
+                elif int(data) == 1:
+                    self.logger.success("Disable RDP Restricted Admin Mode via SMB(ncacn_np) succeed")
+        finally:
+            if remote_ops is not None:
+                with contextlib.suppress(Exception):
+                    remote_ops.finish()
 
     def query_rdp_port(self, remoteOps, regHandle):
         if remoteOps:

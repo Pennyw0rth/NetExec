@@ -1,3 +1,4 @@
+import contextlib
 import json
 import logging
 import operator
@@ -151,13 +152,17 @@ class HostChecker:
     def __init__(self, context, connection):
         self.context = context
         self.connection = connection
-        remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
-        remoteOps.enableRegistry()
-        self.dce = remoteOps._RemoteOperations__rrp
+        self.remote_ops = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
+        self.remote_ops.enableRegistry()
+        self.dce = self.remote_ops._RemoteOperations__rrp
 
     def run(self):
-        self.init_checks()
-        self.check_config()
+        try:
+            self.init_checks()
+            self.check_config()
+        finally:
+            with contextlib.suppress(Exception):
+                self.remote_ops.finish()
 
     def init_checks(self):
         # Declare the checks to do and how to do them
