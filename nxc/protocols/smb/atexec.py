@@ -163,23 +163,34 @@ class TSCH_EXEC:
                 self.logger.debug(f"hSchRpcRun returned: {e}")
 
         done = False
+        # Bound the wait so a task that never starts (for example a specific run-as user with no interactive
+        # session, which a TASK_LOGON_NONE task requires) fails cleanly instead of looping forever
+        max_run_checks = max(self.__tries // 10, 15) if self.__tries else 15
+        run_checks = 0
         while not done:
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
             try:
                 resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")
+                has_run = resp["pLastRuntime"]["wYear"] != 0
             except tsch.DCERPCSessionError as e:
-                if e.error_code == 0x00041303:
-                    sleep(2)
-                    continue
-                self.logger.fail(f"Error retrieving task last run info: {e}")
-                break
-            if resp["pLastRuntime"]["wYear"] != 0:
+                if e.error_code != 0x00041303:  # SCHED_S_TASK_HAS_NOT_RUN
+                    self.logger.fail(f"Error retrieving task last run info: {e}")
+                    break
+                has_run = False
+            if has_run:
                 done = True
-            else:
-                sleep(2)
+                continue
+            run_checks += 1
+            if run_checks >= max_run_checks:
+                self.logger.fail(f"Task \\{self.task_name} did not start. If a specific run-as user was set, it likely has no interactive session on the target (a TASK_LOGON_NONE task only runs while that user is logged on).")
+                break
+            sleep(2)
 
         self.logger.info(f"Deleting task \\{self.task_name}")
-        tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
+        try:
+            tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
+        except Exception as e:
+            self.logger.debug(f"Error deleting task \\{self.task_name}: {e}")
 
         if self.__retOutput:
             tries = 1
