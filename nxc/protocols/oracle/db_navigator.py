@@ -41,7 +41,6 @@ class navigator(DatabaseNavigator):
                 if len(login_data) > 1:
                     print_table(login_data, title="Credential(s) with Logins")
 
-    @staticmethod
     def help_hosts(self):
         help_string = """
         hosts [filter_term]
@@ -88,7 +87,6 @@ class navigator(DatabaseNavigator):
                 if len(access_data) > 1:
                     print_table(access_data, title="Access to Host(s)")
 
-    @staticmethod
     def help_creds(self):
         help_string = """
         creds [add|remove|filter_term]

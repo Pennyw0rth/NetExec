@@ -137,12 +137,20 @@ class oracle(connection):
                 self.conn.close()
 
     def query_execute(self, query):
-        """Execute a SQL query and return the results as a list of tuples, or None on error."""
+        """Execute a SQL query and return (columns, rows), or (None, None) on error.
+
+        Non-SELECT statements (DDL/DML) have no description/rows to fetch; they are
+        executed and committed, returning ([], []) rather than being treated as an error.
+        """
         try:
             cursor = self.conn.cursor()
             cursor.execute(query)
+            if cursor.description is None:
+                self.conn.commit()
+                cursor.close()
+                return [], []
+            columns = [col[0] for col in cursor.description]
             results = cursor.fetchall()
-            columns = [col[0] for col in cursor.description] if cursor.description else []
             cursor.close()
             return columns, results
         except oracledb.Error as e:
@@ -289,6 +297,9 @@ class oracle(connection):
         """Execute an arbitrary SQL query supplied via -q/--query."""
         columns, rows = self.query_execute(self.args.query)
         if columns is None:
+            return
+        if not columns:
+            self.logger.success("Statement executed successfully (no rows returned)")
             return
         if not rows:
             self.logger.display("Query returned no results")
