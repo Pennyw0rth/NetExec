@@ -386,3 +386,15 @@ netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
 netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
+##### Oracle - requires --service-name or --sid; set LOGIN values to a real Oracle account
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sid LOGIN_USERNAME
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --sysdba
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --sysoper
+netexec oracle TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --service-name LOGIN_USERNAME --continue-on-success
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --database
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --database SCHEMA_NAME
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --users
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --roles
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --tablespaces
+netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME -q "SELECT user FROM dual"
