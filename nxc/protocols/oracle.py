@@ -323,30 +323,45 @@ class oracle(connection):
                 self.logger.highlight(f"  {row[0]}")
             self.logger.display("Note: use a DBA account to see status and sizes")
 
-    # SPARE4 verifier segments and the hashcat mode each maps to.
-    # See Oracle's documented password verifier format (SEC_CASE_SENSITIVE_LOGON /
-    # allowed logon versions): S: is the 11g SHA-1 verifier, T: is the 12c+ SHA-512/PBKDF2
-    # verifier, and a legacy H: segment can also appear when older compatibility is enabled.
-    HASH_VERIFIER_TYPES = (
-        ("S", 112, "SHA1/11g"),
-        ("T", 12300, "SHA512/12c+"),
-        ("H", 3100, "DES-compat"),
-    )
-
     # Literal markers Oracle writes into sys.user$.password instead of a real hash, for
     # accounts that don't authenticate with a local verifier at all.
     NON_LOCAL_AUTH_MARKERS = {"EXTERNAL", "GLOBAL"}
 
+    def hash_verifier_priority(self):
+        """Order of verifier types to try, newest-first for the connected DB's major version.
+
+        Oracle keeps older verifier types in SPARE4 alongside newer ones for backward
+        compatibility with older clients, so a 12c+ database can still carry an 11g SHA-1
+        verifier for the same account. We want exactly one hash per account — the one that
+        actually matches the DB's auth generation — rather than dumping every type it kept
+        around for compat.
+        """
+        try:
+            major = int(self.server_version.split(".")[0])
+        except (ValueError, AttributeError, IndexError):
+            major = None
+
+        sha512_12c = ("T", 12300, "SHA512/12c+")
+        sha1_11g = ("S", 112, "SHA1/11g")
+        legacy_des = ("legacy", 3100, "DES/legacy")
+
+        if major is not None and major >= 12:
+            return (sha512_12c, sha1_11g, legacy_des)
+        if major == 11:
+            return (sha1_11g, legacy_des, sha512_12c)
+        return (legacy_des, sha1_11g, sha512_12c)
+
     def dump_hashes(self):
-        """Dump password verifiers from sys.user$ for offline cracking. Requires SYSDBA.
+        """Dump one password verifier per account from sys.user$ for offline cracking. Requires SYSDBA.
 
         Oracle stores up to three verifier types depending on version/config: a legacy DES
         hash (PASSWORD column), an 11g SHA-1 verifier, and a 12c+ SHA-512/PBKDF2 verifier
-        (both in SPARE4). type# = 1 filters out roles (sys.user$ also stores role entries,
-        e.g. CONNECT, DBA, which have no password of their own). Accounts that authenticate
-        externally/globally carry a literal marker instead of a hash and are reported as such,
-        not as crackable DES hashes. Values are extracted exactly as Oracle stores them —
-        verify the exact input format your hashcat/john version expects for each mode.
+        (both in SPARE4) — see hash_verifier_priority() for how the right one is picked.
+        type# = 1 filters out roles (sys.user$ also stores role entries, e.g. CONNECT, DBA,
+        which have no password of their own). Accounts that authenticate externally/globally
+        carry a literal marker instead of a hash and are reported as such, not as crackable
+        DES hashes. Values are extracted exactly as Oracle stores them — verify the exact
+        input format your hashcat/john version expects for the reported mode.
         """
         try:
             cursor = self.conn.cursor()
@@ -362,21 +377,26 @@ class oracle(connection):
             self.logger.fail(f"Cannot read sys.user$: {self.format_oracle_error(e)}{hint}")
             return
 
+        priority = self.hash_verifier_priority()
         accounts = []
         non_local = []
         for name, password, spare4, status in rows:
             if password and password.upper() in self.NON_LOCAL_AUTH_MARKERS:
                 non_local.append((name, password, status))
                 continue
-            verifiers = []
-            if password:
-                verifiers.append(("DES/legacy", 3100, password))
-            for key, mode, label in self.HASH_VERIFIER_TYPES:
-                match = re.search(rf"{key}:([0-9A-Fa-f]+)", spare4 or "")
-                if match:
-                    verifiers.append((label, mode, match.group(1)))
-            if verifiers:
-                accounts.append((name, status, verifiers))
+            verifier = None
+            for key, mode, label in priority:
+                if key == "legacy":
+                    if password:
+                        verifier = (label, mode, password)
+                        break
+                else:
+                    match = re.search(rf"{key}:([0-9A-Fa-f]+)", spare4 or "")
+                    if match:
+                        verifier = (label, mode, match.group(1))
+                        break
+            if verifier:
+                accounts.append((name, status, verifier))
 
         if not accounts and not non_local:
             self.logger.fail("No extractable password verifiers found")
@@ -385,12 +405,10 @@ class oracle(connection):
         if accounts:
             self.logger.success(f"Password hashes for {len(accounts)} account(s):")
             hashcat_lines = {}
-            for name, status, verifiers in accounts:
+            for name, status, (label, mode, value) in accounts:
                 status_tag = f" [{status}]" if status else ""
-                self.logger.highlight(f"  {name}{status_tag}")
-                for label, mode, value in verifiers:
-                    self.logger.highlight(f"    [{label}, hashcat -m {mode}] {value}")
-                    hashcat_lines.setdefault(mode, []).append(f"{name}:{value}")
+                self.logger.highlight(f"  {name}{status_tag} [{label}, hashcat -m {mode}] {value}")
+                hashcat_lines.setdefault(mode, []).append(f"{name}:{value}")
 
             self.logger.display("Lines below are ready to save as hashcat input files, one per mode:")
             for mode, lines in sorted(hashcat_lines.items()):

@@ -304,13 +304,20 @@ Non-DBA users fall back to `all_db_links`, which shows only links they own or th
 Dumps password verifiers from `sys.user$` for offline cracking with hashcat/john. **Requires
 `--sysdba`** — the DBA role alone cannot read this SYS-owned base table.
 
-Oracle stores up to three verifier types depending on version/config:
+Oracle keeps up to three verifier types per account at once, for backward compatibility with
+older clients — a 12c+ database can still carry an 11g verifier for the same user. Rather than
+dump every type an account happens to have, NetExec picks **one hash per account**, matching
+the connected database's own major version:
 
-| Verifier | Source | hashcat mode |
-|---|---|---|
-| Legacy DES hash | `PASSWORD` column (pre-11g compatibility) | `-m 3100` |
-| 11g SHA-1 | `SPARE4` `S:` segment | `-m 112` |
-| 12c+ SHA-512/PBKDF2 | `SPARE4` `T:` segment | `-m 12300` |
+| DB version | Verifier picked | Source | hashcat mode |
+|---|---|---|---|
+| 12c+ | SHA-512/PBKDF2 | `SPARE4` `T:` segment | `-m 12300` |
+| 11g | SHA-1 | `SPARE4` `S:` segment | `-m 112` |
+| 10g and earlier | Legacy DES | `PASSWORD` column | `-m 3100` |
+
+If an account is missing its version-preferred verifier (uncommon, but possible depending on
+`SQLNET.ALLOWED_LOGON_VERSION_SERVER`), NetExec falls back to whatever other verifier it does
+have rather than skipping the account.
 
 Roles (e.g. `CONNECT`, `DBA`) are filtered out automatically, and accounts using external or
 global authentication are reported separately rather than presented as fake crackable hashes
@@ -321,32 +328,24 @@ tagged with its `OPEN`/`LOCKED` status so you can prioritize.
 $ nxc oracle 127.0.0.1 -u sys -p OraclePw123 --service-name XE --sysdba --dump-hashes
 ORACLE  127.0.0.1  1521  127.0.0.1  [+] sys:OraclePw123 (version:21.3.0.0.0) (SYSDBA) (Pwn3d!)
 ORACLE  127.0.0.1  1521  127.0.0.1  [+] Password hashes for 27 account(s):
-ORACLE  127.0.0.1  1521  127.0.0.1    ANONYMOUS [LOCKED]
-ORACLE  127.0.0.1  1521  127.0.0.1      [SHA1/11g, hashcat -m 112] 0000000000000000000000000000000000000000B07826CCABAFED19D301
-ORACLE  127.0.0.1  1521  127.0.0.1      [SHA512/12c+, hashcat -m 12300] 0000...DDE90E506D9DE54BDF35B445A4AFF6AB
-ORACLE  127.0.0.1  1521  127.0.0.1    SYS [OPEN]
-ORACLE  127.0.0.1  1521  127.0.0.1      [SHA1/11g, hashcat -m 112] 3AA50D1E3A76D480B13139B5B7DEA428948E76AFF48474C9A27889094975
-ORACLE  127.0.0.1  1521  127.0.0.1      [SHA512/12c+, hashcat -m 12300] F7E2B1381E2DE103067BFC492952832774409AFD1725FA8FBD2C29C14720D3D87CD958C38B959B37C9F1F0C87BA11A08F0454A5B43AEAB66A2C408795746D2AF5EBD5E17A343C1E12628D3D0E6E61257
-ORACLE  127.0.0.1  1521  127.0.0.1    SYSTEM [OPEN]
-ORACLE  127.0.0.1  1521  127.0.0.1      [SHA1/11g, hashcat -m 112] 87E15FA13D5FDCBB293DFC9B878EB8400DD68F5E5195A7EFC5B4DB1FEB1F
-ORACLE  127.0.0.1  1521  127.0.0.1      [SHA512/12c+, hashcat -m 12300] 5D0FA231B7EEB0EFB29C6F56F0DEE371951D88BA43780768772894012C98474DF9899CBB343C3272FFBBC5F242F7E4CF7DAED8F189CABD2C0C3052ECF4F08CA8D36C843D9D1F638337E674BAB099158A
+ORACLE  127.0.0.1  1521  127.0.0.1    ANONYMOUS [LOCKED] [SHA512/12c+, hashcat -m 12300] 0000...DDE90E506D9DE54BDF35B445A4AFF6AB
+ORACLE  127.0.0.1  1521  127.0.0.1    SYS [OPEN] [SHA512/12c+, hashcat -m 12300] F7E2B1381E2DE103067BFC492952832774409AFD1725FA8FBD2C29C14720D3D87CD958C38B959B37C9F1F0C87BA11A08F0454A5B43AEAB66A2C408795746D2AF5EBD5E17A343C1E12628D3D0E6E61257
+ORACLE  127.0.0.1  1521  127.0.0.1    SYSTEM [OPEN] [SHA512/12c+, hashcat -m 12300] 5D0FA231B7EEB0EFB29C6F56F0DEE371951D88BA43780768772894012C98474DF9899CBB343C3272FFBBC5F242F7E4CF7DAED8F189CABD2C0C3052ECF4F08CA8D36C843D9D1F638337E674BAB099158A
 ORACLE  127.0.0.1  1521  127.0.0.1  [*] Lines below are ready to save as hashcat input files, one per mode:
-ORACLE  127.0.0.1  1521  127.0.0.1    -- hashcat -m 112 --
-ORACLE  127.0.0.1  1521  127.0.0.1    ANONYMOUS:0000000000000000000000000000000000000000B07826CCABAFED19D301
-ORACLE  127.0.0.1  1521  127.0.0.1    SYS:3AA50D1E3A76D480B13139B5B7DEA428948E76AFF48474C9A27889094975
-ORACLE  127.0.0.1  1521  127.0.0.1    ...
 ORACLE  127.0.0.1  1521  127.0.0.1    -- hashcat -m 12300 --
+ORACLE  127.0.0.1  1521  127.0.0.1    ANONYMOUS:0000...DDE90E506D9DE54BDF35B445A4AFF6AB
 ORACLE  127.0.0.1  1521  127.0.0.1    SYS:F7E2B1381E2DE103067BFC492952832774409AFD1725FA8FBD2C29C14720D3D87CD958C38B959B37C9F1F0C87BA11A08F0454A5B43AEAB66A2C408795746D2AF5EBD5E17A343C1E12628D3D0E6E61257
+ORACLE  127.0.0.1  1521  127.0.0.1    SYSTEM:5D0FA231B7EEB0EFB29C6F56F0DEE371951D88BA43780768772894012C98474DF9899CBB343C3272FFBBC5F242F7E4CF7DAED8F189CABD2C0C3052ECF4F08CA8D36C843D9D1F638337E674BAB099158A
 ORACLE  127.0.0.1  1521  127.0.0.1    ...
 ORACLE  127.0.0.1  1521  127.0.0.1  [*] 1 account(s) use external/global authentication (no local hash):
 ORACLE  127.0.0.1  1521  127.0.0.1    OPS$ORACLE [OPEN] (EXTERNAL)
 ```
 
-Save each `-- hashcat -m N --` block to its own `.hash` file and crack with:
+Since every account resolves to the same mode on a given target, there's normally just one
+`-- hashcat -m N --` block to save and crack:
 
 ```bash
-hashcat -m 112 -a 0 oracle_m112.hash wordlist.txt
-hashcat -m 12300 -a 0 oracle_m12300.hash wordlist.txt
+hashcat -m 12300 -a 0 oracle_hashes.txt wordlist.txt
 ```
 
 > **Note:** values are extracted exactly as Oracle stores them. hashcat/john input format
