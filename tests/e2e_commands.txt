@@ -400,3 +400,14 @@ netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LO
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME -q "SELECT user FROM dual"
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --dblinks
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --sysdba --dump-hashes
+
+# oracle_exec module — requires full Oracle (not slim XE) with Java option enabled
+# Command execution via Java stored procedure (requires SYSDBA or DBA):
+netexec oracle TARGET_HOST -u sys -p SYSDBA_PASSWORD --sid SID --sysdba -M oracle_exec -o CMD='id'
+netexec oracle TARGET_HOST -u sys -p SYSDBA_PASSWORD --sid SID --sysdba -M oracle_exec -o CMD='whoami'
+netexec oracle TARGET_HOST -u sys -p SYSDBA_PASSWORD --sid SID --sysdba -M oracle_exec -o CMD='hostname'
+# Non-admin user — on_admin_login should NOT fire:
+netexec oracle TARGET_HOST -u NONADMIN -p PASSWORD --service-name SERVICE -M oracle_exec -o CMD='id'
+# Java unavailable (slim XE or Standard Edition without Java) — verified with local container:
+# nxc oracle 127.0.0.1 -u sys -p OraclePw123 --sid XE --sysdba -M oracle_exec -o CMD='id'
+# → [-] Java is not enabled on this Oracle instance — cannot execute OS commands via Java stored procedures
