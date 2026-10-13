@@ -153,11 +153,13 @@ class HostChecker:
         self.context = context
         self.connection = connection
         self.remote_ops = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
-        self.remote_ops.enableRegistry()
-        self.dce = self.remote_ops._RemoteOperations__rrp
+        self.dce = None
 
     def run(self):
         try:
+            # enableRegistry starts the RemoteRegistry service; keep it inside the try so finish() restores it even if the winreg bind fails
+            self.remote_ops.enableRegistry()
+            self.dce = self.remote_ops._RemoteOperations__rrp
             self.init_checks()
             self.check_config()
         finally:
