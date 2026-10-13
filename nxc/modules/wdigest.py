@@ -94,8 +94,8 @@ class NXCModule:
                     return
 
                 try:
-                    # Check to make sure the reg key is actually deleted
-                    rtype, data = rrp.hBaseRegQueryValue(
+                    # Query again only to confirm the value is gone; it raises if the key was deleted
+                    rrp.hBaseRegQueryValue(
                         remote_ops._RemoteOperations__rrp,
                         keyHandle,
                         "UseLogonCredential\x00",

@@ -129,7 +129,7 @@ class RdpSmb:
                 )
                 key_handle = ans["phkResult"]
 
-                ans = rrp.hBaseRegSetValue(
+                rrp.hBaseRegSetValue(
                     remote_ops._RemoteOperations__rrp,
                     key_handle,
                     "fDenyTSConnections",
