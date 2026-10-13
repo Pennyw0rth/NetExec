@@ -162,26 +162,22 @@ class TSCH_EXEC:
             except tsch.DCERPCSessionError as e:
                 self.logger.debug(f"hSchRpcRun returned: {e}")
 
-        # Wait for the task to run. It starts within seconds of the RegistrationTrigger, but a slow host may
-        # not report the run on the first query, and a task that can never run (e.g. a run-as user with no
-        # interactive session, which a TASK_LOGON_NONE task needs) never reports one. Poll for a bounded time
-        # so we neither give up too early on a slow host nor loop forever.
-        run_check_delay = 2
-        max_run_checks = max(self.__tries // 10, 15) if self.__tries else 15
-        started = False
+        # A task starts within seconds of the RegistrationTrigger. Poll for up to RUN_TIMEOUT seconds so a
+        # slow host still gets a grace period, and a task that can never run (e.g. a run-as user with no
+        # interactive session, which a TASK_LOGON_NONE task needs) is detected instead of looping forever.
+        RUN_TIMEOUT = 30
+        RUN_CHECK_DELAY = 2
         last_error = None
-        for _ in range(max_run_checks):
+        for _ in range(RUN_TIMEOUT // RUN_CHECK_DELAY):
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
             try:
                 if tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")["pLastRuntime"]["wYear"] != 0:
-                    started = True
-                    break
+                    break  # the task has run
             except tsch.DCERPCSessionError as e:
-                # SCHED_S_TASK_HAS_NOT_RUN and transient errors right after registration are expected; keep polling
-                last_error = e
-            sleep(run_check_delay)
-        if not started:
-            self.logger.fail(f"Task \\{self.task_name} did not start within {max_run_checks * run_check_delay}s. If a specific run-as user was set, it likely has no interactive session on the target (a TASK_LOGON_NONE task only runs while that user is logged on). Last error: {last_error}")
+                last_error = e  # SCHED_S_TASK_HAS_NOT_RUN or a transient error right after registration; keep polling
+            sleep(RUN_CHECK_DELAY)
+        else:
+            self.logger.fail(f"Task \\{self.task_name} did not start within {RUN_TIMEOUT}s. If a specific run-as user was set, it likely has no interactive session on the target (a TASK_LOGON_NONE task only runs while that user is logged on). Last error: {last_error}")
 
         self.logger.info(f"Deleting task \\{self.task_name}")
         try:
