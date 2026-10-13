@@ -206,11 +206,8 @@ class NXCModule:
                 file.close()
             except Exception as e:
                 context.log.debug(f"Error closing dumper file: {e}")
-            try:
-                if not ImpacketFile.delete(session, file.get_file_path()):
-                    context.log.fail(f"[OPSEC] No exception, but failed to delete file: {file.get_file_path()}")
-            except Exception as e:
-                context.log.fail(f"[OPSEC] Error deleting temporary lsassy dumper file {file.get_file_path()}: {e}")
+            if not ImpacketFile.delete(session, file.get_file_path()):
+                context.log.fail(f"[OPSEC] Failed to delete lsassy dumper file: {file.get_file_path()}")
         if parsed is None:
             context.log.fail("Unable to parse lsass dump")
             return False
