@@ -233,7 +233,7 @@ class ldap(connection):
 
         # Parse hostname and remoteName
         self.hostname = sanitize_dns(self.target.split(".", 1)[0].upper() or self.host, self.logger)
-        self.remoteName = self.target
+        self.remoteName = self.target if self.kerberos else self.host
 
         # Parse NTLM challenge
         ntlm_challenge = None
