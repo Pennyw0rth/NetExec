@@ -22,12 +22,10 @@ class NXCModule:
       Shutdown: @_nwodtuhs
       Podalirius: @podalirius_
     """
-
     name = "maq"
     description = "Retrieves the MachineAccountQuota domain-level attribute and check SeMachineAccountPrivilege (GPO/SYSVOL)"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
-
     WELL_KNOWN_SIDS = {
         "S-1-1-0": "Everyone",
         "S-1-5-11": "Authenticated Users",
@@ -41,14 +39,12 @@ class NXCModule:
 
     def resolve_gpo(self, context, connection, guid):
         gpo_dn = f"CN={{{guid}}},CN=Policies,CN=System,{connection.baseDN}"
-
         try:
             resp = connection.search(
                     baseDN=gpo_dn,
                     searchFilter="(objectClass=groupPolicyContainer)",
                     attributes=["displayName", "name"]
                     )
-
             results = parse_result_attributes(resp)
             if results:
                 return results[0].get("displayName") or results[0].get("name")
@@ -66,7 +62,6 @@ class NXCModule:
                 sess_port=445,
                 timeout=connection.args.timeout or 3,
         )
-
         if connection.kerberos:
             smb.kerberosLogin(
                     user=connection.username,
@@ -80,34 +75,27 @@ class NXCModule:
                 )
         elif connection.nthash or connection.lmhash:
             smb.login(connection.username, "", connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
-
         else:
             smb.login(connection.username, connection.password, connection.domain)
-
         return smb
 
     def parse_gplink(self, context, gplink):
         raw_entries = re.findall(r"(?i)\[LDAP://cn=\{([0-9a-f\-]{36})\}[^;\]]*;(\d+)\]", gplink)
-
         parsed = []
         for guid, flags_str in raw_entries:
             flags = int(flags_str)
             parsed.append({"guid": guid, "flags": flags, "disabled": bool(flags & 0x1), "enforced": bool(flags & 0x2),})
-
         # enumerating link order from active link only, 
         # by inverting the apparition order (last listed = order 1)
         active = [p for p in parsed if not p["disabled"]]
         for idx, entry in enumerate(reversed(active)):
             entry["link_order"] = idx + 1
-
         for entry in parsed:
             if entry["disabled"]:
                 entry["link_order"] = None
-
         return parsed
 
     def get_SeMachineAccountPrivilege(self, context, connection):
-
         # Getting the gPLink applies to Domain Controllers OU
         ou_dn = f"OU=Domain Controllers,{connection.baseDN}"
         try:
@@ -120,34 +108,26 @@ class NXCModule:
         except Exception as e:
             context.logger.debug(f"Exception raised while looking for gPLink: {e}")
             return
-
         if not entries:
             context.log.fail("No gPLink entries returned.")
             return
-
         gplink = entries[0].get("gPLink", "")
         if not gplink:
             context.log.debug("No gPLink found for Domain Controllers OU")
             return
-
         gpo_links = self.parse_gplink(context, gplink)
         context.log.debug(f"gPLink parsed: {gpo_links}")
-
         try:
             smb = self.connect_smb(connection)
         except (OSError, SessionError, NetBIOSError, NetBIOSTimeout, KerberosError) as e:
             context.log.debug(f"Unable to connect to SYSVOL through SMB: {e}")
             return
-
         context.log.display("Getting SeMachineAccountPrivilege")
-
         for link in sorted(gpo_links, key=lambda link: link["link_order"]):
             guid = link["guid"]
-
             if link["disabled"]:
                 context.log.debug(f"GPO link {guid} disabled, skipping")
                 continue
-
             # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
             path = ntpath.join(connection.targetDomain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf")
             try:
@@ -158,7 +138,6 @@ class NXCModule:
             except Exception as e:
                 context.log.debug(f'({guid}) no GptTmpl.inf or not reachable: \n gpo_path:"{path}"\nException: {e}')
                 continue
-
             # Parse the GptTmpl.inf to find SeMachineAccountPrivilege
             sids = []
             found = False
@@ -172,17 +151,14 @@ class NXCModule:
                     # extract all the sid concerns by the SeMachineAccountPrivilege
                     sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", line)
                     break
-
             if not found:
                 context.log.debug(f"SeMachineAccountPrivilege not in {path}")
                 continue
-
             if sids != []:
                 for sid in sids:
                     if sid in self.WELL_KNOWN_SIDS:
                         context.log.highlight(f'\t\t - "{self.WELL_KNOWN_SIDS[sid]}" ({sid})')
                         continue
-
                     resp = connection.search(
                         searchFilter=f"(objectSid={sid})",
                         attributes=["sAMAccountName"]
@@ -192,24 +168,17 @@ class NXCModule:
                         context.log.highlight(f'\t\t - "{entries[0]["sAMAccountName"]}" ({sid})')
                     else:
                         context.log.debug(f"Could not resolve SID: {sid}")
-
             else:
                 context.log.fail("No SID(s) found in SeMachineAccountPrivilege")
-
         smb.logoff()
-
         return
 
     def on_login(self, context, connection):
         context.log.display("Getting the MachineAccountQuota")
-
         ldap_response = connection.search("(ms-DS-MachineAccountQuota=*)", ["ms-DS-MachineAccountQuota"])
         entries = parse_result_attributes(ldap_response)
-
         if not entries:
             context.log.fail("No LDAP entries returned.")
             return
-
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
-
         self.get_SeMachineAccountPrivilege(context, connection)
