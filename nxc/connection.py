@@ -255,7 +255,7 @@ class connection:
             filename_pattern = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=220)
             self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
             # Default output filename for logs
-            self.output_filename = os.path.join(base_log_dir, self.filename_pattern)
+            self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
             if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):

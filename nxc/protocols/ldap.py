@@ -137,18 +137,12 @@ class ldap(connection):
         return True
 
     def get_ldap_username(self):
-        extended_request = ldapasn1_impacket.ExtendedRequest()
-        extended_request["requestName"] = "1.3.6.1.4.1.4203.1.11.3"  # whoami
-
-        response = self.ldap_connection.sendReceive(extended_request)
-        for message in response:
-            search_result = message["protocolOp"].getComponent()
-            if search_result["resultCode"] == ldapasn1_impacket.ResultCode("success"):
-                response_value = search_result["responseValue"]
-                if response_value.hasValue():
-                    value = response_value.asOctets().decode(response_value.encoding)[2:]
-                    return value.split("\\")[1]
-        return ""
+        try:
+            # impacket returns the raw RFC 4532 identity, "u:DOMAIN\user" on a DC
+            return self.ldap_connection.whoami().split("\\")[-1]
+        except ldap_impacket.LDAPSessionError as e:
+            self.logger.debug(f"LDAP whoami request failed: {e}")
+            return ""
 
     def check_ldap_signing(self):
         self.signing_required = None
@@ -509,6 +503,13 @@ class ldap(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
+            if self.args.schannel:
+                # The error mapping below reads NTLM status codes, which a certificate bind never returns
+                if "did not receive any credentials via TLS" in str(e) or "connection is anonymous" in str(e):
+                    self.logger.fail("Schannel authentication failed: the DC did not map the certificate to an account")
+                else:
+                    self.logger.fail(f"Schannel authentication failed: {e}")
+                return False
             if str(e).find("strongerAuthRequired") >= 0:
                 # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
                 if self.args.simple_bind:
