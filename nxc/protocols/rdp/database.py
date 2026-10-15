@@ -98,7 +98,7 @@ class database(BaseDB):
             return [results]
         # filtering nla False because this is the misconfiguration we are looking for
         elif filter_term == "nla":
-            q = q.filter(self.HostsTable.c.nla == False)  # noqa: E712
+            q = q.filter(self.HostsTable.c.nla == False)  # ruff: ignore[true-false-comparison]
         # if we're filtering by ip/hostname
         elif filter_term and filter_term != "":
             q = format_host_query(q, filter_term, self.HostsTable)

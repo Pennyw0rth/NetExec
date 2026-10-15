@@ -3,11 +3,11 @@
 # Module by @mpgn_x64
 # https://twitter.com/mpgn_x64
 
-from impacket.dcerpc.v5 import lsat, lsad, transport
+from impacket.dcerpc.v5 import lsat, lsad
 from impacket.dcerpc.v5.dtypes import NULL, MAXIMUM_ALLOWED, RPC_UNICODE_STRING
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 import pathlib
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -45,20 +45,8 @@ class NXCModule:
         results = {}
 
         try:
-            lsa = LsaLookupNames(
-                domain=connection.domain,
-                username=connection.username,
-                password=connection.password,
-                remote_name=target,
-                do_kerberos=connection.kerberos,
-                remoteHost=connection.host,
-                kdcHost=connection.kdcHost,
-                lmhash=connection.lmhash,
-                nthash=connection.nthash,
-                aesKey=connection.aesKey
-            )
-
-            dce, _ = lsa.connect()
+            lsa = LsaLookupNames(connection=connection)
+            dce = lsa.connect()
             policyHandle = lsa.open_policy(dce)
             for product in conf["products"]:
                 for service in product["services"]:
@@ -103,82 +91,11 @@ class NXCModule:
 
 
 class LsaLookupNames:
-    timeout = None
-    authn_level = None
-    protocol = None
-    transfer_syntax = None
-    machine_account = False
+    def __init__(self, connection=None):
+        self.connection = connection
 
-    iface_uuid = lsat.MSRPC_UUID_LSAT
-    authn = True
-
-    def __init__(
-        self,
-        domain="",
-        username="",
-        password="",
-        remote_name="",
-        do_kerberos=False,
-        remoteHost="",
-        kdcHost="",
-        lmhash="",
-        nthash="",
-        aesKey="",
-    ):
-        self.domain = domain
-        self.username = username
-        self.password = password
-        self.remoteName = remote_name
-        self.string_binding = rf"ncacn_np:{remote_name}[\PIPE\lsarpc]"
-        self.doKerberos = do_kerberos
-        self.lmhash = lmhash
-        self.nthash = nthash
-        self.aesKey = aesKey
-        self.kdcHost = kdcHost
-        self.remoteHost = remoteHost
-
-    def connect(self, string_binding=None, iface_uuid=None):
-        """Obtains a RPC Transport and a DCE interface according to the bindings and
-        transfer syntax specified.
-        :return: tuple of DCE/RPC and RPC Transport objects
-        :rtype: (DCERPC_v5, DCERPCTransport)
-        """
-        string_binding = string_binding or self.string_binding
-        if not string_binding:
-            raise NotImplementedError("String binding must be defined")
-
-        rpc_transport = transport.DCERPCTransportFactory(string_binding)
-        rpc_transport.setRemoteHost(self.remoteHost)
-
-        # Set timeout if defined
-        if self.timeout:
-            rpc_transport.set_connect_timeout(self.timeout)
-
-        # Authenticate if specified
-        if self.authn and hasattr(rpc_transport, "set_credentials"):
-            # This method exists only for selected protocol sequences.
-            rpc_transport.set_credentials(self.username, self.password, self.domain, self.lmhash, self.nthash, self.aesKey)
-
-        if self.doKerberos:
-            rpc_transport.set_kerberos(self.doKerberos, kdcHost=self.kdcHost)
-
-        # Gets the DCE RPC object
-        dce = rpc_transport.get_dce_rpc()
-
-        if self.doKerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-        # Connect
-        dce.connect()
-
-        # Bind if specified
-        iface_uuid = iface_uuid or self.iface_uuid
-        if iface_uuid and self.transfer_syntax:
-            dce.bind(iface_uuid, transfer_syntax=self.transfer_syntax)
-        elif iface_uuid:
-            dce.bind(iface_uuid)
-
-        return dce, rpc_transport
+    def connect(self):
+        return NXCRPCConnection(self.connection).connect(r"\lsarpc", lsat.MSRPC_UUID_LSAT)
 
     def open_policy(self, dce):
         request = lsad.LsarOpenPolicy2()
@@ -211,6 +128,19 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Avast / AVG",
+            "services": [
+                {"name": "AvastWscReporter", "description": "Avast WSC Reporter Service"},
+                {"name": "aswbIDSAgent", "description": "Avast IDS Agent Service"},
+                {"name": "AVGWscReporter", "description": "AVG WSC Reporter Service"},
+                {"name": "avgbIDSAgent", "description": "AVG IDS Agent Service"}
+            ],
+            "pipes": [
+                {"name": "aswCallbackPipe*", "processes": ["AvastSvc.exe", "aswEngSrv.exe"]},
+                {"name": "avgCallbackPipe*", "processes": ["AVGSvc.exe", "aswEngSrv.exe"]}
+            ]
+        },
+        {
             "name": "Bitdefender",
             "services": [
                 {"name": "bdredline_agent", "description": "Bitdefender Agent RedLine Service"},
@@ -240,17 +170,27 @@ conf = {
             "pipes": []
         },
         {
-            "name": "CrowdStrike",
-            "services": [{"name": "CSFalconService", "description": "CrowdStrike Falcon Sensor Service"}],
-            "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
+            "name": "Check Point Endpoint Security",
+            "services": [
+                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
+                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
+                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
+                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
+            ],
+            "pipes": []
         },
         {
             "name": "Cortex",
             "services": [
                 {"name": "xdrhealth", "description": "Cortex XDR Health Helper"},
-                {"name": "cyserver", "description": " Cortex XDR"}
+                {"name": "cyserver", "description": "Cortex XDR"}
             ],
             "pipes": []
+        },
+        {
+            "name": "CrowdStrike",
+            "services": [{"name": "CSFalconService", "description": "CrowdStrike Falcon Sensor Service"}],
+            "pipes": [{"name": "CrowdStrike\\{*", "processes": ["CSFalconContainer.exe", "CSFalconService.exe"]}]
         },
         {
             "name": "Cybereason",
@@ -265,15 +205,22 @@ conf = {
             ]
         },
         {
-            "name": "Check Point Endpoint Security",
+            "name": "Cynet",
             "services": [
-                {"name": "CPDA", "description": "Check Point Endpoint Agent"},
-                {"name": "vsmon", "description": "Check Point Endpoint Security Network Protection"},
-                {"name": "CPFileAnlyz", "description": "Check Point Endpoint Security File Analyzer"},
-                {"name": "EPClientUIService", "description": "Check Point Endpoint Security Client UI"}
-
+                {"name": "CynetLauncher", "description": "CynetLauncher"}
             ],
             "pipes": []
+        },
+        {
+            "name": "Elastic EDR",
+            "services": [
+                {"name": "Elastic Agent", "description": "Elastic Agent Service"},
+                {"name": "ElasticEndpoint", "description": "Elastic Endpoint Security Service"}
+            ],
+            "pipes": [
+                {"name": "ElasticEndpointServiceComms-*", "processes": ["elastic-endpoint.exe"]},
+                {"name": "elastic-agent-system", "processes": ["elastic-agent.exe"]}
+            ]
         },
         {
             "name": "ESET",
@@ -319,7 +266,22 @@ conf = {
             ]
         },
         {
-        "name": "Ivanti Security",
+            "name": "HarfangLab EDR",
+            "services": [
+                {"name": "hurukai", "description": "HarfangLab Hurukai Agent"},
+                {"name": "Hurukai agent", "description": "HarfangLab Hurukai Agent Service"},
+                {"name": "HarfangLab Hurukai agent", "description": "HarfangLab Hurukai Agent Program"},
+                {"name": "hurukai-av", "description": "HarfangLab Hurukai Antivirus"},
+                {"name": "hurukai-ui", "description": "HarfangLab Hurukai UI"}
+            ],
+            "pipes": [
+                {"name": "hurukai-control", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-servicing", "processes": ["hurukai.exe"]},
+                {"name": "hurukai-amsi", "processes": ["hurukai.exe"]}
+            ]
+        },
+        {
+            "name": "Ivanti Security",
             "services": [
                 {"name": "STAgent$Shavlik Protect", "description": "Ivanti Security Controls Agent"},
                 {"name": "STDispatch$Shavlik Protect", "description": "Ivanti Security Controls Agent Dispatcher"}
@@ -374,6 +336,11 @@ conf = {
             ]
         },
         {
+            "name": "Rapid7",
+            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
+            "pipes": []
+        },
+        {
             "name": "SentinelOne",
             "services": [
                 {"name": "SentinelAgent", "description": "SentinelOne Endpoint Protection Agent"},
@@ -385,20 +352,6 @@ conf = {
                 {"name": "DFIScanner.Etw.*", "processes": ["SentinelStaticEngine.exe"]},
                 {"name": "DFIScanner.Inline.*", "processes": ["SentinelAgent.exe"]}
             ]
-        },
-        {
-            "name": "Symantec Endpoint Protection",
-            "services": [
-                {"name": "SepMasterService", "description": "Symantec Endpoint Protection"},
-                {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
-                {"name": "SNAC", "description": "Symantec Network Access Control"}
-            ],
-            "pipes": []
-        },
-        {
-            "name": "Rapid7",
-            "services": [{"name": "ir_agent", "description": "Rapid7 Insight Agent"}],
-            "pipes": []
         },
         {
             "name": "Sophos Intercept X",
@@ -419,6 +372,15 @@ conf = {
                 {"name": "sophos_deviceencryption", "processes": [""]},
                 {"name": "sophoslivequery_*", "processes": [""]}
             ]
+        },
+        {
+            "name": "Symantec Endpoint Protection",
+            "services": [
+                {"name": "SepMasterService", "description": "Symantec Endpoint Protection"},
+                {"name": "SepScanService", "description": "Symantec Endpoint Protection Scan Services"},
+                {"name": "SNAC", "description": "Symantec Network Access Control"}
+            ],
+            "pipes": []
         },
         {
             "name": "Trellix Endpoint Detection and Response (EDR)",
@@ -461,6 +423,13 @@ conf = {
                 {"name": "Log_ServerNamePipe", "processes": ["LogServer.exe"]},
                 {"name": "OIPC_NTRTSCAN_PIPE_*", "processes": ["Ntrtscan.exe"]}
             ]
+        },
+        {
+            "name": "Wazuh",
+            "services": [
+                {"name": "WazuhSvc", "description": "Wazuh Windows Agent"}
+            ],
+            "pipes": []
         },
         {
             "name": "Windows Defender",

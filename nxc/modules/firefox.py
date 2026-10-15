@@ -1,6 +1,6 @@
 from dploot.lib.target import Target
 from nxc.helpers.misc import CATEGORY
-from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
+from nxc.helpers.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
 
 
 class NXCModule:
