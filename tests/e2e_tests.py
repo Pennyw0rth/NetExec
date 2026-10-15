@@ -32,6 +32,7 @@ def get_cli_args():
     parser.add_argument("--test-password-file", required=False, default=normpath(join(script_dir, "data", "test_passwords.txt")), help="Path to the file containing test passwords")
     parser.add_argument("--amsi-bypass-file", required=False, default=normpath(join(script_dir, "data", "test_amsi_bypass.txt")), help="Path to the file containing AMSI bypasses")
     parser.add_argument("--test-normal-file", required=False, default=normpath(join(script_dir, "data", "test_file.txt")), help="Path to file to upload/download")
+    parser.add_argument("--test-pfx-file", required=False, default=normpath(join(script_dir, "data", "test_cert.pfx")), help="Path to the PFX certificate for certificate authentication")
     parser.add_argument("--dns-server", action="store", required=False, help="Specify DNS server")
     return parser.parse_args()
 
@@ -99,6 +100,7 @@ def replace_command(args, line):
         .replace("TEST_PASSWORD_FILE", args.test_password_file)\
         .replace("AMSI_BYPASS_FILE", args.amsi_bypass_file)\
         .replace("TEST_NORMAL_FILE", args.test_normal_file)\
+        .replace("TEST_PFX_FILE", args.test_pfx_file)\
         .replace("{DNS}", dns_server)\
         .replace("/tmp", TMP_PATH)
     if args.poetry:
