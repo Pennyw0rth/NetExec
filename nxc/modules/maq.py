@@ -177,4 +177,3 @@ class NXCModule:
             return
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
         self.get_SeMachineAccountPrivilege(context, connection)
-
