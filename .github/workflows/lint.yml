@@ -20,7 +20,7 @@ jobs:
         with:
           enable-cache: true
       - name: Set up Python
-        run: uv python install 3.13
+        run: uv python install 3.14
       - name: Install project with dev group
         run: uv sync --dev
       - name: Run ruff

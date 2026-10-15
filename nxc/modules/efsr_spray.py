@@ -13,7 +13,7 @@ class NXCModule:
         """
         FILE_NAME      Name of the file which will be tried to create and afterwards delete
         SHARE_NAME     If set, ONLY this share will be used
-        EXCLUDED_SHARES List of share names which will not be used, seperated by comma
+        EXCLUDED_SHARES List of share names which will not be used, separated by comma
         """
 
     def on_login(self, context: Context, connection):
