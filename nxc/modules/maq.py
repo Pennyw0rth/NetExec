@@ -2,7 +2,6 @@ import re
 import ntpath
 
 from io import BytesIO
-from ldap3.utils.conv import escape_filter_chars
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.protocols.ldap.constants import WELL_KNOWN_SIDS
@@ -59,7 +58,7 @@ class NXCModule:
                     aesKey=connection.aesKey,
                     kdcHost=connection.kdcHost,
                     useCache=connection.use_kcache,
-            )
+                )
         elif connection.nthash or connection.lmhash:
             smb.login(connection.username, "", connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
         else:
@@ -80,7 +79,7 @@ class NXCModule:
         gpo_links = []
         block_inheritance = False
         for scope_dn in (ou_dn, connection.baseDN):
-            ldap_response = connection.search(searchFilter=f"(distinguishedName={escape_filter_chars(scope_dn)})", baseDN=scope_dn, attributes=["gPLink", "gPOptions"])
+            ldap_response = connection.search(searchFilter=f"(distinguishedName={scope_dn})", baseDN=scope_dn, attributes=["gPLink", "gPOptions"])
             entries = parse_result_attributes(ldap_response)
             if not entries:
                 context.log.fail(f"Unable to read GPO links for {scope_dn}")
@@ -115,10 +114,7 @@ class NXCModule:
         try:
             for link in gpo_links:
                 guid = link["guid"]
-                gpo_name = self.resolve_gpo(connection, guid)
-                if not gpo_name:
-                    context.log.debug(f"GPO {guid} not found or unreadable, skipping")
-                    continue
+                gpo_name = self.resolve_gpo(connection, guid) or f"{{{guid}}}"
                 # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
                 path = ntpath.join(connection.targetDomain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf")
                 try:
@@ -129,7 +125,8 @@ class NXCModule:
                     if e.getErrorCode() in (nt_errors.STATUS_NO_SUCH_FILE, nt_errors.STATUS_OBJECT_NAME_NOT_FOUND, nt_errors.STATUS_OBJECT_PATH_NOT_FOUND):
                         context.log.debug(f"No GptTmpl.inf for GPO {guid}")
                     else:
-                        context.log.fail(f"Unable to read {path}: {e}")
+                        enforced_str = ", Enforced" if link["enforced"] else ""
+                        context.log.fail(f'(GPO) "{gpo_name}" [DN: {link["scope_dn"]}] [Link order: {link["link_order"]}{enforced_str}] not readable ({e.getErrorString()[0]}), result may be incomplete')
                     continue
                 except (OSError, NetBIOSError, NetBIOSTimeout, UnicodeError) as e:
                     context.log.fail(f"Unable to read {path}: {e}")
@@ -149,10 +146,13 @@ class NXCModule:
                 if not value:
                     context.log.highlight("SeMachineAccountPrivilege explicitly assigned to nobody")
                     continue
-                sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", value)
-                if not sids:
-                    context.log.info(f"SeMachineAccountPrivilege assignment: {value}")
-                for sid in sids:
+                principals = [principal.strip() for principal in value.split(",") if principal.strip()]
+                for principal in principals:
+                    match = re.fullmatch(r"\*?(S-\d+(?:-\d+)+)", principal)
+                    if not match:
+                        context.log.highlight(f'\t\t - "{principal}"')
+                        continue
+                    sid = match.group(1)
                     if sid in WELL_KNOWN_SIDS:
                         context.log.highlight(f'\t\t - "{WELL_KNOWN_SIDS[sid]}" ({sid})')
                         continue
@@ -177,3 +177,4 @@ class NXCModule:
             return
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
         self.get_SeMachineAccountPrivilege(context, connection)
+
