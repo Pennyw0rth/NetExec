@@ -23,7 +23,7 @@ class NXCModule:
       Podalirius: @podalirius_
     """
 
-    name = "maqq"
+    name = "maq"
     description = "Retrieves the MachineAccountQuota domain-level attribute and check SeMachineAccountPrivilege (GPO/SYSVOL)"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
@@ -87,43 +87,19 @@ class NXCModule:
         return smb
 
     def parse_gplink(self, context, gplink):
-        """
-        Parse une chaîne gPLink et retourne une liste de dicts contenant
-        pour chaque lien : guid, flags bruts, disabled, enforced, et
-        link_order (1 = le plus prioritaire, au sens de l'ordre affiché
-        dans GPMC / gpresult, donc le dernier appliqué qui gagne).
-
-        Format gPLink: [LDAP://cn={GUID},cn=policies,cn=system,DC=...;FLAGS][...]
-        FLAGS bit 0 (1) = link Disabled
-        FLAGS bit 1 (2) = Enforced (No Override)
-
-        Ordre d'application AD : le DERNIER lien listé dans gPLink est
-        appliqué en dernier donc gagne en cas de conflit -> link_order 1.
-        On inverse donc l'ordre d'apparition pour numéroter le link order,
-        en ignorant les liens désactivés dans la numérotation.
-        """
-        raw_entries = re.findall(
-            r"(?i)\[LDAP://cn=\{([0-9a-f\-]{36})\}[^;\]]*;(\d+)\]",
-            gplink
-        )
+        raw_entries = re.findall(r"(?i)\[LDAP://cn=\{([0-9a-f\-]{36})\}[^;\]]*;(\d+)\]", gplink)
 
         parsed = []
         for guid, flags_str in raw_entries:
             flags = int(flags_str)
-            parsed.append({
-                "guid": guid,
-                "flags": flags,
-                "disabled": bool(flags & 0x1),
-                "enforced": bool(flags & 0x2),
-            })
+            parsed.append({"guid": guid, "flags": flags, "disabled": bool(flags & 0x1), "enforced": bool(flags & 0x2),})
 
-        # Numérotation du link order parmi les liens actifs uniquement,
-        # en inversant l'ordre d'apparition (dernier listé = order 1)
+        # enumerating link order from active link only, 
+        # by inverting the apparition order (last listed = order 1)
         active = [p for p in parsed if not p["disabled"]]
         for idx, entry in enumerate(reversed(active)):
             entry["link_order"] = idx + 1
 
-        # Les liens désactivés n'ont pas de link order applicable
         for entry in parsed:
             if entry["disabled"]:
                 entry["link_order"] = None
@@ -165,7 +141,7 @@ class NXCModule:
 
         context.log.display("Getting SeMachineAccountPrivilege")
 
-        for link in gpo_links:
+        for link in sorted(gpo_links, key=lambda link: link["link_order"]):
             guid = link["guid"]
 
             if link["disabled"]:
@@ -190,9 +166,9 @@ class NXCModule:
                 if "SeMachineAccountPrivilege" in line:
                     found = True
                     gpo_name = self.resolve_gpo(context, connection, guid)
-                    enforced_str = "Enforced" if link["enforced"] else "Not Enforced"
-                    context.log.success(f'(GPO) "{gpo_name}" [CN: {ou_dn}] [Link order: {link["link_order"]}, {enforced_str}]')
-                    context.log.highlight(f"\t{line.strip()}")
+                    enforced_str = ", Enforced" if link["enforced"] else ""
+                    context.log.success(f'(GPO) "{gpo_name}" [CN: {ou_dn}] [Link order: {link["link_order"]}{enforced_str}]')
+                    context.log.info(f"\t{line.strip()}")
                     # extract all the sid concerns by the SeMachineAccountPrivilege
                     sids = re.findall(r"\*?(S-\d+(?:-\d+)+)", line)
                     break
