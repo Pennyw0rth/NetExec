@@ -21,7 +21,7 @@ class navigator(DatabaseNavigator):
         print_table(data, title="Credentials")
 
     def display_hosts(self, hosts):
-        data = [["HostID", "Admins", "IP", "Hostname", "Domain", "OS", "DB Instances"]]
+        data = [["HostID", "Admins", "IP", "Hostname", "Domain", "OS", "MSSQL Version", "DB Instances", "EncryptionReq"]]
         for host in hosts:
             links = self.db.get_admin_relations(host_id=host[0])
             data.append(
@@ -33,6 +33,8 @@ class navigator(DatabaseNavigator):
                     host[3],
                     host[4],
                     host[5],
+                    host[6],
+                    host[7]
                 ]
             )
         print_table(data, title="Hosts")
@@ -49,12 +51,12 @@ class navigator(DatabaseNavigator):
             if len(hosts) > 1:
                 self.display_hosts(hosts)
             elif len(hosts) == 1:
-                data = [["HostID", "IP", "Hostname", "Domain", "OS"]]
+                data = [["HostID", "IP", "Hostname", "Domain", "OS", "MSSQL Version", "DB Instances", "EncryptionReq"]]
                 host_id_list = []
 
                 for host in hosts:
                     host_id_list.append(host[0])
-                    data.append([host[0], host[1], host[2], host[3], host[4]])
+                    data.append([host[0], host[1], host[2], host[3], host[4], host[5], host[6], host[7]])
 
                 print_table(data, title="Host(s)")
 

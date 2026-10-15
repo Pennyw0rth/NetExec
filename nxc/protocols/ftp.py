@@ -1,15 +1,16 @@
+from io import BytesIO
 import os
 from nxc.config import process_secret
 from nxc.connection import connection
 from nxc.helpers.logger import highlight
 from nxc.logger import NXCAdapter
-from ftplib import FTP, error_perm
+from ftplib import FTP, error_perm, error_temp
 
 
 class ftp(connection):
     def __init__(self, args, db, host):
         self.protocol = "FTP"
-        self.remote_version = None
+        self.welcome_banner = ""
 
         super().__init__(args, db, host)
 
@@ -23,25 +24,15 @@ class ftp(connection):
             }
         )
 
-    def proto_flow(self):
-        self.proto_logger()
-        if self.create_conn_obj() and self.login():
-            if hasattr(self.args, "module") and self.args.module:
-                self.load_modules()
-                self.logger.debug("Calling modules")
-                self.call_modules()
-            else:
-                self.logger.debug("Calling command arguments")
-                self.call_cmd_args()
-
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
         self.logger.debug(f"Welcome result: {welcome}")
-        self.remote_version = welcome.split("220", 1)[1].strip()  # strip out the extra space in the front
-        self.logger.debug(f"Remote version: {self.remote_version}")
+        for line in welcome.splitlines():
+            self.welcome_banner += line.split("220", 1)[1].strip()  # strip out the extra space in the front
+        self.logger.debug(f"Remote version: {self.welcome_banner}")
 
     def print_host_info(self):
-        self.logger.display(f"Banner: {self.remote_version}")
+        self.logger.display(f"Banner: {self.welcome_banner}")
 
     def create_conn_obj(self):
         self.conn = FTP()
@@ -61,13 +52,12 @@ class ftp(connection):
             self.logger.debug(f"Response: {resp}")
         except Exception as e:
             self.logger.fail(f"{username}:{process_secret(password)} (Response:{e})")
-            self.conn.close()
             return False
 
         # 230 is "User logged in, proceed" response, ftplib raises an exception on failed login
         if "230" in resp:
             self.logger.debug(f"Host: {self.host} Port: {self.port}")
-            self.db.add_host(self.host, self.port, self.remote_version)
+            self.db.add_host(self.host, self.port, self.welcome_banner)
 
             cred_id = self.db.add_credential(username, password)
 
@@ -112,8 +102,9 @@ class ftp(connection):
             self.put_file(self.args.put[0], self.args.put[1])
 
         if not self.args.continue_on_success:
-            self.conn.close()
             return True
+
+    def disconnect(self):
         self.conn.close()
 
     def list_directory_full(self):
@@ -126,6 +117,10 @@ class ftp(connection):
             self.logger.fail(f"Failed to list directory. Response: ({error_message})")
             self.conn.close()
             return False
+        except error_temp as e:
+            self.logger.fail(e)
+            self.conn.close()
+            return False
         return files
 
     def get_file(self, filename):
@@ -136,10 +131,9 @@ class ftp(connection):
             if self.conn.encoding == "utf-8":
                 # Switch the connection to binary
                 self.conn.sendcmd("TYPE I")
-            # Check if the file exists
-            self.conn.size(filename)
             # Attempt to download the file
-            self.conn.retrbinary(f"RETR {filename}", open(downloaded_file, "wb").write)  # noqa: SIM115
+            with open(downloaded_file, "wb") as f:
+                self.conn.retrbinary(f"RETR {filename}", f.write)
         except error_perm as error_message:
             self.logger.fail(f"Failed to download the file. Response: ({error_message})")
             self.conn.close()
@@ -157,7 +151,8 @@ class ftp(connection):
     def put_file(self, local_file, remote_file):
         try:
             # Attempt to upload the file
-            self.conn.storbinary(f"STOR {remote_file}", open(local_file, "rb"))  # noqa: SIM115
+            with open(local_file, "rb") as f:
+                self.conn.storbinary(f"STOR {remote_file}", f.read)
         except error_perm as error_message:
             self.logger.fail(f"Failed to upload file. Response: ({error_message})")
             return False
@@ -165,10 +160,34 @@ class ftp(connection):
             self.logger.fail(f"Failed to upload file. {local_file} does not exist locally.")
             return False
         # Check if the file was uploaded
-        if self.conn.size(remote_file) > 0:
+        if self.conn.size(remote_file) is not None:
             self.logger.success(f"Uploaded: {local_file} to {remote_file}")
         else:
             self.logger.fail(f"Failed to upload: {local_file} to {remote_file}")
+
+    def cat(self):
+        # Extract the filename from the path
+        remote_file = self.args.cat
+        try:
+            # Check if the current connection is ASCII (ASCII does not support .size())
+            if self.conn.encoding == "utf-8":
+                # Switch the connection to binary
+                self.conn.sendcmd("TYPE I")
+            # Attempt to get the file content
+            buf = BytesIO()
+            self.conn.retrbinary(f"RETR {remote_file}", buf.write)
+        except error_perm as error_message:
+            self.logger.fail(f"Failed to get file content. Response: ({error_message})")
+            return False
+        except FileNotFoundError:
+            self.logger.fail("Failed to get file content. Response: (No such file or directory.)")
+            return False
+
+        try:
+            for line in buf.getvalue().decode().splitlines():
+                self.logger.highlight(line)
+        except UnicodeDecodeError as e:
+            self.logger.fail(f"File is not in UTF-8: {e}")
 
     def supported_commands(self):
         raw_supported_commands = self.conn.sendcmd("HELP")
