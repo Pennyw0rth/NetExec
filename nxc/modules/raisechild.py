@@ -49,7 +49,7 @@ class NXCModule:
         self.krbtgt_hash = ""
         self.aes128_key = ""
         self.aes256_key = ""
-        self.etype = "rc4"
+        self.etype = "aes256"
 
     def options(self, context, module_options):
         """
@@ -59,7 +59,7 @@ class NXCModule:
         USER        Target username to forge the ticket for (default: Administrator)
         USER_ID     RID used as the user ID in the PAC (default: 500)
         RID         RID used for the extra SID (default: 519 = Enterprise Admins)
-        ETYPE       Encryption type for the ticket: rc4, aes128, aes256 (default: rc4)
+        ETYPE       Encryption type for the ticket: rc4, aes128, aes256 (default: aes256)
 
         Examples:
         netexec ldap <ip> -u <username> -p <password> -M raisechild -o USER=DC01$
@@ -69,7 +69,7 @@ class NXCModule:
         """
         self.context = context
         self.module_options = module_options
-        self.etype = module_options.get("ETYPE", "rc4").lower()
+        self.etype = module_options.get("ETYPE", "aes256").lower()
 
     def on_admin_login(self, context, connection):
         self.context = context
@@ -300,7 +300,7 @@ class NXCModule:
     def _createBasicValidationInfo(self, username: str, domain: str, domain_sid: str, groups: list[int], user_rid: int) -> VALIDATION_INFO:
         kerbdata = KERB_VALIDATION_INFO()
 
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_utc = datetime.datetime.now(datetime.UTC)
         now_unix = timegm(now_utc.timetuple())
         now_filetime = self._getFileTime(now_unix)
 
@@ -451,7 +451,7 @@ class NXCModule:
         pac_infos[PAC_LOGON_INFO] = validation_info.getData() + validation_info.getDataReferents()
 
     def _buildEncParts(self, as_rep: AS_REP, domain: str, username: str, duration_hours: int, enctype_value: int, pac_infos: dict, key_size: int) -> tuple[EncASRepPart, EncTicketPart, dict]:
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_utc = datetime.datetime.now(datetime.UTC)
         end_utc = now_utc + datetime.timedelta(hours=duration_hours)
 
         enc_ticket_part = EncTicketPart()

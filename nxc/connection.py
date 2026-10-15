@@ -15,7 +15,8 @@ from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 from nxc.config import pwned_label
 from nxc.config import stealth_label
 from nxc.helpers.logger import highlight
-from nxc.loaders.moduleloader import ModuleLoader
+from nxc.helpers.path import sanitize_path_component
+from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.paths import NXC_PATH
@@ -149,6 +150,7 @@ class connection:
                              self.args.use_kcache or
                              self.args.aesKey or
                              (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "generate_st") and self.args.generate_st) or
                              (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
@@ -175,12 +177,14 @@ class connection:
         if self.kerberos:
             self.host = self.hostname
 
-        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
+        self.logger.debug(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         try:
             self.proto_flow()
         except FileNotFoundError as e:
             self.logger.error(f"File not found error on target {target}: {e}")
+        except ConnectionRefusedError as e:
+            self.logger.error(f"Target {target} refused the connection: {e}")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
@@ -242,20 +246,20 @@ class connection:
         self.logger.debug("Kicking off proto_flow")
         self.proto_logger()
         if not self.create_conn_obj():
-            self.logger.info(f"Failed to create connection object for target {self.host}, exiting...")
+            self.logger.debug(f"Failed to create connection object for target {self.host}, exiting...")
         else:
-            self.logger.debug("Created connection object")
+            self.logger.info(f"Successfully created connection object for target '{self.host}'")
             self.enum_host_info()
 
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
-            filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            filename_pattern = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=220)
             self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
             # Default output filename for logs
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == ""):
+            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
                 self.logger.debug("Calling command arguments")
                 self.call_cmd_args()
                 if self.args.module:
@@ -335,7 +339,7 @@ class connection:
             if self.failed_logins == self.args.fail_limit:
                 return True
 
-            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
+            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # ruff: ignore[needless-bool]
                 return True
 
             return False
@@ -605,5 +609,9 @@ class connection:
         self.modules = []
 
         for module_path in self.module_paths:
-            module = loader.init_module(module_path)
+            try:
+                module = loader.init_module(module_path)
+            except ModuleOptionsError as e:
+                self.logger.debug(f"Skipping module: {e}")
+                continue
             self.modules.append(module)

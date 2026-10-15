@@ -1,4 +1,4 @@
-from argparse import _StoreTrueAction, _StoreAction
+from argparse import BooleanOptionalAction, _StoreTrueAction
 from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction, get_conditional_action
 
 
@@ -7,8 +7,8 @@ def proto_args(parser, parents):
     smb_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
 
     delegate_arg = smb_parser.add_argument("--delegate", action="store", help="Impersonate user with S4U2Self + S4U2Proxy")
-    delegate_spn_arg = smb_parser.add_argument("--delegate-spn", action=get_conditional_action(_StoreAction), make_required=[], help="SPN to use for S4U2Proxy, if not specified the SPN used will be cifs/<target>", type=str)
-    generate_st = smb_parser.add_argument("--generate-st", type=str, dest="generate_st", action=get_conditional_action(_StoreAction), make_required=[], help="Store the S4U Service Ticket in the specified file")
+    smb_parser.add_argument("--spn", action="store", help="SPN to use for the Service Ticket. With --delegate it's the SPN used for S4U2Proxy (defaults to cifs/<target>).", type=str)
+    smb_parser.add_argument("--generate-st", type=str, dest="generate_st", help="Store a Service Ticket in the specified file. Use with --delegate to save the S4U ST, or without --delegate (together with --spn) to request a regular ST for the given SPN")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
     u2u_arg = smb_parser.add_argument("--u2u", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Use User-to-User (U2U) authentication with S4U2Self")
 
@@ -22,13 +22,11 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--smbv1", action="store_true", default=False, help="[DEFAULT OFF] Enable SMBv1 negotiation (only if explicitly needed)")
     smb_parser.add_argument("--gen-relay-list", metavar="OUTPUT_FILE", help="outputs all hosts that don't require SMB signing to the specified file")
     smb_parser.add_argument("--smb-timeout", help="SMB connection timeout", type=int, default=2)
-    smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentification", nargs="?", const="administrator")
+    smb_parser.add_argument("--laps", dest="laps", metavar="LAPS", type=str, help="LAPS authentication", nargs="?", const="administrator")
     smb_parser.add_argument("--generate-hosts-file", type=str, help="Generate a hosts file like from a range of IP")
     smb_parser.add_argument("--generate-krb5-file", type=str, help="Generate a krb5 file like from a range of IP")
     smb_parser.add_argument("--generate-tgt", type=str, help="Generate a tgt ticket")
     self_delegate_arg.make_required = [delegate_arg]
-    generate_st.make_required = [delegate_arg]
-    delegate_spn_arg.make_required = [delegate_arg]
     u2u_arg.make_required = [delegate_arg]
 
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering")
@@ -43,8 +41,12 @@ def proto_args(parser, parents):
     kerb_keys_arg.make_required = [ntds_arg]
     enabled_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
+    trust_keys_arg = cred_gathering_group.add_argument("--trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], default=True, help="Dump Trusted Domain Object (TDO) secrets and derive inter-realm Kerberos/RC4 keys (NTDS.dit)")
+    just_trust_keys_arg = cred_gathering_group.add_argument("--just-trust-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Like --trust-keys but dump ONLY the trust keys, skipping every account secret (NTDS.dit)")
+    trust_keys_arg.make_required = [ntds_arg]
+    just_trust_keys_arg.make_required = [ntds_arg]
     cred_gathering_group.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
-    cred_gathering_group.add_argument("--sccm", choices={"wmi", "disk"}, nargs="?", const="disk", help="dump SCCM secrets from target systems")
+    cred_gathering_group.add_argument("--sccm", action="store_true", help="dump SCCM secrets from target systems")
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
@@ -92,6 +94,9 @@ def proto_args(parser, parents):
     files_group = smb_parser.add_argument_group("File Operations")
     files_group.add_argument("--put-file", action="append", nargs=2, metavar="FILE", help="Put a local file into remote target, ex: whoami.txt \\\\Windows\\\\Temp\\\\whoami.txt")
     files_group.add_argument("--get-file", action="append", nargs=2, metavar="FILE", help="Get a remote file, ex: \\\\Windows\\\\Temp\\\\whoami.txt whoami.txt")
+    files_group.add_argument("--get-folder", action="append", nargs=2, metavar="DIR", help="Get a remote directory, ex: \\\\Windows\\\\Temp\\\\testing testing")
+    files_group.add_argument("--recursive", default=True, action=BooleanOptionalAction, help="Recursively get a folder")
+    files_group.add_argument("--ignore-empty-folders", default=False, action="store_true", help="Ignore empty folders when downloading")
     files_group.add_argument("--append-host", action="store_true", help="append the host to the get-file filename")
 
     cmd_exec_group = smb_parser.add_argument_group("Command Execution")

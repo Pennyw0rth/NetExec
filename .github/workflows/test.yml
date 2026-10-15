@@ -14,25 +14,17 @@ jobs:
       max-parallel: 5
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Install uv
-        run: |
-          pip install uv
-          uv --version
-      - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: uv.lock
-      - name: Install with pipx
-        run: |
-          pipx install . --python python${{ matrix.python-version }}
-      - name: Install libraries with dev group
-        run: |
-          uv sync
+          enable-cache: true
+      - name: NetExec set up python ${{ matrix.python-version }} on ${{ matrix.os }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install project
+        run: uv sync --python ${{ matrix.python-version }}
       - name: Load every protocol and module
         run: |
           uv run netexec winrm 127.0.0.1
