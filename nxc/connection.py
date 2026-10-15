@@ -566,6 +566,10 @@ class connection:
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
 
+        if self.args.protocol == "ldap" and self.args.schannel and not (self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert):
+            self.logger.fail("--schannel requires a certificate: --pfx-cert, --pfx-base64, or --pem-cert with --pem-key")
+            return False
+
         if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
             self.logger.debug("Trying to authenticate using Certificate pfx")
             if self.args.protocol == "ldap" and self.args.schannel:

@@ -480,10 +480,10 @@ class ldap(connection):
 
             if self.args.schannel:
                 # The certificate is mapped to an account server-side, so whoami is the only way to know who we are
-                self.username = self.get_ldap_username()
-                if not self.username:
-                    self.logger.fail("Authenticated with the certificate but the mapped user could not be retrieved with LDAP whoami")
-                    return False
+                netbios_domain, _, self.username = self.ldap_connection.whoami().removeprefix("u:").partition("\\")
+                # The mapped account can belong to another domain of the forest, and whoami only returns its NetBIOS domain name
+                cross_ref = parse_result_attributes(self.search(f"(&(objectClass=crossRef)(nETBIOSName={netbios_domain}))", ["dnsRoot"], baseDN=f"CN=Partitions,{self.configuration_context}"))
+                self.domain = cross_ref[0]["dnsRoot"] if cross_ref else netbios_domain
 
             self.check_if_admin()
 
