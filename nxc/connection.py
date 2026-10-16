@@ -19,8 +19,6 @@ from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.paths import NXC_PATH
-from nxc.protocols.ldap.laps import laps_search
-from nxc.helpers.pfx import pfx_auth
 
 from impacket.krb5.ccache import CCache
 
@@ -540,10 +538,12 @@ class connection:
                 self.logger.fail("You must specify a username when using certificate authentication")
                 return False
             with sem:
+                from nxc.helpers.pfx import pfx_auth
                 return pfx_auth(self)
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
+            from nxc.protocols.ldap.laps import laps_search
             username[0], secret[0], domain[0] = laps_search(self, username, secret, cred_type, domain, self.dns_server)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
