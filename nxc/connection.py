@@ -22,7 +22,6 @@ from nxc.paths import NXC_PATH
 from nxc.protocols.ldap.laps import laps_search
 from nxc.helpers.pfx import pfx_auth
 
-from impacket.dcerpc.v5 import transport
 from impacket.krb5.ccache import CCache
 
 sem = BoundedSemaphore(1)
