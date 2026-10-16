@@ -61,7 +61,8 @@ from impacket.smb3structs import (
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
-from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
+from nxc.connection import connection, sem, requires_admin
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
@@ -1991,7 +1992,7 @@ class smb(connection):
         try:
             dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout, self.logger)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 

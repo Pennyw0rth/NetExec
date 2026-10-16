@@ -101,37 +101,6 @@ def requires_admin(func):
     return wraps(func)(_decorator)
 
 
-def dcom_FirewallChecker(iInterface, remoteHost, timeout):
-    stringBindings = iInterface.get_cinstance().get_string_bindings()
-    for strBinding in stringBindings:
-        if strBinding["wTowerId"] == 7:
-            if strBinding["aNetworkAddr"].find("[") >= 0:
-                binding, _, bindingPort = strBinding["aNetworkAddr"].partition("[")
-                bindingPort = "[" + bindingPort
-            else:
-                binding = strBinding["aNetworkAddr"]
-                bindingPort = ""
-
-            if binding.upper().find(iInterface.get_target().upper()) >= 0:
-                stringBinding = "ncacn_ip_tcp:" + strBinding["aNetworkAddr"][:-1]
-                break
-            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition(".")[0]) >= 0:
-                stringBinding = f"ncacn_ip_tcp:{iInterface.get_target()}{bindingPort}"
-    if "stringBinding" not in locals():
-        return True, None
-    try:
-        rpctransport = transport.DCERPCTransportFactory(stringBinding)
-        rpctransport.setRemoteHost(remoteHost)
-        rpctransport.set_connect_timeout(timeout)
-        rpctransport.connect()
-        rpctransport.disconnect()
-    except Exception as e:
-        nxc_logger.debug(f"Exception while connecting to {stringBinding}: {e}")
-        return False, stringBinding
-    else:
-        return True, stringBinding
-
-
 class connection:
     def __init__(self, args, db, target):
         self.args = args
