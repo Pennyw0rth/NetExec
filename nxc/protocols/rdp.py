@@ -9,6 +9,7 @@ from anyio import Path
 from termcolor import colored
 
 from impacket.krb5.ccache import CCache
+from impacket.smb3 import WIN_VERSIONS
 
 from nxc.connection import connection
 from nxc.helpers.misc import sanitize_dns
@@ -157,7 +158,7 @@ class rdp(connection):
                     else:
                         self.hostname = sanitize_dns(info_domain.get("computername") or self.host, self.logger)
                         self.domain = sanitize_dns(info_domain.get("dnsdomainname") or self.host, self.logger)
-                        self.server_os = f"{info_domain.get('os_guess', 'Unknown')} Build {info_domain.get('os_build', 'Unknown')}"
+                        self.server_os = self.guess_os(info_domain)
                         self.logger.extra["hostname"] = self.hostname
                     break
 
@@ -187,6 +188,12 @@ class rdp(connection):
         self.iosettings.supported_protocols = None
 
         return True
+
+    def guess_os(self, info_domain):
+        build = info_domain.get("os_build")
+        if build in WIN_VERSIONS:
+            return f"{WIN_VERSIONS[build]} Build {build}"
+        return f"{info_domain.get('os_guess') or 'Unknown'} Build {build or 'Unknown'}"
 
     async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
