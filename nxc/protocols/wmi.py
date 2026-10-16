@@ -9,7 +9,8 @@ import base64
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.helpers.misc import sanitize_dns
 from nxc.config import process_secret
-from nxc.connection import connection, dcom_FirewallChecker, requires_admin
+from nxc.connection import connection, requires_admin
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.helpers.logger import highlight
@@ -180,7 +181,7 @@ class wmi(connection):
         try:
             self.dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
             iInterface = self.dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout)
+            flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout, self.logger)
         except Exception as e:
             self.logger.debug(f"Received error while checking admin: {e}")
             if "access_denied" not in str(e).lower():
