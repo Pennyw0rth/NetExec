@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 
 from impacket.dcerpc.v5 import samr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
-from impacket.nt_errors import STATUS_MORE_ENTRIES
 
 from nxc.helpers.rpc import NXCRPCConnection
 
@@ -83,24 +82,7 @@ class UserSamrDump:
                 else:
                     self.logger.fail(f"Error occurred when looking up users in domain: {e}")
         else:
-            status = STATUS_MORE_ENTRIES
-            enumerationContext = 0
-            while status == STATUS_MORE_ENTRIES:
-                try:
-                    enumerate_users_resp = samr.hSamrEnumerateUsersInDomain(self.dce, domain_handle, enumerationContext=enumerationContext)
-                except DCERPCException as e:
-                    if str(e).find("STATUS_MORE_ENTRIES") < 0:
-                        self.logger.fail("Error enumerating domain user(s)")
-                        break
-                    enumerate_users_resp = e.get_packet()
-
-                rids = [r["RelativeId"] for r in enumerate_users_resp["Buffer"]["Buffer"]]
-                self.logger.debug(f"Full domain RIDs retrieved: {rids}")
-                users = self.get_user_info(domain_handle, rids)
-
-                # set these for the while loop
-                enumerationContext = enumerate_users_resp["EnumerationContext"]
-                status = enumerate_users_resp["ErrorCode"]
+            users = self.query_display_users(domain_handle)
 
         self.logger.display(f"Enumerated {len(users)} local users: {domain_name}")
         if dump_path:
@@ -108,6 +90,44 @@ class UserSamrDump:
             with open(dump_path, "w+") as file:
                 file.writelines(f"{user}\n" for user in users)
         self.dce.disconnect()
+
+    def query_display_users(self, domain_handle):
+        """Enumerate users via SamrQueryDisplayInformation in a single bulk call instead of per-user handle opens."""
+        users = []
+        self.logger.highlight(f"{'-Username-':<30}{'-Rid-':<8}{'-Full Name-':<25}{'-Description-':<60}")
+        index = 0
+        while True:
+            try:
+                resp = samr.hSamrQueryDisplayInformation(
+                    self.dce,
+                    domain_handle,
+                    displayInformationClass=samr.DOMAIN_DISPLAY_INFORMATION.DomainDisplayUser,
+                    index=index,
+                    entryCount=0xffffffff,
+                    preferedMaximumLength=0xffffffff,
+                )
+                more = False
+            except DCERPCException as e:
+                if "STATUS_MORE_ENTRIES" not in str(e):
+                    self.logger.fail(f"QueryDisplayInformation error: {e}")
+                    break
+                resp = e.get_packet()
+                more = True
+
+            entries = resp["Buffer"]["UserInformation"]["Buffer"]
+            for entry in entries:
+                name = entry["AccountName"] or ""
+                desc = entry["AdminComment"] or ""
+                full = entry["FullName"] or ""
+                rid = entry["Rid"]
+                users.append(name)
+                self.logger.highlight(f"{name:<30}{rid:<8}{full:<25}{desc}")
+
+            if not more or not entries:
+                break
+            index = entries[-1]["Index"] + 1
+
+        return users
 
     def get_user_info(self, domain_handle, user_ids):
         self.logger.debug(f"Getting user info for users: {user_ids}")
