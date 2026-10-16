@@ -33,8 +33,8 @@ class NXCModule:
         """No options available"""
 
     def resolve_gpo(self, connection, guid):
-        gpo_dn = f"CN={{{guid}}},CN=Policies,CN=System,{connection.baseDN}"
-        resp = connection.search(baseDN=gpo_dn, searchFilter="(objectClass=groupPolicyContainer)", attributes=["displayName", "name"])
+        policies_dn = f"CN=Policies,CN=System,{connection.baseDN}"
+        resp = connection.search(baseDN=policies_dn, searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
         results = parse_result_attributes(resp)
         if not results:
             return ""
