@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11, <4.0"
 
 [options]
-exclude-newer = "2026-10-13T16:16:27.356501522Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P1D"
 
 [options.exclude-newer-package]
@@ -878,8 +878,8 @@ wheels = [
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20261001.122511.1875828d"
-source = { git = "https://github.com/fortra/impacket#1875828d0f2e987cd89c1bcb45f843708981a199" }
+version = "0.14.0.dev0+20261015.95810.75938fcb"
+source = { git = "https://github.com/fortra/impacket#75938fcb0145b476250940d740f71394676288cb" }
 dependencies = [
     { name = "charset-normalizer" },
     { name = "flask" },

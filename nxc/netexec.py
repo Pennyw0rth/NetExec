@@ -104,6 +104,10 @@ def main():
         nxc_logger.fail("Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
         exit(1)
 
+    if args.protocol == "ldap" and args.schannel and not (args.pfx_cert or args.pfx_base64 or args.pem_cert):
+        nxc_logger.fail("--schannel requires a certificate: --pfx-cert, --pfx-base64, or --pem-cert with --pem-key")
+        exit(1)
+
     if args.use_kcache and not os.environ.get("KRB5CCNAME"):
         nxc_logger.error("KRB5CCNAME environment variable is not set")
         exit(1)
