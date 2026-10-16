@@ -3,7 +3,7 @@
 # Code refactored and added to by @mjhallenbeck (Marshall-Hallenbeck on GitHub)
 
 from impacket.dcerpc.v5 import lsat, lsad, samr
-from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
+
 from impacket.nmb import NetBIOSError
 from impacket.smbconnection import SessionError
 from nxc.helpers.rpc import NXCRPCConnection
@@ -83,7 +83,7 @@ class SAMRQuery:
     def get_server_handle(self):
         if self.dce:
             try:
-                resp = samr.hSamrConnect(self.dce)
+                resp = samr.hSamrConnect5(self.dce, desiredAccess=samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
             except samr.DCERPCException as e:
                 if "rpc_s_access_denied" in str(e):
                     raise
@@ -114,7 +114,7 @@ class SAMRQuery:
         return aliases
 
     def get_alias_handle(self, domain_handle, alias_id):
-        resp = samr.hSamrOpenAlias(self.dce, domain_handle, desiredAccess=MAXIMUM_ALLOWED, aliasId=alias_id)
+        resp = samr.hSamrOpenAlias(self.dce, domain_handle, desiredAccess=samr.ALIAS_LIST_MEMBERS, aliasId=alias_id)
         return resp["AliasHandle"]
 
     def get_alias_members(self, domain_handle, alias_id):
@@ -138,7 +138,7 @@ class LSAQuery:
             return None
 
     def get_policy_handle(self):
-        resp = lsad.hLsarOpenPolicy2(self.dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
+        resp = lsad.hLsarOpenPolicy2(self.dce, lsat.POLICY_LOOKUP_NAMES)
         return resp["PolicyHandle"]
 
     def lookup_sids(self, sids):

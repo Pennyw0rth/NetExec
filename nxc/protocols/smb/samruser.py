@@ -33,7 +33,7 @@ class UserSamrDump:
         users = []
 
         # Setup Connection
-        resp = samr.hSamrConnect2(self.dce)
+        resp = samr.hSamrConnect5(self.dce, desiredAccess=samr.SAM_SERVER_ENUMERATE_DOMAINS | samr.SAM_SERVER_LOOKUP_DOMAIN)
         if resp["ErrorCode"] != 0:
             raise Exception("Connect error")
 
@@ -58,7 +58,7 @@ class UserSamrDump:
         resp4 = samr.hSamrOpenDomain(
             self.dce,
             serverHandle=resp["ServerHandle"],
-            desiredAccess=samr.MAXIMUM_ALLOWED,
+            desiredAccess=samr.DOMAIN_LIST_ACCOUNTS | samr.DOMAIN_LOOKUP,
             domainId=resp3["DomainId"],
         )
         if resp4["ErrorCode"] != 0:
@@ -119,7 +119,7 @@ class UserSamrDump:
             open_user_resp = samr.hSamrOpenUser(
                 self.dce,
                 domain_handle,
-                samr.MAXIMUM_ALLOWED,
+                samr.USER_READ_GENERAL | samr.USER_READ_ACCOUNT,
                 user
             )
             info_user_resp = samr.hSamrQueryInformationUser2(

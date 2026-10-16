@@ -34,7 +34,7 @@ from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
 from impacket.dcerpc.v5.epm import MSRPC_UUID_PORTMAP
 from impacket.dcerpc.v5.samr import SID_NAME_USE
-from impacket.dcerpc.v5.dtypes import MAXIMUM_ALLOWED
+
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import SessionKeyDecryptionError, getKerberosTGT, getKerberosTGS, KerberosError
 from impacket.krb5.types import KerberosException, Principal
@@ -1527,7 +1527,7 @@ class smb(connection):
             return
 
         # Resolve SIDs with names
-        policy_handle = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
+        policy_handle = lsad.hLsarOpenPolicy2(dce, lsat.POLICY_LOOKUP_NAMES)["PolicyHandle"]
         try:
             resp = lsat.hLsarLookupSids(dce, policy_handle, sessions.keys(), lsat.LSAP_LOOKUP_LEVEL.LsapLookupWksta)
         except DCERPCException as e:
@@ -2081,7 +2081,7 @@ class smb(connection):
             self.logger.fail(f"Error creating DCERPC connection: {e}")
             return entries
         try:
-            resp = lsad.hLsarOpenPolicy2(dce, MAXIMUM_ALLOWED | lsat.POLICY_LOOKUP_NAMES)
+            resp = lsad.hLsarOpenPolicy2(dce, lsad.POLICY_VIEW_LOCAL_INFORMATION | lsat.POLICY_LOOKUP_NAMES)
         except lsad.DCERPCSessionError as e:
             self.logger.fail(f"Error connecting: {e}")
             return entries
