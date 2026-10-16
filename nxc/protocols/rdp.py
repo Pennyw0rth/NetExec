@@ -193,6 +193,8 @@ class rdp(connection):
         build = info_domain.get("os_build")
         if build in WIN_VERSIONS:
             return f"{WIN_VERSIONS[build]} Build {build}"
+        if info_domain.get("os_major_version") == "WINDOWS_MAJOR_VERSION_10":   # asyauth labels every 10.0 kernel "Windows 10 or Windows Server 2016", only trust it for older kernels
+            return f"Windows 10.0 Build {build}"
         return f"{info_domain.get('os_guess') or 'Unknown'} Build {build or 'Unknown'}"
 
     async def check_nla(self):
