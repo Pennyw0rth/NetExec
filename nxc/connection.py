@@ -20,8 +20,6 @@ from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.paths import NXC_PATH
 
-from impacket.krb5.ccache import CCache
-
 sem = BoundedSemaphore(1)
 fail_lock = Lock()
 global_failed_logins = 0
@@ -526,6 +524,7 @@ class connection:
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
+                from impacket.krb5.ccache import CCache
                 username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
