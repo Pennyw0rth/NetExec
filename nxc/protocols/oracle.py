@@ -16,6 +16,7 @@ class oracle(connection):
         self.instance = None
         self.auth_mode = oracledb.AUTH_MODE_DEFAULT
         self.server_version = ""
+        self.tns_version = ""
 
         super().__init__(args, db, host)
 
@@ -46,16 +47,49 @@ class oracle(connection):
             self.auth_mode = oracledb.AUTH_MODE_SYSOPER
 
         try:
-            sock = socket.create_connection((self.host, self.port), timeout=self.args.oracle_timeout)
-            sock.close()
+            self.tns_version = self.grab_tns_version()
         except Exception as e:
             self.logger.debug(f"Error connecting to Oracle TNS listener on {self.host}:{self.port}, reason: {e}")
             return False
         return True
 
+    def grab_tns_version(self):
+        """Send a TNS CONNECT with a probe service name; parse VSNNUM from the REFUSE response.
+
+        The listener always includes VSNNUM in the REFUSE body even for unknown service names.
+        VSNNUM is a 32-bit int where the top byte is the Oracle major version.
+        Returns a dotted major.minor string, or empty string if parsing fails.
+        """
+        import struct as _struct
+        cd = b"(DESCRIPTION=(CONNECT_DATA=(SERVICE_NAME=NXC_PROBE)))"
+        offset = 58
+        total = offset + len(cd)
+        hdr = bytes([(total >> 8) & 0xFF, total & 0xFF, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00])
+        fields = _struct.pack(">HHHHHHHHHH",
+            0x0139, 0x012C, 0x0C41, 0x0800, 0x7FFF,
+            0x860E, 0x0000, 0x0001, len(cd), offset,
+        )
+        fields += b"\x00" * (50 - len(fields))
+        sock = socket.create_connection((self.host, self.port), timeout=self.args.oracle_timeout)
+        try:
+            sock.sendall(hdr + fields + cd)
+            data = sock.recv(4096)
+        finally:
+            sock.close()
+        if len(data) <= 8:
+            return ""
+        body = data[8:].decode("ascii", errors="replace")
+        m = re.search(r"VSNNUM=(\d+)", body)
+        if not m:
+            return ""
+        vsnnum = int(m.group(1))
+        major = (vsnnum >> 24) & 0xFF
+        if major:
+            return str(major)
+        return ""
+
     def enum_host_info(self):
-        # Version is only known after a successful authentication; nothing to enumerate pre-auth.
-        return
+        pass
 
     def print_host_info(self):
         instance_type = "ServiceName" if self.args.service_name else "SID"
@@ -64,7 +98,8 @@ class oracle(connection):
             role = " (role:SYSDBA)"
         elif self.auth_mode == oracledb.AUTH_MODE_SYSOPER:
             role = " (role:SYSOPER)"
-        self.logger.display(f"Oracle TNS Listener ({instance_type}:{self.instance}){role}")
+        version_str = f" (version:{self.tns_version})" if self.tns_version else ""
+        self.logger.display(f"Oracle TNS Listener ({instance_type}:{self.instance}){role}{version_str}")
 
     def check_if_admin(self):
         """Determine whether the authenticated principal has DBA-level control.
