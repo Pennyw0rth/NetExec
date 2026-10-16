@@ -487,15 +487,13 @@ class ldap(connection):
 
             self.check_if_admin()
 
-            if self.args.schannel:
-                self.logger.debug(f"Adding credential: {self.domain}/{self.username} from certificate")
-                self.db.add_credential("certificate", self.domain, self.username, "")
-                self.logger.success(f"{self.domain}\\{self.username} from certificate {self.mark_pwned()}")
-            else:
+            # A certificate bind has no secret to store, the account comes from the certificate mapping
+            if not self.args.schannel:
                 self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
                 self.db.add_credential("plaintext", domain, self.username, self.password)
-                # Prepare success credential text
-                self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+
+            used_certificate = " from certificate" if self.args.schannel else f":{process_secret(self.password)}"
+            self.logger.success(f"{self.domain}\\{self.username}{used_certificate} {self.mark_pwned()}")
 
             if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
