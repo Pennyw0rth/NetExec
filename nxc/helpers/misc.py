@@ -26,7 +26,7 @@ def identify_target_file(target_file):
 
 
 def gen_random_string(length=10):
-    return "".join(random.sample(string.ascii_letters, int(length)))
+    return "".join(random.choices(string.ascii_letters + string.digits, k=int(length)))
 
 
 def sanitize_dns(hostname, logger=nxc_logger):
