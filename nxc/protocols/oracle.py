@@ -36,8 +36,8 @@ class oracle(connection):
         Oracle has no unauthenticated session we can hold open, so the actual connection
         happens per-credential in plaintext_login(). Here we only validate reachability and args.
         """
-        if not self.args.service_name and not self.args.sid:
-            self.logger.fail("Specify the target instance with --service-name or --sid")
+        if not self.args.service_name and not self.args.sid and not self.args.enum_sids:
+            self.logger.fail("Specify the target instance with --service-name or --sid (or use --enum-sids)")
             return False
 
         self.instance = self.args.service_name if self.args.service_name else self.args.sid
@@ -89,17 +89,81 @@ class oracle(connection):
         return ""
 
     def enum_host_info(self):
-        pass
+        if not self.args.enum_sids:
+            return
+        common_sids = [
+            "XE", "ORCL", "ORCLCDB", "DB11G", "DB12C", "ORACLE",
+            "PLSExtProc", "CLRExtProc", "XEXDB",
+        ]
+        common_services = [
+            "XEPDB1", "ORCLPDB1", "ORCL", "PDBORCL", "XE",
+            "ORCLCDB", "DB12C", "orcl", "oracle",
+        ]
+        found = []
+        for sid in common_sids:
+            err = self.probe_tns_instance(sid, use_sid=True)
+            if err not in (12505, 12514, None):
+                found.append(f"SID:{sid}")
+        for svc in common_services:
+            err = self.probe_tns_instance(svc, use_sid=False)
+            if err not in (12505, 12514, None):
+                found.append(f"ServiceName:{svc}")
+        if found:
+            for name in found:
+                self.logger.highlight(f"Found instance: {name}")
+        else:
+            self.logger.display("No common SIDs or service names found")
+
+    def probe_tns_instance(self, name, use_sid):
+        """Send a TNS CONNECT for the given SID or service name; return the ERR code from the REFUSE body.
+
+        Returns None on network/parse failure, or the integer ERR value.
+        ERR 12505/12514 means the instance doesn't exist; anything else means it does.
+        """
+        import struct as _struct
+        key = "SID" if use_sid else "SERVICE_NAME"
+        cd = f"(DESCRIPTION=(CONNECT_DATA=({key}={name})))".encode()
+        offset = 58
+        total = offset + len(cd)
+        hdr = bytes([(total >> 8) & 0xFF, total & 0xFF, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00])
+        fields = _struct.pack(">HHHHHHHHHH",
+            0x0139, 0x012C, 0x0C41, 0x0800, 0x7FFF,
+            0x860E, 0x0000, 0x0001, len(cd), offset,
+        )
+        fields += b"\x00" * (50 - len(fields))
+        try:
+            sock = socket.create_connection((self.host, self.port), timeout=self.args.oracle_timeout)
+            try:
+                sock.sendall(hdr + fields + cd)
+                data = sock.recv(4096)
+            finally:
+                sock.close()
+            if len(data) < 5:
+                return None
+            # REDIRECT (0x0b) or ACCEPT (0x02) both mean the instance exists
+            if data[4] in (0x02, 0x0b):
+                return 0
+            if len(data) <= 8:
+                return None
+            body = data[8:].decode("ascii", errors="replace")
+            m = re.search(r"ERR=(\d+)", body)
+            return int(m.group(1)) if m else 0
+        except Exception as e:
+            self.logger.debug(f"probe_tns_instance({name}): {e}")
+            return None
 
     def print_host_info(self):
-        instance_type = "ServiceName" if self.args.service_name else "SID"
         role = ""
         if self.auth_mode == oracledb.AUTH_MODE_SYSDBA:
             role = " (role:SYSDBA)"
         elif self.auth_mode == oracledb.AUTH_MODE_SYSOPER:
             role = " (role:SYSOPER)"
         version_str = f" (version:{self.tns_version})" if self.tns_version else ""
-        self.logger.display(f"Oracle TNS Listener ({instance_type}:{self.instance}){role}{version_str}")
+        if self.instance:
+            instance_type = "ServiceName" if self.args.service_name else "SID"
+            self.logger.display(f"Oracle TNS Listener ({instance_type}:{self.instance}){role}{version_str}")
+        else:
+            self.logger.display(f"Oracle TNS Listener{role}{version_str}")
 
     def check_if_admin(self):
         """Determine whether the authenticated principal has DBA-level control.

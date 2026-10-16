@@ -12,6 +12,7 @@ def proto_args(parser, parents):
     igroup.add_argument("--sid", metavar="SID", help="Oracle System Identifier (legacy SID) to connect to (e.g. XE)")
 
     egroup = oracle_parser.add_argument_group("Enumeration")
+    egroup.add_argument("--enum-sids", action="store_true", help="probe common SIDs and service names without credentials")
     egroup.add_argument("--database", nargs="?", const=True, metavar="SCHEMA", help="list pluggable databases, or list tables for SCHEMA")
     egroup.add_argument("--users", action="store_true", help="enumerate database users/accounts")
     egroup.add_argument("--roles", action="store_true", help="show current session roles and system privileges")
