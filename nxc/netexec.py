@@ -160,7 +160,8 @@ def main():
 
     if args.module or args.list_modules is not None:
         loader = ModuleLoader(args, db, nxc_logger)
-        modules = loader.list_modules()
+        # -L lists every module, -M only needs the requested ones
+        modules = loader.list_modules(None if args.list_modules is not None else args.module)
 
     if args.list_modules is not None:
         low_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and not props["requires_admin"]}
