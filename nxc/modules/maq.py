@@ -32,6 +32,17 @@ class NXCModule:
     def options(self, context, module_options):
         """No options available"""
 
+    def on_login(self, context, connection):
+        context.log.display("Getting the MachineAccountQuota")
+        ldap_response = connection.search("(ms-DS-MachineAccountQuota=*)", ["ms-DS-MachineAccountQuota"])
+        entries = parse_result_attributes(ldap_response)
+        if not entries:
+            context.log.fail("No LDAP entries returned.")
+            return
+        context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
+        self.get_SeMachineAccountPrivilege(context, connection)
+
+
     def resolve_gpo(self, connection, guid):
         policies_dn = f"CN=Policies,CN=System,{connection.baseDN}"
         resp = connection.search(baseDN=policies_dn, searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
@@ -167,13 +178,3 @@ class NXCModule:
                         context.log.highlight(f"\t\t - {sid} (unresolved)")
         finally:
             smb.logoff()
-
-    def on_login(self, context, connection):
-        context.log.display("Getting the MachineAccountQuota")
-        ldap_response = connection.search("(ms-DS-MachineAccountQuota=*)", ["ms-DS-MachineAccountQuota"])
-        entries = parse_result_attributes(ldap_response)
-        if not entries:
-            context.log.fail("No LDAP entries returned.")
-            return
-        context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
-        self.get_SeMachineAccountPrivilege(context, connection)
