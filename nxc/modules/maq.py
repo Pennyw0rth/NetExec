@@ -48,18 +48,21 @@ class NXCModule:
             context.log.debug("No enabled GPO links found for the domain and Domain Controllers OU")
             return
         context.log.debug(f"gPLink parsed: {gpo_links}")
+
         try:
             smb = self.connect_smb(connection)
         except (OSError, SessionError, NetBIOSError, NetBIOSTimeout, KerberosError) as e:
             context.log.fail(f"Unable to connect to SYSVOL through SMB: {e}")
             return
         context.log.display("Getting SeMachineAccountPrivilege")
+
         try:
             for link in gpo_links:
                 guid = link["guid"]
                 gpo_name = self.resolve_gpo(connection, guid) or f"{{{guid}}}"
                 # Accessing the GPO in the SYSVOL share to parse GptTmpl.inf
                 path = ntpath.join(connection.targetDomain, "Policies", f"{{{guid}}}", "MACHINE", "Microsoft", "Windows NT", "SecEdit", "GptTmpl.inf")
+
                 try:
                     buf = BytesIO()
                     smb.getFile("SYSVOL", path, buf.write)
@@ -74,6 +77,7 @@ class NXCModule:
                 except (OSError, NetBIOSError, NetBIOSTimeout, UnicodeError) as e:
                     context.log.fail(f"Unable to read {path}: {e}")
                     continue
+
                 # An absent setting inherits; an explicitly empty assignment overrides.
                 for line in GptTmpl.splitlines():
                     match = re.match(r"^\s*SeMachineAccountPrivilege\s*=(.*)$", line.lstrip("\ufeff"))
@@ -83,12 +87,14 @@ class NXCModule:
                 else:
                     context.log.debug(f"SeMachineAccountPrivilege not in {path}")
                     continue
+
                 enforced_str = ", Enforced" if link["enforced"] else ""
                 context.log.success(f'(GPO) "{gpo_name}" [DN: {link["scope_dn"]}] [Link order: {link["link_order"]}{enforced_str}]')
                 context.log.info(f"\t{line.strip()}")
                 if not value:
                     context.log.highlight("SeMachineAccountPrivilege explicitly assigned to nobody")
                     continue
+
                 principals = [principal.strip() for principal in value.split(",") if principal.strip()]
                 for principal in principals:
                     match = re.fullmatch(r"\*?(S-\d+(?:-\d+)+)", principal)
@@ -99,10 +105,7 @@ class NXCModule:
                     if sid in WELL_KNOWN_SIDS:
                         context.log.highlight(f'\t\t - "{WELL_KNOWN_SIDS[sid]}" ({sid})')
                         continue
-                    resp = connection.search(
-                        searchFilter=f"(objectSid={sid})",
-                        attributes=["sAMAccountName"]
-                    )
+                    resp = connection.search(searchFilter=f"(objectSid={sid})", attributes=["sAMAccountName"])
                     entries = parse_result_attributes(resp)
                     if entries and entries[0].get("sAMAccountName"):
                         context.log.highlight(f'\t\t - "{entries[0]["sAMAccountName"]}" ({sid})')
@@ -115,6 +118,7 @@ class NXCModule:
         ou_dn = f"OU=Domain Controllers,{connection.baseDN}"
         gpo_links = []
         block_inheritance = False
+
         for scope_dn in (ou_dn, connection.baseDN):
             ldap_response = connection.search(searchFilter=f"(distinguishedName={scope_dn})", baseDN=scope_dn, attributes=["gPLink", "gPOptions"])
             entries = parse_result_attributes(ldap_response)
