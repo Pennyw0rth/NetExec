@@ -40,7 +40,6 @@ class rdp(connection):
         self.domain = None
         self.server_os = None
         self.iosettings = RDPIOSettings()
-        self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
             SUPP_PROTOCOLS.SSL,
@@ -60,8 +59,8 @@ class rdp(connection):
         # servers dont support 8 any more :/
         self.iosettings.video_bpp_min = 15
         self.iosettings.video_bpp_max = 32
-        # PIL produces incorrect picture for some reason?! TODO: check bug
-        self.iosettings.video_out_format = VIDEO_FORMAT.PNG  #
+        # screenshots read the desktop buffer, so don't PNG-encode every update put on ext_out_queue
+        self.iosettings.video_out_format = VIDEO_FORMAT.PIL
         self.domain = None
         self.server_os = None
         self.url = None
@@ -69,6 +68,8 @@ class rdp(connection):
         self.hybrid = False
         self.target = None
         self.auth = None
+        self.runner = asyncio.Runner()  # one event loop per target, so the session opened by the login can be reused by --screenshot
+        self.screen_conn = None
 
         self.rdp_error_status = {
             "0xc0000071": "STATUS_PASSWORD_EXPIRED",
@@ -241,9 +242,10 @@ class rdp(connection):
             await self.terminate_conn()
 
     async def login_and_confirm(self):
-        """Connect and return whether a real session opened (Save Session Info PDU), always cleaning up.
+        """Connect and return whether a real session opened (Save Session Info PDU).
 
         That PDU never comes when access is authorized but the logon is refused (restricted admin).
+        With --screenshot the session stays open for screen(), so the screenshot needs no second logon.
         """
         try:
             await self.connect_rdp()
@@ -254,7 +256,10 @@ class rdp(connection):
                 self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
                 return False
         finally:
-            await self.terminate_conn()
+            if self.args.screenshot and self.screen_conn is None and not self.conn.disconnected_evt.is_set():
+                self.screen_conn = self.conn
+            else:
+                await self.terminate_conn()
 
     def rdp_access_denied(self):
         """Whether the Early User Authorization Result PDU says the account has no RDP access right at all.
@@ -332,9 +337,9 @@ class rdp(connection):
                 except RuntimeError as e:
                     self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
                     self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = asyncio.run(self.login_and_confirm())
+                    self.admin_privs = self.runner.run(self.login_and_confirm())
             else:
-                self.admin_privs = asyncio.run(self.login_and_confirm())
+                self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(
                 "{}\\{}{} {}".format(
@@ -407,9 +412,9 @@ class rdp(connection):
                 except RuntimeError as e:
                     self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
                     self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = asyncio.run(self.login_and_confirm())
+                    self.admin_privs = self.runner.run(self.login_and_confirm())
             else:
-                self.admin_privs = asyncio.run(self.login_and_confirm())
+                self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -456,9 +461,9 @@ class rdp(connection):
                 except RuntimeError as e:
                     self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
                     self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = asyncio.run(self.login_and_confirm())
+                    self.admin_privs = self.runner.run(self.login_and_confirm())
             else:
-                self.admin_privs = asyncio.run(self.login_and_confirm())
+                self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -773,25 +778,30 @@ Add-Type -AssemblyName System.Windows.Forms
     def ps_execute(self):
         self.execute(payload=self.args.ps_execute, shell_type="powershell")
 
-    async def screen(self):
-        try:
-            self.conn = self._create_rdp_connection(self.auth)
-            await self.connect_rdp()
+    async def save_screenshot(self, desktop, label):
+        filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
+        filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
+        desktop.save(filename, "png")
+        self.logger.highlight(f"{label} saved {filename}")
 
+    async def screen(self):
+        # reuse the session left open by the login, or open one when the login only checked the credentials (-x/-X)
+        try:
+            if self.screen_conn is None:
+                self.conn = self._create_rdp_connection(self.auth)
+                await self.connect_rdp()
+            else:
+                self.conn, self.screen_conn = self.screen_conn, None
             await asyncio.sleep(5)
-            if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-                buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
-                filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
-                buffer.save(filename, "png")
-                self.logger.highlight(f"Screenshot saved {filename}")
+            if self.conn.desktop_buffer_has_data:
+                await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "Screenshot")
         except Exception as e:
             self.logger.debug(f"Error taking screenshot: {e!s}")
         finally:
             await self.terminate_conn()
 
     def screenshot(self):
-        asyncio.run(self.screen())
+        self.runner.run(self.screen())
 
     async def nla_screen(self):
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
@@ -810,11 +820,7 @@ Add-Type -AssemblyName System.Windows.Forms
             try:
                 await asyncio.sleep(int(self.args.screentime))
                 if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-                    buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                    filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
-                    filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
-                    buffer.save(filename, "png")
-                    self.logger.highlight(f"NLA Screenshot saved {filename}")
+                    await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "NLA Screenshot")
                     return
             finally:
                 await self.terminate_conn()
@@ -822,3 +828,9 @@ Add-Type -AssemblyName System.Windows.Forms
     def nla_screenshot(self):
         if not self.nla:
             asyncio.run(self.nla_screen())
+
+    def disconnect(self):
+        if self.screen_conn is not None:  # the login kept a session that screen() did not use
+            self.conn = self.screen_conn
+            self.runner.run(self.terminate_conn())
+        self.runner.close()
