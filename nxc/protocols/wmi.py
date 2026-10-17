@@ -23,7 +23,10 @@ from dploot.lib.network.wmi import WMITarget as Target
 
 from impacket import ntlm
 from impacket.uuid import uuidtup_to_bin
+from impacket.krb5 import constants
 from impacket.krb5.ccache import CCache
+from impacket.krb5.kerberosv5 import getKerberosTGT
+from impacket.krb5.types import Principal
 from impacket.examples.secretsdump import LSASecrets, SAMHashes, NTDSHashes
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
@@ -43,6 +46,7 @@ class wmi(connection):
         self.nthash = ""
         self.server_os = None
         self.doKerberos = False
+        self.tgt = None
         self.stringBinding = None
         # from: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/18d8fbe8-a967-4f1c-ae50-99ca8e491d2d
         self.rpc_error_status = {
@@ -179,7 +183,7 @@ class wmi(connection):
 
     def check_if_admin(self):
         try:
-            self.dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
+            self.dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host, TGT=self.tgt)
             iInterface = self.dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
             flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout, self.logger)
         except Exception as e:
@@ -234,10 +238,14 @@ class wmi(connection):
 
         try:
             self.logger.debug(f"Attempting to connect via WMI to {self.host}")
-            self.conn.set_credentials(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, aesKey=self.aesKey)
+            dce = self.conn.get_dce_rpc()
+            # Reuse one TGT for every RPC/DCOM bind, impacket would otherwise redo the AS exchange on each bind
+            if not useCache and kerb_pass:
+                tgt, cipher, _, session_key = getKerberosTGT(Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value), password, domain, lmhash, nthash, self.aesKey, kdcHost)
+                self.tgt = {"KDC_REP": tgt, "cipher": cipher, "sessionKey": session_key}
+            self.conn.set_credentials(username=username, password=password, domain=domain, lmhash=lmhash, nthash=nthash, aesKey=self.aesKey, TGT=self.tgt)
             self.conn.setRemoteHost(self.host)
             self.conn.set_kerberos(True, kdcHost)
-            dce = self.conn.get_dce_rpc()
             dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
             dce.connect()
