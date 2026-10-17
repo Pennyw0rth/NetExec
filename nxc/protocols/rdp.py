@@ -792,7 +792,7 @@ Add-Type -AssemblyName System.Windows.Forms
                 await self.connect_rdp()
             else:
                 self.conn, self.screen_conn = self.screen_conn, None
-            await asyncio.sleep(5)
+            await asyncio.sleep(5 if self.args.screentime is None else self.args.screentime)
             if self.conn.desktop_buffer_has_data:
                 await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "Screenshot")
         except Exception as e:
@@ -818,7 +818,7 @@ Add-Type -AssemblyName System.Windows.Forms
                 continue
 
             try:
-                await asyncio.sleep(int(self.args.screentime))
+                await asyncio.sleep(10 if self.args.screentime is None else self.args.screentime)
                 if self.conn is not None and self.conn.desktop_buffer_has_data is True:
                     await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "NLA Screenshot")
                     return
