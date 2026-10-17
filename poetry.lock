@@ -482,14 +482,16 @@ dev = ["black (>=23.0.0)", "mypy (>=1.0.0)", "pytest (>=7.0.0)", "pytest-cov (>=
 kerberos = ["gssapi (>=1.8.0) ; sys_platform != \"win32\"", "winkerberos (>=0.9.1) ; sys_platform == \"win32\""]
 
 [[package]]
-name = "certipy-ad"
-version = "5.1.0"
-description = "Active Directory Certificate Services enumeration and abuse"
+name = "certipy-nxc"
+version = "5.1.0.post1"
+description = "Certipy (ly4k/Certipy) packaged for NetExec, with relaxed Python and impacket pins"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "certipy_nxc-5.1.0.post1-py3-none-any.whl", hash = "sha256:27620fdd7a7a44f5ea7d537732a8022d20dd02f7fcd76e2d7fff84daab43ecb0"},
+    {file = "certipy_nxc-5.1.0.post1.tar.gz", hash = "sha256:fb11ca11bcf2e1e7eb060e2c7a7ba78699baeafabb23598dd3770b61d07b75b8"},
+]
 
 [package.dependencies]
 argcomplete = ">=3.6.2,<3.7.0"
@@ -506,12 +508,6 @@ requests = ">=2.32.3,<2.33.0"
 
 [package.extras]
 bloodhound = ["neo4j (>=5.28.1,<5.29.0)"]
-
-[package.source]
-type = "git"
-url = "https://github.com/Pennyw0rth/Certipy"
-reference = "HEAD"
-resolved_reference = "069e03113095aa02772aa3d8debea90654933fe4"
 
 [[package]]
 name = "cffi"
@@ -1080,7 +1076,7 @@ all = ["mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2)"]
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20261001.122511.1875828d"
+version = "0.14.0.dev0+20261015.95810.75938fcb"
 description = "Network protocols Constructors and Dissectors"
 optional = false
 python-versions = "*"
@@ -1104,7 +1100,7 @@ six = "*"
 type = "git"
 url = "https://github.com/fortra/impacket"
 reference = "HEAD"
-resolved_reference = "1875828d0f2e987cd89c1bcb45f843708981a199"
+resolved_reference = "75938fcb0145b476250940d740f71394676288cb"
 
 [[package]]
 name = "iniconfig"
@@ -2964,4 +2960,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "7689c604ae009d0da1cf9fce74a59b42933f04f92d4423f08c7e01d6cf2c0683"
+content-hash = "f3bdd08f336195dcad587423689f837cf2c8cabddf46358bb8a7f279512d4f65"

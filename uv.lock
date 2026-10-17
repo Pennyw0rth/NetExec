@@ -3,8 +3,11 @@ revision = 3
 requires-python = ">=3.11, <4.0"
 
 [options]
-exclude-newer = "2026-10-10T13:56:17.397976536Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P1D"
+
+[options.exclude-newer-package]
+certipy-nxc = "2026-10-14T17:00:00Z"
 
 [[package]]
 name = "aardwolf"
@@ -374,9 +377,9 @@ wheels = [
 ]
 
 [[package]]
-name = "certipy-ad"
-version = "5.1.0"
-source = { git = "https://github.com/Pennyw0rth/Certipy#069e03113095aa02772aa3d8debea90654933fe4" }
+name = "certipy-nxc"
+version = "5.1.0.post1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "argcomplete" },
     { name = "asn1crypto" },
@@ -389,6 +392,10 @@ dependencies = [
     { name = "pyasn1" },
     { name = "pycryptodome" },
     { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/db/b8/ebf0f6f0a3d54d7c309a58d692f54532edbc62d8358ea56dadd22ef8b041/certipy_nxc-5.1.0.post1.tar.gz", hash = "sha256:fb11ca11bcf2e1e7eb060e2c7a7ba78699baeafabb23598dd3770b61d07b75b8", size = 159110, upload-time = "2026-10-14T16:14:49.169Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/6e/5b1c9ceaf7b6092dfe50705af3b1eb5e239115d1044a162a3933a3fa24dc/certipy_nxc-5.1.0.post1-py3-none-any.whl", hash = "sha256:27620fdd7a7a44f5ea7d537732a8022d20dd02f7fcd76e2d7fff84daab43ecb0", size = 181768, upload-time = "2026-10-14T16:14:47.58Z" },
 ]
 
 [[package]]
@@ -871,8 +878,8 @@ wheels = [
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20261001.122511.1875828d"
-source = { git = "https://github.com/fortra/impacket#1875828d0f2e987cd89c1bcb45f843708981a199" }
+version = "0.14.0.dev0+20261015.95810.75938fcb"
+source = { git = "https://github.com/fortra/impacket#75938fcb0145b476250940d740f71394676288cb" }
 dependencies = [
     { name = "charset-normalizer" },
     { name = "flask" },
@@ -1276,7 +1283,7 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "bloodhound-ce" },
     { name = "certihound" },
-    { name = "certipy-ad" },
+    { name = "certipy-nxc" },
     { name = "cryptography" },
     { name = "dploot" },
     { name = "dsinternals" },
@@ -1320,7 +1327,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.11,<5" },
     { name = "bloodhound-ce", specifier = ">=1.8.0" },
     { name = "certihound", specifier = ">=0.1.1" },
-    { name = "certipy-ad", git = "https://github.com/Pennyw0rth/Certipy" },
+    { name = "certipy-nxc", specifier = ">=5.1.0.post1" },
     { name = "cryptography", specifier = ">=42.0.8" },
     { name = "dploot", specifier = ">=4.0.0" },
     { name = "dsinternals", specifier = ">=1.2.4" },
