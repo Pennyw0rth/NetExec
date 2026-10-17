@@ -35,6 +35,9 @@ MSRPC_UUID_PORTMAP = uuidtup_to_bin(("E1AF8308-5D1F-11C9-91A4-08002B14A0FA", "3.
 
 
 class wmi(connection):
+    # check_if_admin() starts impacket's class-level DCOMConnection.PINGTIMER, which crashes when two threads start it at once
+    serialize_login = True
+
     def __init__(self, args, db, host):
         self.domain = ""
         self.targetDomain = ""

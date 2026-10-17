@@ -86,6 +86,7 @@ from nxc.protocols.ldap.resolution import LDAPResolution
 
 from dploot.lib.network.smb import SMBTarget as Target
 
+from threading import Lock
 from time import time, ctime, sleep
 from traceback import format_exc
 from termcolor import colored
@@ -125,6 +126,9 @@ def get_error_string(exception):
 
 
 class smb(connection):
+    # Logins run concurrently, so writes to the shared --generate-st file must not overlap
+    st_file_lock = Lock()
+
     def __init__(self, args, db, host):
         self.domain = None
         self.server_os = None
@@ -733,11 +737,17 @@ class smb(connection):
         if self.args.no_admin_check:
             return
         self.logger.debug(f"Checking if user is admin on {self.host}")
-        try:
-            dce = NXCRPCConnection(self).connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
-        except Exception:
-            self.admin_privs = False
-            return
+        for attempt in range(3):
+            try:
+                dce = NXCRPCConnection(self).connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
+                break
+            except Exception as e:
+                # Concurrent logins to the same host can momentarily exhaust the listening \svcctl pipe instances
+                if "STATUS_PIPE_NOT_AVAILABLE" not in str(e) or attempt == 2:
+                    self.admin_privs = False
+                    return
+                self.logger.debug(f"No listening \\svcctl pipe instance on {self.host}, retrying ({attempt + 1}/2)")
+                sleep(0.5)
         try:
             # 0xF003F - SC_MANAGER_ALL_ACCESS
             # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
@@ -776,7 +786,8 @@ class smb(connection):
             ccache.credentials[0]["server"].fromPrincipal(principal)
 
         st_file = f"{self.args.generate_st.removesuffix('.ccache')}.ccache"
-        ccache.saveFile(st_file)
+        with self.st_file_lock:
+            ccache.saveFile(st_file)
         self.logger.success(f"Saved ST to {st_file}")
 
     def generate_tgt(self):

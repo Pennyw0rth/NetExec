@@ -97,6 +97,9 @@ def requires_admin(func):
 
 
 class connection:
+    # Set by protocols whose login changes process-wide state, so their logins never run concurrently
+    serialize_login = False
+
     def __init__(self, args, db, target):
         self.args = args
         self.db = db
@@ -466,7 +469,8 @@ class connection:
             self.logger.debug(f"Throttle authentications: sleeping {value} second(s)")
             sleep(value)
 
-        with sem:
+        # Only the global/per-user fail limits (shared counters) and serialize_login protocols need logins to run one at a time
+        with sem if self.serialize_login or self.args.gfail_limit or self.args.ufail_limit else contextlib.nullcontext():
             if self.over_fail_limit(username):
                 return False
             if cred_type == "plaintext":
