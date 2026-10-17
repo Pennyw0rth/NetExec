@@ -42,7 +42,6 @@ class NXCModule:
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
         self.get_SeMachineAccountPrivilege(context, connection)
 
-
     def resolve_gpo(self, connection, guid):
         policies_dn = f"CN=Policies,CN=System,{connection.baseDN}"
         resp = connection.search(baseDN=policies_dn, searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
@@ -54,22 +53,22 @@ class NXCModule:
     # Just handle smb connection
     def connect_smb(self, connection):
         smb = SMBConnection(
-                remoteName=connection.hostname,
-                remoteHost=connection.host,
-                sess_port=445,
-                timeout=connection.args.timeout or 3,
+            remoteName=connection.hostname,
+            remoteHost=connection.host,
+            sess_port=445,
+            timeout=connection.args.timeout or 3,
         )
         if connection.kerberos:
             smb.kerberosLogin(
-                    user=connection.username,
-                    password=connection.password,
-                    domain=connection.domain,
-                    lmhash=connection.lmhash,
-                    nthash=connection.nthash,
-                    aesKey=connection.aesKey,
-                    kdcHost=connection.kdcHost,
-                    useCache=connection.use_kcache,
-                )
+                user=connection.username,
+                password=connection.password,
+                domain=connection.domain,
+                lmhash=connection.lmhash,
+                nthash=connection.nthash,
+                aesKey=connection.aesKey,
+                kdcHost=connection.kdcHost,
+                useCache=connection.use_kcache,
+            )
         elif connection.nthash or connection.lmhash:
             smb.login(connection.username, "", connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
         else:
