@@ -894,17 +894,13 @@ class smb(connection):
         session we already hold answers without enumerating every share (unlike
         listShares). ACCESS_DENIED still proves the share exists, hence a DC.
 
-        Meant to run while the null session is still fresh. When there is no
-        session, the reason is decisive: a DC with NTLM enabled always accepts
-        the null bind, so "NTLM on + no null session" means this is NOT a DC.
-        Only "NTLM disabled" is inconclusive here (a real DC can refuse the null
-        bind then), so we hand that case off to the Kerberos tier.
+        Meant to run while the null session is still fresh. Without a session
+        this check is inconclusive: DCs can refuse the null bind (Server 2025
+        does by default, as does an NTLM-disabled DC), so we hand off to the
+        RPC/Kerberos tiers.
         """
         if not self.null_auth:
-            if not self.no_ntlm:
-                self.logger.debug("NTLM enabled but no null session: host is not a DC")
-                return False
-            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos")
+            self.logger.debug("No null session: SMB DC check inconclusive, deferring to RPC/Kerberos")
             return None
         try:
             tid = self.conn.connectTree("SYSVOL")
