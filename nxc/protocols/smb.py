@@ -221,7 +221,7 @@ class smb(connection):
                 self.hostname = dns_hostname
             self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
             # Preserve IP as target if not required by Kerberos to avoid issues when DNS is not resolvable
-            self.remoteName = self.host if self.kerberos else dns_hostname
+            self.remoteName = dns_hostname if self.kerberos else self.host
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
