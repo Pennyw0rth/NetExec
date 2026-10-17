@@ -1,3 +1,4 @@
+import ast
 import nxc
 import importlib
 import traceback
@@ -132,6 +133,20 @@ class ModuleLoader:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
 
+    def get_module_info_static(self, module_path):
+        """Read the listing info of a module from its source without running it, falling back to get_module_info() if it is not plain literals"""
+        try:
+            with open(module_path, "rb") as f:
+                module_class = [node for node in ast.parse(f.read()).body if isinstance(node, ast.ClassDef) and node.name == "NXCModule"][-1]
+            attrs = {target.id: node.value for node in module_class.body if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name)}
+            methods = {node.name for node in module_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
+            name, description, supported_protocols = (ast.literal_eval(attrs[key]) for key in ("name", "description", "supported_protocols"))
+            if not module_class.bases and not module_class.decorator_list and attrs["category"].value.id == "CATEGORY" and name == basename(module_path)[:-3] and "options" in methods and methods & {"on_login", "on_admin_login"}:
+                return {name: {"path": module_path, "description": description, "supported_protocols": supported_protocols, "category": CATEGORY[attrs["category"].attr], "requires_admin": "on_admin_login" in methods}}
+        except Exception as e:
+            self.logger.debug(f"Could not read {module_path} statically: {e}")
+        return self.get_module_info(module_path)
+
     def list_modules(self, names=None):
         """List modules without initializing them, only the ones in names if given"""
         modules = {}
@@ -145,7 +160,7 @@ class ModuleLoader:
                 if module[-3:] == ".py" and module != "example_module.py" and (names is None or module[:-3] in names):
                     try:
                         module_path = path_join(path, module)
-                        module_data = self.get_module_info(module_path)
+                        module_data = self.get_module_info_static(module_path) if names is None else self.get_module_info(module_path)
                         modules.update(module_data)
                     except Exception as e:
                         self.logger.debug(f"Error loading module {module}: {e}")
