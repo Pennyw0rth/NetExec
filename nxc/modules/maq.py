@@ -42,39 +42,6 @@ class NXCModule:
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
         self.get_SeMachineAccountPrivilege(context, connection)
 
-    def resolve_gpo(self, connection, guid):
-        policies_dn = f"CN=Policies,CN=System,{connection.baseDN}"
-        resp = connection.search(baseDN=policies_dn, searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
-        results = parse_result_attributes(resp)
-        if not results:
-            return ""
-        return results[0].get("displayName") or results[0].get("name") or ""
-
-    # Just handle smb connection
-    def connect_smb(self, connection):
-        smb = SMBConnection(
-            remoteName=connection.hostname,
-            remoteHost=connection.host,
-            sess_port=445,
-            timeout=connection.args.timeout or 3,
-        )
-        if connection.kerberos:
-            smb.kerberosLogin(
-                user=connection.username,
-                password=connection.password,
-                domain=connection.domain,
-                lmhash=connection.lmhash,
-                nthash=connection.nthash,
-                aesKey=connection.aesKey,
-                kdcHost=connection.kdcHost,
-                useCache=connection.use_kcache,
-            )
-        elif connection.nthash or connection.lmhash:
-            smb.login(connection.username, "", connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
-        else:
-            smb.login(connection.username, connection.password, connection.domain)
-        return smb
-
     def get_SeMachineAccountPrivilege(self, context, connection):
         gpo_links = self.get_gpo_links(context, connection)
         if not gpo_links:
@@ -168,6 +135,39 @@ class NXCModule:
                 link["priority"] = (0 if scope_dn == connection.baseDN else 1) if link["enforced"] else (2 if scope_dn == ou_dn else 3)
                 gpo_links.append(link)
         return sorted(gpo_links, key=lambda link: (link["priority"], link["link_order"]))
+
+    # Just handle smb connection
+    def connect_smb(self, connection):
+        smb = SMBConnection(
+            remoteName=connection.hostname,
+            remoteHost=connection.host,
+            sess_port=445,
+            timeout=connection.args.timeout or 3,
+        )
+        if connection.kerberos:
+            smb.kerberosLogin(
+                user=connection.username,
+                password=connection.password,
+                domain=connection.domain,
+                lmhash=connection.lmhash,
+                nthash=connection.nthash,
+                aesKey=connection.aesKey,
+                kdcHost=connection.kdcHost,
+                useCache=connection.use_kcache,
+            )
+        elif connection.nthash or connection.lmhash:
+            smb.login(connection.username, "", connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
+        else:
+            smb.login(connection.username, connection.password, connection.domain)
+        return smb
+
+    def resolve_gpo(self, connection, guid):
+        policies_dn = f"CN=Policies,CN=System,{connection.baseDN}"
+        resp = connection.search(baseDN=policies_dn, searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
+        results = parse_result_attributes(resp)
+        if not results:
+            return ""
+        return results[0].get("displayName") or results[0].get("name") or ""
 
     def parse_gplink(self, gplink):
         raw_entries = re.findall(r"(?i)\[LDAP://cn=\{([0-9a-f\-]{36})\}[^;\]]*;(\d+)\]", gplink)
