@@ -12,6 +12,7 @@ def proto_args(parser, parents):
     spray_window_arg = ldap_parser.add_argument("--spray-window", metavar="SECONDS", dest="spray_window", type=float, default=0, help="seconds to wait between password rounds so the domain badPwdCount resets; set to at least the lockout Observation Window")
     ldap_parser.add_argument("--spray-attempts", metavar="N", dest="spray_attempts", type=int, default=1, action=get_conditional_action(_StoreAction), make_required=[spray_window_arg], help="passwords to try per user before waiting --spray-window (MUST stay below the lockout threshold; default 1 = wait after every password)")
     ldap_parser.add_argument("-d", metavar="DOMAIN", dest="domain", type=str, default=None, help="domain to authenticate to")
+    ldap_parser.add_argument("--schannel", action="store_true", help="Authenticate with the certificate using Schannel instead of PKINIT")
 
     egroup = ldap_parser.add_argument_group("Retrieve hash on the remote DC", "Options to get hashes from Kerberos")
     egroup.add_argument("--asreproast", help="Output AS_REP response to crack with hashcat to file")

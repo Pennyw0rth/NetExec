@@ -6,14 +6,16 @@ import struct
 import ipaddress
 from pathlib import Path
 
-from nxc.helpers.path import sanitize_filename
+from nxc.helpers.path import sanitize_path_component
 from Cryptodome.Hash import MD4
 from textwrap import dedent
+from nxc.helpers.misc import sanitize_dns
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
 from impacket.smb3structs import SMB2_DIALECT_30, SMB2_NEGOTIATE_SIGNING_REQUIRED
 from impacket.examples.secretsdump import (
+    LocalOperations,
     RemoteOperations,
     SAMHashes,
     LSASecrets,
@@ -59,9 +61,11 @@ from impacket.smb3structs import (
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
-from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
+from nxc.connection import connection, sem, requires_admin
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
+from nxc.paths import NXC_PATH
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -208,16 +212,15 @@ class smb(connection):
         # self.targetDomain is the attribute which gets displayed as host domain
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = self.conn.getServerDNSHostName().upper()
+            dns_hostname = self.conn.getServerDNSHostName()
             if dns_hostname and "." in dns_hostname:
-                self.hostname = dns_hostname.split(".")[0]
+                hostname = dns_hostname.split(".", 1)[0]
             elif dns_hostname:
-                self.hostname = dns_hostname
+                hostname = dns_hostname
             else:
-                self.hostname = self.conn.getServerName()
-            self.targetDomain = self.conn.getServerDNSDomainName()
-            if not self.targetDomain:   # Not sure if that can even happen but now we are safe
-                self.targetDomain = self.hostname
+                hostname = self.conn.getServerName()
+            self.hostname = sanitize_dns(hostname, self.logger)
+            self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
@@ -1277,7 +1280,7 @@ class smb(connection):
                     self.logger.error("Could not get process list")
                     return
 
-                pidList = [i["UniqueProcessId"] for i in res if i["ImageName"].lower() == self.args.taskkill.lower()]
+                pidList = [i.getProcessInfo()["UniqueProcessId"] for i in res if i.getProcessInfo()["ImageName"].getValue().lower() == self.args.taskkill.lower()]
                 if not pidList:
                     self.logger.fail(f"Could not find process named {self.args.taskkill}")
                     return
@@ -1391,12 +1394,12 @@ class smb(connection):
     @requires_admin
     def tasklist(self):
         # Formats a row to be printed on screen
-        def format_row(procInfo):
+        def format_row(procInfo, pSid):
             return template.format(
-                procInfo["ImageName"],
-                procInfo["UniqueProcessId"],
-                procInfo["SessionId"],
-                procInfo["pSid"],
+                str(procInfo["ImageName"].getValue()),
+                str(procInfo["UniqueProcessId"]),
+                str(procInfo["SessionId"]),
+                pSid,
                 f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
 
@@ -1412,8 +1415,8 @@ class smb(connection):
                 if not res:
                     return
                 self.logger.success("Enumerated processes")
-                maxImageNameLen = max(len(i["ImageName"]) for i in res)
-                maxSidLen = max(len(i["pSid"]) for i in res)
+                maxImageNameLen = max(len(i.getProcessInfo()["ImageName"].getValue()) for i in res)
+                maxSidLen = max(len(i.getSid()) for i in res)
                 template = f"{{: <{maxImageNameLen}}} {{: <8}} {{: <11}} {{: <{maxSidLen}}} {{: >12}}"
                 self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
                 self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
@@ -1424,12 +1427,12 @@ class smb(connection):
                     # If args.tasklist is not True then a process name was supplied
                     if self.args.tasklist is not True:
                         # So we look for it and print its information if found
-                        if self.args.tasklist.lower() in procInfo["ImageName"].lower():
+                        if self.args.tasklist.lower() in procInfo.getProcessInfo()["ImageName"].getValue().lower():
                             found_task = True
-                            self.logger.highlight(format_row(procInfo))
+                            self.logger.highlight(format_row(procInfo.getProcessInfo(), procInfo.getSid()))
                     # Else, no process was supplied, we print the entire list of remote processes
                     else:
-                        self.logger.highlight(format_row(procInfo))
+                        self.logger.highlight(format_row(procInfo.getProcessInfo(), procInfo.getSid()))
 
                 # If a process was suppliad to args.tasklist and it was not found, we print a fail message
                 if self.args.tasklist is not True and not found_task:
@@ -2002,7 +2005,7 @@ class smb(connection):
         try:
             dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout, self.logger)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 
@@ -2179,10 +2182,10 @@ class smb(connection):
 
     def get_file_single(self, remote_path, download_path, silent=False):
         share_name = self.args.share
+        if self.args.append_host:
+            download_path = sanitize_path_component(f"{self.hostname}-{remote_path}")
         if not silent:
             self.logger.display(f"Copying '{remote_path}' to '{download_path}'")
-        if self.args.append_host:
-            download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
             if self.download_file(share_name, remote_path, file.write):
                 if not silent:
@@ -2215,10 +2218,18 @@ class smb(connection):
 
         filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
 
-        # create local directory structure regardless of content; download empty folders by default
-        # change the Windows path to Linux and then join it with the base directory to get our actual save path
-        relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
-        local_folder_path = os.path.join(dest, relative_path)
+        # Create a safe local directory structure while retaining the raw remote path for SMB.
+        try:
+            relative_path = ntpath.relpath(folder, base_dir or folder)
+        except ValueError:
+            relative_path = folder
+        relative_parts = [] if relative_path == "." else [sanitize_path_component(part) for part in relative_path.split("\\") if part]
+        local_folder_path = os.path.join(dest, *relative_parts)
+        destination_path = Path(dest).resolve()
+        resolved_folder = Path(local_folder_path).resolve()
+        if resolved_folder != destination_path and destination_path not in resolved_folder.parents:
+            self.logger.fail(f"Path traversal detected in '{folder}', skipping")
+            return
 
         if not filtered_items and ignore_empty:
             self.logger.debug(f"Skipping empty folder '{folder}'")
@@ -2230,22 +2241,20 @@ class smb(connection):
             self.logger.display(f"Created empty directory '{local_folder_path}'")
 
         for item in filtered_items:
-            item_name = sanitize_filename(item.get_longname())
-            if not item_name:
-                self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
-                continue
-            dir_path = ntpath.normpath(ntpath.join(folder, item_name))
-            self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
+            remote_item_name = item.get_longname()
+            item_name = sanitize_path_component(remote_item_name)
+            dir_path = ntpath.normpath(ntpath.join(folder, remote_item_name))
+            self.logger.debug(f"Parsing item: {remote_item_name!r}, {dir_path!r}")
 
             if item.is_directory() and recursive:
-                self.logger.debug(f"Found new directory to parse: {dir_path}")
+                self.logger.debug(f"Found new directory to parse: {dir_path!r}")
                 self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
             elif not item.is_directory():
-                remote_file_path = ntpath.join(folder, item_name)
+                remote_file_path = ntpath.join(folder, remote_item_name)
                 local_file_path = os.path.join(local_folder_path, item_name)
                 # Defense-in-depth: verify path stays under destination
                 resolved = Path(local_file_path).resolve()
-                if not str(resolved).startswith(str(Path(dest).resolve()) + os.sep):
+                if destination_path not in resolved.parents:
                     self.logger.fail(f"Path traversal detected in '{item_name}', skipping")
                     continue
                 self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
@@ -2253,7 +2262,7 @@ class smb(connection):
                 try:
                     self.get_file_single(remote_file_path, local_file_path, silent)
                 except FileNotFoundError:
-                    self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+                    self.logger.fail(f"Error downloading file '{remote_file_path!r}' due to file not found (probably a race condition between listing and downloading)")
 
     def get_folder(self):
         recursive = self.args.recursive
@@ -2447,6 +2456,7 @@ class smb(connection):
 
     def ntds(self):
         self.enable_remoteops()
+        is_remote = True
         use_vss_method = False
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
@@ -2501,20 +2511,21 @@ class smb(connection):
         add_hash.kerb_secrets = 0
         add_hash.added_to_db = 0
 
-        if self.remote_ops:
-            try:
-                if self.args.ntds == "vss":
-                    NTDSFileName = self.remote_ops.saveNTDS()
-                    use_vss_method = True
-            except Exception as e:
-                self.logger.fail(e)
+        if self.args.ntds == "vss":
+            use_vss_method = True
+            is_remote = False
+            output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", sanitize_path_component(self.hostname)))
+            os.makedirs(output_folder, exist_ok=True)
+            sam_path, system_path, security_path, NTDSFileName = self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
+            localOps = LocalOperations(system_path)
+            self.bootkey = localOps.getBootKey()
 
         self.output_filename = self.output_file_template.format(output_folder="ntds")
 
         NTDS = NTDSHashes(
             NTDSFileName,
             self.bootkey,
-            isRemote=True,
+            isRemote=is_remote,
             history=self.args.history,
             noLMHash=True,
             remoteOps=self.remote_ops,

@@ -1,7 +1,7 @@
 import ntpath
 import os
 from time import sleep
-from nxc.connection import dcom_FirewallChecker
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
 from nxc.paths import TMP_PATH
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
@@ -57,7 +57,7 @@ class WMIEXEC:
             remoteHost=self.__remoteHost,
         )
         iInterface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
-        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout, self.logger)
         if not flag or not self.__stringBinding:
             error_msg = f'WMIEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
 

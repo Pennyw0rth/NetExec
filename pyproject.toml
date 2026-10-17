@@ -3,7 +3,7 @@ name = "netexec"
 dynamic = ["version"]
 description = "The Network Execution tool"
 readme = "README.md"
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.11,<4.0"
 license = { text = "BSD-2-Clause" }
 authors = [
     { name = "Marshall Hallenbeck", email = "marshall.hallenbeck@gmail.com" },
@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: Security"
 ]
 dependencies = [
-    "aardwolf>=0.2.8",
+    "aardwolf>=0.2.16",
     "argcomplete>=3.1.4",
     "asyauth>=0.0.20",
     "beautifulsoup4>=4.11,<5",
@@ -47,7 +47,7 @@ dependencies = [
     "terminaltables3>=4.0.0",
     "xmltodict>=0.13.0",
     # Git Dependencies
-    "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
+    "certipy-nxc>=5.1.0.post1",
     "impacket @ git+https://github.com/fortra/impacket",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
@@ -98,14 +98,10 @@ dev = [
 # malicious or compromised releases before they are selected during resolution.
 [tool.uv]
 exclude-newer = "1 day"
+# Temporary: certipy-nxc 5.1.0.post1 was published 2026-10-14, remove once it is older than 1 day
+exclude-newer-package = { certipy-nxc = "2026-10-14T17:00:00Z" }
 
 [tool.ruff]
-target-version = "py310"
-exclude = [
-    ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg", ".mypy_cache",
-    ".nox", ".pants.d", ".pytype", ".ruff_cache", ".svn", ".tox", ".venv",
-    "__pypackages__", "_build", "buck-out", "build", "dist", "node_modules", "venv"
-]
 preview = true
 
 [tool.ruff.lint]

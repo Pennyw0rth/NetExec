@@ -14,16 +14,12 @@ from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label, abort_on_lockout
 from nxc.helpers.logger import highlight
+from nxc.helpers.path import sanitize_path_component
 from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.console import nxc_console
 from nxc.context import Context
 from nxc.paths import NXC_PATH
-from nxc.protocols.ldap.laps import laps_search
-from nxc.helpers.pfx import pfx_auth
-
-from impacket.dcerpc.v5 import transport
-from impacket.krb5.ccache import CCache
 
 sem = BoundedSemaphore(1)
 fail_lock = Lock()
@@ -106,37 +102,6 @@ def requires_admin(func):
         return func(self, *args, **kwargs)
 
     return wraps(func)(_decorator)
-
-
-def dcom_FirewallChecker(iInterface, remoteHost, timeout):
-    stringBindings = iInterface.get_cinstance().get_string_bindings()
-    for strBinding in stringBindings:
-        if strBinding["wTowerId"] == 7:
-            if strBinding["aNetworkAddr"].find("[") >= 0:
-                binding, _, bindingPort = strBinding["aNetworkAddr"].partition("[")
-                bindingPort = "[" + bindingPort
-            else:
-                binding = strBinding["aNetworkAddr"]
-                bindingPort = ""
-
-            if binding.upper().find(iInterface.get_target().upper()) >= 0:
-                stringBinding = "ncacn_ip_tcp:" + strBinding["aNetworkAddr"][:-1]
-                break
-            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition(".")[0]) >= 0:
-                stringBinding = f"ncacn_ip_tcp:{iInterface.get_target()}{bindingPort}"
-    if "stringBinding" not in locals():
-        return True, None
-    try:
-        rpctransport = transport.DCERPCTransportFactory(stringBinding)
-        rpctransport.setRemoteHost(remoteHost)
-        rpctransport.set_connect_timeout(timeout)
-        rpctransport.connect()
-        rpctransport.disconnect()
-    except Exception as e:
-        nxc_logger.debug(f"Exception while connecting to {stringBinding}: {e}")
-        return False, stringBinding
-    else:
-        return True, stringBinding
 
 
 class connection:
@@ -261,7 +226,7 @@ class connection:
 
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
-            filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            filename_pattern = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=220)
             self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
             # Default output filename for logs
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
@@ -593,6 +558,7 @@ class connection:
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
+                from impacket.krb5.ccache import CCache
                 username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
@@ -601,14 +567,20 @@ class connection:
 
         if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
             self.logger.debug("Trying to authenticate using Certificate pfx")
+            if self.args.protocol == "ldap" and self.args.schannel:
+                # Schannel maps the certificate to an account server-side, so the supplied username is ignored
+                with sem:
+                    return self.plaintext_login(self.domain, "", "")
             if not self.args.username:
                 self.logger.fail("You must specify a username when using certificate authentication")
                 return False
             with sem:
+                from nxc.helpers.pfx import pfx_auth
                 return pfx_auth(self)
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
+            from nxc.protocols.ldap.laps import laps_search
             username[0], secret[0], domain[0] = laps_search(self, username, secret, cred_type, domain, self.dns_server)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):

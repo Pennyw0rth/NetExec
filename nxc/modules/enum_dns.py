@@ -1,6 +1,7 @@
 from datetime import datetime
 from nxc.helpers.logger import write_log
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
 
@@ -63,6 +64,6 @@ class NXCModule:
                         context.log.highlight("\t" + d)
                         data += "\t" + d + "\n"
 
-        log_name = f"DNS-Enum-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
+        log_name = sanitize_path_component(f"DNS-Enum-{connection.host}-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
         write_log(data, log_name)
         context.log.display(f"Saved raw output to {NXC_PATH}/logs/{log_name}")

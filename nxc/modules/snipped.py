@@ -1,8 +1,9 @@
 import ntpath
 import os
 from os.path import join, getsize, exists
-from pathlib import PurePosixPath
+from pathlib import Path
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
 
@@ -85,11 +86,10 @@ class NXCModule:
                                 continue
 
                             remote_file_path = ntpath.join(screenshot_path, remote_file_name)
-                            # replace \\ with underscores and ignore absolute path or path traversal attempts
-                            clean_screenshot_path = "_".join(p for p in PurePosixPath(screenshot_path.replace("\\", "/")).parts if p not in ("..", ".", "/"))
-                            clean_file = "_".join(p for p in PurePosixPath(remote_file_name.replace("\\", "/")).parts if p not in ("..", ".", "/"))
-
-                            local_file_path = join(user_output_dir, f"{clean_screenshot_path}_{clean_file}")
+                            local_file_path = Path(user_output_dir, sanitize_path_component(f"{screenshot_path}_{remote_file_name}")).resolve()
+                            if Path(user_output_dir).resolve() not in local_file_path.parents:
+                                context.log.fail(f"Path traversal detected in {remote_file_path!r}, skipping")
+                                continue
                             context.log.debug(f"{local_file_path=}")
 
                             try:

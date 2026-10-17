@@ -7,8 +7,9 @@ from datetime import datetime
 from struct import unpack
 
 from impacket.structure import Structure
-from os.path import expanduser
+from os.path import expanduser, join
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -141,7 +142,7 @@ class NXCModule:
             outdata = [x for x in outdata if not (x["value"] in seen_ips or seen_ips.add(x["value"]))]
 
         context.log.highlight(f"Found {len(outdata)} records")
-        path = expanduser(f"{NXC_PATH}/logs/{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")
+        path = expanduser(join(NXC_PATH, "logs", sanitize_path_component(f"{connection.domain}_network_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")))
         with open(path, "w") as outfile:
             for row in outdata:
                 if self.showhosts:

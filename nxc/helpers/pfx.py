@@ -28,6 +28,7 @@
 
 import os
 import secrets
+import tempfile
 import hashlib
 import datetime
 import random
@@ -70,7 +71,8 @@ from minikerberos.common.ccache import CCACHE
 
 from impacket.krb5.ccache import CCache as impacket_CCache
 
-from nxc.paths import NXC_PATH
+from nxc.paths import NXC_PATH, TMP_PATH
+from nxc.helpers.path import sanitize_path_component
 from nxc.logger import nxc_logger
 
 
@@ -187,7 +189,7 @@ class myPKINIT:
         else:
             cname = [self.cname]
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
 
         kdc_req_body_data = {}
         kdc_req_body_data["kdc-options"] = KDCOptions(kdcopts)
@@ -530,8 +532,8 @@ def pfx_auth(self):
         return False
 
     username = self.args.username[0]
-    basename = f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache"
-    log_ccache = os.path.normpath(os.path.expanduser(f"{NXC_PATH}/logs/{basename}"))
+    basename = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache")
+    log_ccache = os.path.normpath(os.path.expanduser(os.path.join(NXC_PATH, "logs", basename)))
 
     # Request a TGT with the cert data
     req = ini.build_asreq(self.domain, username)
@@ -568,3 +570,23 @@ def pfx_auth(self):
 
     self.logger.info("Successfully authenticated using Certificate")
     return True
+
+
+def certificate_options(args):
+    """Return the LDAPConnection certificate options for the command line material, plus a temporary file the caller must delete."""
+    if args.pfx_cert:
+        return {"pfxfile": args.pfx_cert, "pfxpass": args.pfx_pass}, None
+
+    if args.pem_cert and args.pem_key:
+        return {"certfile": args.pem_cert, "keyfile": args.pem_key}, None
+
+    if args.pfx_base64:
+        with open(args.pfx_base64, "rb") as pfx_base64_file:
+            pfxdata = base64.b64decode(pfx_base64_file.read())
+        # impacket loads the bundle from a path, so the decoded PFX has to hit the disk
+        handle, pfx_path = tempfile.mkstemp(suffix=".pfx", dir=TMP_PATH)
+        with os.fdopen(handle, "wb") as pfx_file:
+            pfx_file.write(pfxdata)
+        return {"pfxfile": pfx_path, "pfxpass": args.pfx_pass}, pfx_path
+
+    raise ValueError("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
