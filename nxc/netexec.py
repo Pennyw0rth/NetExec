@@ -104,6 +104,10 @@ def main():
         nxc_logger.fail("Password is required, even if a key file is used - if no passphrase for key, use `-p ''`")
         exit(1)
 
+    if args.protocol == "ldap" and args.schannel and not (args.pfx_cert or args.pfx_base64 or args.pem_cert):
+        nxc_logger.fail("--schannel requires a certificate: --pfx-cert, --pfx-base64, or --pem-cert with --pem-key")
+        exit(1)
+
     if args.use_kcache and not os.environ.get("KRB5CCNAME"):
         nxc_logger.error("KRB5CCNAME environment variable is not set")
         exit(1)
@@ -156,7 +160,8 @@ def main():
 
     if args.module or args.list_modules is not None:
         loader = ModuleLoader(args, db, nxc_logger)
-        modules = loader.list_modules()
+        # -L lists every module, -M only needs the requested ones
+        modules = loader.list_modules(None if args.list_modules is not None else args.module)
 
     if args.list_modules is not None:
         low_privilege_modules = {m: props for m, props in modules.items() if args.protocol in props["supported_protocols"] and not props["requires_admin"]}
@@ -197,7 +202,7 @@ def main():
             proto_module_paths.append(modules[m]["path"])
         protocol_object.module_paths = proto_module_paths
 
-    if args.protocol == "rdp" and args.execute:
+    if args.protocol == "rdp" and (args.execute or args.ps_execute):
         ans = input(highlight("[!] Executing remote command via RDP will disconnect the Windows session (not log off) if the targeted user is connected via RDP, do you want to continue ? [Y/n] ", "red"))
         if ans.lower() not in ["y", "yes", ""]:
             exit(1)

@@ -61,7 +61,8 @@ from impacket.smb3structs import (
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
-from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
+from nxc.connection import connection, sem, requires_admin
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
@@ -888,17 +889,13 @@ class smb(connection):
         session we already hold answers without enumerating every share (unlike
         listShares). ACCESS_DENIED still proves the share exists, hence a DC.
 
-        Meant to run while the null session is still fresh. When there is no
-        session, the reason is decisive: a DC with NTLM enabled always accepts
-        the null bind, so "NTLM on + no null session" means this is NOT a DC.
-        Only "NTLM disabled" is inconclusive here (a real DC can refuse the null
-        bind then), so we hand that case off to the Kerberos tier.
+        Meant to run while the null session is still fresh. Without a session
+        this check is inconclusive: DCs can refuse the null bind (Server 2025
+        does by default, as does an NTLM-disabled DC), so we hand off to the
+        RPC/Kerberos tiers.
         """
         if not self.null_auth:
-            if not self.no_ntlm:
-                self.logger.debug("NTLM enabled but no null session: host is not a DC")
-                return False
-            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos")
+            self.logger.debug("No null session: SMB DC check inconclusive, deferring to RPC/Kerberos")
             return None
         try:
             tid = self.conn.connectTree("SYSVOL")
@@ -1986,7 +1983,7 @@ class smb(connection):
         try:
             dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout, self.logger)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 

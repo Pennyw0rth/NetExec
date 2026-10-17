@@ -162,6 +162,7 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M slinky -
 # spider_plus takes a while to run, so it is commented out during normal testing
 # netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spider_plus -o MAX_FILE_SIZE=100
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spooler
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M spooler --options
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M teams_localdb
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M test_connection -o HOST=localhost
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M uac
@@ -221,6 +222,8 @@ netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M wifi
 ##### LDAP
 netexec {DNS} ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --simple-bind
+netexec ldap TARGET_HOST --pfx-cert TEST_PFX_FILE --schannel
+netexec ldap TARGET_HOST --pfx-cert TEST_PFX_FILE --schannel --port 636
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --users-export /tmp/userlistOutputFilename.txt
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --groups
@@ -240,6 +243,7 @@ netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --dc-list
 ##### LDAP Modules
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -L
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M adcs
+netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M certipy-find
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M daclread -o TARGET=LOGIN_USERNAME ACTION=read
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M dns-nonsecure
 netexec ldap TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -M get-desc-users
@@ -353,6 +357,10 @@ netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --nla-scree
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --screenshot
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X ipconfig
 netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x ipconfig
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x "echo nxc-rdp-exec"
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x "echo alpha^&beta"
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -X "Write-Output 'nxc-rdp-exec'"
+netexec rdp TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x "echo nxc-rdp-no-output" --no-output
 ##### SSH - Default test passwords and random key; switch these out if you want correct authentication
 netexec ssh TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
 netexec ssh TARGET_HOST -u TEST_USER_FILE -p TEST_PASSWORD_FILE --no-bruteforce

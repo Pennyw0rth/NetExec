@@ -132,8 +132,8 @@ class ModuleLoader:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
 
-    def list_modules(self):
-        """List modules without initializing them"""
+    def list_modules(self, names=None):
+        """List modules without initializing them, only the ones in names if given"""
         modules = {}
         modules_paths = [
             path_join(dirname(nxc.__file__), "modules"),
@@ -142,7 +142,7 @@ class ModuleLoader:
 
         for path in modules_paths:
             for module in listdir(path):
-                if module[-3:] == ".py" and module != "example_module.py":
+                if module[-3:] == ".py" and module != "example_module.py" and (names is None or module[:-3] in names):
                     try:
                         module_path = path_join(path, module)
                         module_data = self.get_module_info(module_path)

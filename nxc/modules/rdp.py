@@ -1,6 +1,6 @@
 from sys import exit
 
-from nxc.connection import dcom_FirewallChecker
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import CATEGORY
 
 from impacket.dcerpc.v5 import rrp
@@ -248,7 +248,7 @@ class RdpWmi:
 
             i_interface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
             if self.__currentprotocol == "smb":
-                flag, self.__stringBinding = dcom_FirewallChecker(i_interface, self.__remoteHost, self.__timeout)
+                flag, self.__stringBinding = dcom_FirewallChecker(i_interface, self.__remoteHost, self.__timeout, self.logger)
                 if not flag or not self.__stringBinding:
                     error_msg = f'RDP-WMI: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the module option "DCOM-TIMEOUT=10". If it\'s still failing maybe something is blocking the RPC connection, please try to use "-o" with "METHOD=smb"'
 

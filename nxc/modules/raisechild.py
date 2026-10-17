@@ -49,7 +49,7 @@ class NXCModule:
         self.krbtgt_hash = ""
         self.aes128_key = ""
         self.aes256_key = ""
-        self.etype = "rc4"
+        self.etype = "aes256"
 
     def options(self, context, module_options):
         """
@@ -59,7 +59,7 @@ class NXCModule:
         USER        Target username to forge the ticket for (default: Administrator)
         USER_ID     RID used as the user ID in the PAC (default: 500)
         RID         RID used for the extra SID (default: 519 = Enterprise Admins)
-        ETYPE       Encryption type for the ticket: rc4, aes128, aes256 (default: rc4)
+        ETYPE       Encryption type for the ticket: rc4, aes128, aes256 (default: aes256)
 
         Examples:
         netexec ldap <ip> -u <username> -p <password> -M raisechild -o USER=DC01$
@@ -69,7 +69,7 @@ class NXCModule:
         """
         self.context = context
         self.module_options = module_options
-        self.etype = module_options.get("ETYPE", "rc4").lower()
+        self.etype = module_options.get("ETYPE", "aes256").lower()
 
     def on_admin_login(self, context, connection):
         self.context = context

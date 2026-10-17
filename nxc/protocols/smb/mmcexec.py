@@ -27,7 +27,7 @@
 
 from os.path import join as path_join
 from time import sleep
-from nxc.connection import dcom_FirewallChecker
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
 from nxc.paths import TMP_PATH
 
@@ -108,7 +108,7 @@ class MMCEXEC:
             self.logger.info(f"Got Exception while connecting with DCOM: {e}")
             # Make it force break function
             self.__dcom.disconnect()
-        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout, self.logger)
         if not flag or not self.__stringBinding:
             error_msg = f'MMCEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
 

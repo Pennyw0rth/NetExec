@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: Security"
 ]
 dependencies = [
-    "aardwolf>=0.2.14",
+    "aardwolf>=0.2.16",
     "argcomplete>=3.1.4",
     "asyauth>=0.0.20",
     "beautifulsoup4>=4.11,<5",
@@ -47,7 +47,7 @@ dependencies = [
     "terminaltables3>=4.0.0",
     "xmltodict>=0.13.0",
     # Git Dependencies
-    "certipy-ad @ git+https://github.com/Pennyw0rth/Certipy",
+    "certipy-nxc>=5.1.0.post1",
     "impacket @ git+https://github.com/fortra/impacket",
     "pynfsclient @ git+https://github.com/Pennyw0rth/NfsClient",
 ]
@@ -98,6 +98,8 @@ dev = [
 # malicious or compromised releases before they are selected during resolution.
 [tool.uv]
 exclude-newer = "1 day"
+# Temporary: certipy-nxc 5.1.0.post1 was published 2026-10-14, remove once it is older than 1 day
+exclude-newer-package = { certipy-nxc = "2026-10-14T17:00:00Z" }
 
 [tool.ruff]
 preview = true

