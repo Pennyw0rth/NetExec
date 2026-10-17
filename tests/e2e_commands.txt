@@ -387,6 +387,7 @@ netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.tx
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
 netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
 ##### Oracle - requires --service-name or --sid; set LOGIN values to a real Oracle account
+netexec oracle TARGET_HOST --enum-sids
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --sid LOGIN_USERNAME
 netexec oracle TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --service-name LOGIN_USERNAME --sysdba
