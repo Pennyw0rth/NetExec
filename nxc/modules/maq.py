@@ -46,6 +46,11 @@ class NXCModule:
         self.get_SeMachineAccountPrivilege(context, connection)
 
     def get_SeMachineAccountPrivilege(self, context, connection):
+        # A Schannel bind leaves no secret to reuse, and an empty NTLM login on SYSVOL counts as a bad password attempt
+        if connection.args.schannel:
+            context.log.fail("Skipping SeMachineAccountPrivilege: reading SYSVOL needs a password, hash or Kerberos ticket, which --schannel doesn't provide")
+            return
+
         gpo_links = self.get_gpo_links(context, connection)
         if not gpo_links:
             context.log.debug("No enabled GPO links found for the domain and Domain Controllers OU")
@@ -169,8 +174,7 @@ class NXCModule:
         return smb
 
     def resolve_gpo(self, connection, guid):
-        policies_dn = f"CN=Policies,CN=System,{connection.baseDN}"
-        resp = connection.search(baseDN=policies_dn, searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
+        resp = connection.search(baseDN=f"CN=Policies,CN=System,{connection.baseDN}", searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
         results = parse_result_attributes(resp)
         if not results:
             return ""
