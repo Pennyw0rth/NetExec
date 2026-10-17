@@ -75,40 +75,6 @@ class NXCModule:
             smb.login(connection.username, connection.password, connection.domain)
         return smb
 
-    def parse_gplink(self, gplink):
-        raw_entries = re.findall(r"(?i)\[LDAP://cn=\{([0-9a-f\-]{36})\}[^;\]]*;(\d+)\]", gplink)
-        parsed = []
-        # Number every link, including disabled links (last listed = order 1).
-        for link_order, (guid, flags_str) in enumerate(reversed(raw_entries), 1):
-            flags = int(flags_str)
-            parsed.append({"guid": guid, "flags": flags, "disabled": bool(flags & 0x1), "enforced": bool(flags & 0x2), "link_order": link_order})
-        return parsed
-
-    def get_gpo_links(self, context, connection):
-        ou_dn = f"OU=Domain Controllers,{connection.baseDN}"
-        gpo_links = []
-        block_inheritance = False
-        for scope_dn in (ou_dn, connection.baseDN):
-            ldap_response = connection.search(searchFilter=f"(distinguishedName={scope_dn})", baseDN=scope_dn, attributes=["gPLink", "gPOptions"])
-            entries = parse_result_attributes(ldap_response)
-            if not entries:
-                context.log.fail(f"Unable to read GPO links for {scope_dn}")
-                return []
-            if scope_dn == ou_dn:
-                block_inheritance = bool(int(entries[0].get("gPOptions") or 0) & 0x1)
-            for link in self.parse_gplink(entries[0].get("gPLink") or ""):
-                if link["disabled"]:
-                    context.log.debug(f'GPO link {link["guid"]} disabled, skipping')
-                    continue
-                if scope_dn == connection.baseDN and block_inheritance and not link["enforced"]:
-                    context.log.debug(f'GPO link {link["guid"]} blocked by inheritance, skipping')
-                    continue
-                link["scope_dn"] = scope_dn
-                # Enforced domain, enforced OU, normal OU, then normal domain links.
-                link["priority"] = (0 if scope_dn == connection.baseDN else 1) if link["enforced"] else (2 if scope_dn == ou_dn else 3)
-                gpo_links.append(link)
-        return sorted(gpo_links, key=lambda link: (link["priority"], link["link_order"]))
-
     def get_SeMachineAccountPrivilege(self, context, connection):
         gpo_links = self.get_gpo_links(context, connection)
         if not gpo_links:
@@ -177,3 +143,37 @@ class NXCModule:
                         context.log.highlight(f"\t\t - {sid} (unresolved)")
         finally:
             smb.logoff()
+
+    def get_gpo_links(self, context, connection):
+        ou_dn = f"OU=Domain Controllers,{connection.baseDN}"
+        gpo_links = []
+        block_inheritance = False
+        for scope_dn in (ou_dn, connection.baseDN):
+            ldap_response = connection.search(searchFilter=f"(distinguishedName={scope_dn})", baseDN=scope_dn, attributes=["gPLink", "gPOptions"])
+            entries = parse_result_attributes(ldap_response)
+            if not entries:
+                context.log.fail(f"Unable to read GPO links for {scope_dn}")
+                return []
+            if scope_dn == ou_dn:
+                block_inheritance = bool(int(entries[0].get("gPOptions") or 0) & 0x1)
+            for link in self.parse_gplink(entries[0].get("gPLink") or ""):
+                if link["disabled"]:
+                    context.log.debug(f'GPO link {link["guid"]} disabled, skipping')
+                    continue
+                if scope_dn == connection.baseDN and block_inheritance and not link["enforced"]:
+                    context.log.debug(f'GPO link {link["guid"]} blocked by inheritance, skipping')
+                    continue
+                link["scope_dn"] = scope_dn
+                # Enforced domain, enforced OU, normal OU, then normal domain links.
+                link["priority"] = (0 if scope_dn == connection.baseDN else 1) if link["enforced"] else (2 if scope_dn == ou_dn else 3)
+                gpo_links.append(link)
+        return sorted(gpo_links, key=lambda link: (link["priority"], link["link_order"]))
+
+    def parse_gplink(self, gplink):
+        raw_entries = re.findall(r"(?i)\[LDAP://cn=\{([0-9a-f\-]{36})\}[^;\]]*;(\d+)\]", gplink)
+        parsed = []
+        # Number every link, including disabled links (last listed = order 1).
+        for link_order, (guid, flags_str) in enumerate(reversed(raw_entries), 1):
+            flags = int(flags_str)
+            parsed.append({"guid": guid, "flags": flags, "disabled": bool(flags & 0x1), "enforced": bool(flags & 0x2), "link_order": link_order})
+        return parsed
