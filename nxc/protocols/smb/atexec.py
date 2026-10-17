@@ -183,18 +183,22 @@ class TSCH_EXEC:
 
         if self.__retOutput:
             tries = 1
-            # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
-            sleep(0.4)
+            # Most commands finish within a few hundred ms: read every 0.1s up to 0.4s (not counted in --get-output-tries), then fall back to the 1s polling below
+            fast_polls = 3
+            sleep(0.1)
             while True:
                 try:
                     self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
                     self.__connection.conn.getFile(self.__share, self.__output_filename, self.output_callback)
                     break
                 except Exception as e:
-                    if tries >= self.__tries:
+                    if fast_polls and ("STATUS_SHARING_VIOLATION" in str(e) or "STATUS_OBJECT_NAME_NOT_FOUND" in str(e)):
+                        fast_polls -= 1
+                        sleep(0.1)
+                    elif tries >= self.__tries:
                         self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
                         break
-                    if "STATUS_BAD_NETWORK_NAME" in str(e):
+                    elif "STATUS_BAD_NETWORK_NAME" in str(e):
                         self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
                         break
                     elif "STATUS_VIRUS_INFECTED" in str(e):
@@ -202,7 +206,7 @@ class TSCH_EXEC:
                         break
                     # When executing PowerShell and the command is still running, we get a sharing violation
                     # We can use that information to wait longer than if the file is not found (probably av or something)
-                    if "STATUS_SHARING_VIOLATION" in str(e):
+                    elif "STATUS_SHARING_VIOLATION" in str(e):
                         self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
                         tries += 1
                         sleep(1)
