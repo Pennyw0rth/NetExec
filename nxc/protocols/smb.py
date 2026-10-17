@@ -214,13 +214,11 @@ class smb(connection):
         self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = sanitize_dns(self.conn.getServerDNSHostName(), self.logger)
+            dns_hostname = sanitize_dns(self.conn.getServerDNSHostName() or self.conn.getServerName(), self.logger)
             if dns_hostname and "." in dns_hostname:
                 self.hostname = dns_hostname.split(".", 1)[0]
-            elif dns_hostname:
-                self.hostname = dns_hostname
             else:
-                self.hostname = sanitize_dns(self.conn.getServerName(), self.logger)
+                self.hostname = dns_hostname
             self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
             # Preserve IP as target if not required by Kerberos to avoid issues when DNS is not resolvable
             self.remoteName = self.host if self.kerberos else dns_hostname
