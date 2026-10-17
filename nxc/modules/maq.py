@@ -139,10 +139,10 @@ class NXCModule:
     # Just handle smb connection
     def connect_smb(self, connection):
         smb = SMBConnection(
-            remoteName=connection.hostname,
+            remoteName=connection.remoteName,
             remoteHost=connection.host,
             sess_port=445,
-            timeout=connection.args.timeout or 3,
+            timeout=3,
         )
         if connection.kerberos:
             smb.kerberosLogin(
