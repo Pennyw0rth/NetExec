@@ -36,10 +36,13 @@ class NXCModule:
         context.log.display("Getting the MachineAccountQuota")
         ldap_response = connection.search("(ms-DS-MachineAccountQuota=*)", ["ms-DS-MachineAccountQuota"])
         entries = parse_result_attributes(ldap_response)
+
         if not entries:
             context.log.fail("No LDAP entries returned.")
             return
+
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
+
         self.get_SeMachineAccountPrivilege(context, connection)
 
     def get_SeMachineAccountPrivilege(self, context, connection):
