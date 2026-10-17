@@ -162,24 +162,28 @@ class TSCH_EXEC:
             except tsch.DCERPCSessionError as e:
                 self.logger.debug(f"hSchRpcRun returned: {e}")
 
-        done = False
-        while not done:
+        # A task starts within seconds of the RegistrationTrigger. Poll for up to RUN_TIMEOUT seconds so a
+        # slow host still gets a grace period, and a task that can never run (e.g. a run-as user with no
+        # interactive session, which a TASK_LOGON_NONE task needs) is detected instead of looping forever.
+        RUN_TIMEOUT = 30
+        RUN_CHECK_DELAY = 2
+        last_error = None
+        for _ in range(RUN_TIMEOUT // RUN_CHECK_DELAY):
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
             try:
-                resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")
+                if tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")["pLastRuntime"]["wYear"] != 0:
+                    break  # the task has run
             except tsch.DCERPCSessionError as e:
-                if e.error_code == 0x00041303:
-                    sleep(2)
-                    continue
-                self.logger.fail(f"Error retrieving task last run info: {e}")
-                break
-            if resp["pLastRuntime"]["wYear"] != 0:
-                done = True
-            else:
-                sleep(2)
+                last_error = e  # SCHED_S_TASK_HAS_NOT_RUN or a transient error right after registration; keep polling
+            sleep(RUN_CHECK_DELAY)
+        else:
+            self.logger.fail(f"Task \\{self.task_name} did not start within {RUN_TIMEOUT}s. If a specific run-as user was set, it likely has no interactive session on the target (a TASK_LOGON_NONE task only runs while that user is logged on). Last error: {last_error}")
 
         self.logger.info(f"Deleting task \\{self.task_name}")
-        tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
+        try:
+            tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
+        except Exception as e:
+            self.logger.fail(f"[OPSEC] Could not delete scheduled task \\{self.task_name} on the target: {e}")
 
         if self.__retOutput:
             tries = 1
