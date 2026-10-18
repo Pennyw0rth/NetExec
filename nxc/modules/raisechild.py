@@ -2,7 +2,6 @@ import os
 import datetime
 import re
 from contextlib import suppress
-from impacket.smbconnection import SMBConnection
 from impacket.examples.secretsdump import RemoteOperations, NTDSHashes
 from impacket.dcerpc.v5.drsuapi import DCERPCSessionError
 from calendar import timegm
@@ -20,6 +19,7 @@ from impacket.dcerpc.v5.samr import GROUP_MEMBERSHIP, SE_GROUP_MANDATORY, SE_GRO
 from impacket.dcerpc.v5.dtypes import SID, RPC_SID, NULL
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.smb import get_smb_connection
 
 # Encryption type configurations: enctype, checksum, signature size, session key size
 ETYPE_CONFIG = {
@@ -133,32 +133,6 @@ class NXCModule:
         else:
             self.context.log.fail("Could not retrieve child domain SID from connection.")
 
-    def _get_smb_session(self, ldap_conn):
-        smb = SMBConnection(
-            remoteName=ldap_conn.hostname,
-            remoteHost=ldap_conn.host,
-            sess_port=445,
-        )
-
-        if ldap_conn.kerberos:
-            smb.kerberosLogin(
-                user=ldap_conn.username,
-                password=ldap_conn.password,
-                domain=ldap_conn.domain,
-                lmhash=ldap_conn.lmhash,
-                nthash=ldap_conn.nthash,
-                aesKey=ldap_conn.aesKey,
-                kdcHost=ldap_conn.kdcHost,
-                useCache=ldap_conn.use_kcache,
-            )
-        elif ldap_conn.nthash or ldap_conn.lmhash:
-            # NTLM pass-the-hash
-            smb.login(ldap_conn.username, "", ldap_conn.domain, lmhash=ldap_conn.lmhash, nthash=ldap_conn.nthash)
-        else:
-            # NTLM with cleartext password
-            smb.login(ldap_conn.username, ldap_conn.password, ldap_conn.domain)
-        return smb
-
     def _get_domain_netbios(self, ldap_conn):
         resp = ldap_conn.search(
             baseDN=f"CN=Partitions,{ldap_conn.configuration_context}",
@@ -225,11 +199,13 @@ class NXCModule:
 
     def get_krbtgt_hash(self, connection):
         try:
-            smb_conn = self._get_smb_session(connection)
-            self._dcsync_krbtgt(smb_conn, connection)
+            smb_conn = get_smb_connection(self.context, connection)
         except Exception as e:
             self.context.log.fail(f"Error during DCSync: {e}")
             return
+        if not smb_conn:
+            return
+        self._dcsync_krbtgt(smb_conn, connection)
 
         if (self.etype == "rc4" and self.krbtgt_hash) or (self.etype == "aes128" and self.aes128_key) or (self.etype == "aes256" and self.aes256_key):
             try:
