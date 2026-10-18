@@ -14,7 +14,7 @@ def proto_args(parser, parents):
 
     egroup = rdp_parser.add_argument_group("Screenshot", "Remote Desktop Screenshot")
     egroup.add_argument("--screenshot", action="store_true", help="Screenshot RDP if connection success")
-    egroup.add_argument("--screentime", type=int, default=None, help="Time to wait for desktop image (default: 5 for --screenshot, 10 for --nla-screenshot)")
+    egroup.add_argument("--screentime", type=int, default=5, help="Time to wait for desktop image")
     egroup.add_argument("--res", default="1024x768", help="Resolution in WIDTHxHEIGHT format")
 
     cgroup = rdp_parser.add_argument_group("Command Execution")
