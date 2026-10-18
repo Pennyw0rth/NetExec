@@ -47,10 +47,6 @@ class NXCModule:
         self.get_SeMachineAccountPrivilege(context, connection)
 
     def get_SeMachineAccountPrivilege(self, context, connection):
-        if not connection.has_reusable_secret:
-            context.log.fail("Skipping SeMachineAccountPrivilege: reading SYSVOL needs a password, hash or Kerberos ticket, which --schannel doesn't provide")
-            return
-
         gpo_links = self.get_gpo_links(context, connection)
         if not gpo_links:
             context.log.debug("No enabled GPO links found for the domain and Domain Controllers OU")
@@ -58,9 +54,11 @@ class NXCModule:
         context.log.debug(f"gPLink parsed: {gpo_links}")
 
         try:
-            smb = get_smb_connection(connection)
+            smb = get_smb_connection(context, connection)
         except (OSError, SessionError, NetBIOSError, NetBIOSTimeout, KerberosError) as e:
             context.log.fail(f"Unable to connect to SYSVOL through SMB: {e}")
+            return
+        if not smb:
             return
         context.log.display("Getting SeMachineAccountPrivilege")
 

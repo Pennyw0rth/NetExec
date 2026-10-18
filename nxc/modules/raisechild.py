@@ -73,9 +73,6 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         self.context = context
-        if not connection.has_reusable_secret:
-            context.log.fail("Skipping raisechild: DCSync needs a password, hash or Kerberos ticket, which --schannel doesn't provide")
-            return
         context.log.display("Running raisechild module...")
         self.get_domain_sid(connection)
         self.get_parent_info(connection)
@@ -202,11 +199,13 @@ class NXCModule:
 
     def get_krbtgt_hash(self, connection):
         try:
-            smb_conn = get_smb_connection(connection)
-            self._dcsync_krbtgt(smb_conn, connection)
+            smb_conn = get_smb_connection(self.context, connection)
         except Exception as e:
             self.context.log.fail(f"Error during DCSync: {e}")
             return
+        if not smb_conn:
+            return
+        self._dcsync_krbtgt(smb_conn, connection)
 
         if (self.etype == "rc4" and self.krbtgt_hash) or (self.etype == "aes128" and self.aes128_key) or (self.etype == "aes256" and self.aes256_key):
             try:
