@@ -119,6 +119,7 @@ class connection:
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
         self.failed_logins = 0
+        self.has_reusable_secret = not (self.protocol == "ldap" and self.args.schannel)   # a Schannel bind authenticates the LDAP connection only, leaving no secret for a second channel
 
         # Network info
         self.domain = None
