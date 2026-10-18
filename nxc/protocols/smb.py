@@ -209,22 +209,25 @@ class smb(connection):
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
+        # self.remoteName is the attribute which gets used in the SPN
+        self.hostname = self.host
+        self.targetDomain = self.host
+        self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = self.conn.getServerDNSHostName()
+            dns_hostname = sanitize_dns(self.conn.getServerDNSHostName() or self.conn.getServerName(), self.logger)
             if dns_hostname and "." in dns_hostname:
-                hostname = dns_hostname.split(".", 1)[0]
-            elif dns_hostname:
-                hostname = dns_hostname
+                self.hostname = dns_hostname.split(".", 1)[0]
             else:
-                hostname = self.conn.getServerName()
-            self.hostname = sanitize_dns(hostname, self.logger)
+                self.hostname = dns_hostname
             self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
+            # Preserve IP as target if not required by Kerberos to avoid issues when DNS is not resolvable
+            self.remoteName = dns_hostname if self.kerberos else self.host
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
-                    self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
+                    self.hostname, self.domain, self.remoteName = LDAPResolution(self.host).get_resolution()
                     self.targetDomain = self.domain
                 # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
                 else:
@@ -232,19 +235,12 @@ class smb(connection):
                     import socket
                     socket.inet_aton(self.host)
                     self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
-                    self.hostname = self.host
-                    self.targetDomain = self.host
             except OSError:
                 if self.host.count(".") >= 1:
                     self.hostname = self.host.split(".")[0]
                     self.targetDomain = ".".join(self.host.split(".")[1:])
-                else:
-                    self.hostname = self.host
-                    self.targetDomain = self.host
             except Exception as e:
                 self.logger.debug(f"Error getting hostname from LDAP: {e}")
-                self.hostname = self.host
-                self.targetDomain = self.host
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -313,9 +309,6 @@ class smb(connection):
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
-
-        # DCOM connection with kerberos needed
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
@@ -427,6 +420,8 @@ class smb(connection):
                 if self.args.generate_st:
                     self.save_st(tgs, sk, spn if self.args.spn else None)
 
+            if not tgs and not useCache:
+                self.logger.debug(f"TGS for cifs/{self.remoteName} will be requested")
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
 
             if self.args.generate_st:
