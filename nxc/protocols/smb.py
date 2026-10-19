@@ -131,7 +131,7 @@ class smb(connection):
         self.server_os_major = None
         self.server_os_minor = None
         self.server_os_build = None
-        self.os_arch = 0
+        self.os_arch = None
         self.hash = None
         self.lmhash = ""
         self.nthash = ""
@@ -187,7 +187,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error retrieving os arch of {self.host}: {e!s}")
 
-        return 0
+        return None
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
@@ -960,7 +960,7 @@ class smb(connection):
         """
         from impacket.dcerpc.v5 import nrpc, epm
 
-        if not self.os_arch:
+        if self.os_arch is None:
             self.logger.debug("Port 135 unreachable (OS arch probe failed): RPC inconclusive, deferring to Kerberos")
             return None
 
