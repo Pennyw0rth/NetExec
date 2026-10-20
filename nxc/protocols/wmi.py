@@ -177,9 +177,17 @@ class wmi(connection):
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
 
     def check_if_admin(self):
+        # With several credentials, drop the admin flag, namespaces and DCOM connections (cached per target by impacket) of the previous one
+        self.admin_privs = False
+        self.namespaces = {}
+        if self.dcom_conn:
+            self.dcom_conn.disconnect()
+            self.dcom_conn = None
         try:
-            self.dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
-            iInterface = self.dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
+            # Only keep the connection once activated: impacket's disconnect() can't run twice on a target
+            dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
+            iInterface = dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
+            self.dcom_conn = dcom_conn
             flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout, self.logger)
         except Exception as e:
             self.logger.debug(f"Received error while checking admin: {e}")
