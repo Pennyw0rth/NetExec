@@ -194,16 +194,17 @@ class wmi(connection):
 
                 self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
             else:
+                self.logger.extra["protocol"] = "WMI"
                 try:
                     self.iWbemLevel1Login = IWbemLevel1Login(iInterface)
-                    self.get_namespace("//./root/cimv2")
+                    if self.get_namespace("//./root/cimv2") is None:
+                        self.admin_privs = False
+                    else:
+                        self.admin_privs = True
                 except Exception as e:
                     if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
                         return False
-                else:
-                    self.logger.extra["protocol"] = "WMI"
-                    self.admin_privs = True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug("Starting WMI login with Kerberos")
