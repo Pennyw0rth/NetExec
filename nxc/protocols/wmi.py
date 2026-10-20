@@ -206,7 +206,6 @@ class wmi(connection):
                 try:
                     self.iWbemLevel1Login = IWbemLevel1Login(iInterface)
                     self.get_namespace("//./root/cimv2")
-                    
                 except Exception as e:
                     if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
