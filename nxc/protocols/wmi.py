@@ -172,8 +172,6 @@ class wmi(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        self.logger.extra["protocol"] = "RPC"
-        self.logger.extra["port"] = "135"
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
 
     def check_if_admin(self):
@@ -202,7 +200,6 @@ class wmi(connection):
 
                 self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
             else:
-                self.logger.extra["protocol"] = "WMI"
                 try:
                     self.iWbemLevel1Login = IWbemLevel1Login(iInterface)
                     self.get_namespace("//./root/cimv2")
@@ -211,7 +208,6 @@ class wmi(connection):
                         self.logger.fail(str(e))
                         return False
                 else:
-                    self.logger.extra["protocol"] = "WMI"
                     self.admin_privs = True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
