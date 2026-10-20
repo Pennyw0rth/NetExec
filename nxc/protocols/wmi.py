@@ -194,16 +194,17 @@ class wmi(connection):
 
                 self.logger.fail(error_msg) if not flag else self.logger.debug(error_msg)
             else:
+                self.logger.extra["protocol"] = "WMI"
                 try:
                     self.iWbemLevel1Login = IWbemLevel1Login(iInterface)
-                    self.get_namespace("//./root/cimv2")
+                    if self.get_namespace("//./root/cimv2") is None:
+                        self.admin_privs = False
+                    else:
+                        self.admin_privs = True
                 except Exception as e:
                     if "access_denied" not in str(e).lower():
                         self.logger.fail(str(e))
                         return False
-                else:
-                    self.logger.extra["protocol"] = "WMI"
-                    self.admin_privs = True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.logger.debug("Starting WMI login with Kerberos")
@@ -392,8 +393,10 @@ class wmi(connection):
         escaped_path = remote_path.replace("\\", "\\\\")
 
         # Load the Namespace
-        powershellv3_namespace = self.get_namespace("//./root/Microsoft/Windows/Powershellv3")
-        if powershellv3_namespace is None:
+        try:
+            powershellv3_namespace = self.get_namespace("//./root/Microsoft/Windows/Powershellv3")
+        except Exception as e:
+            self.logger.debug(f"Cannot load WMI Namespace //./root/Microsoft/Windows/Powershellv3: {e}")
             return None
 
         # Read the file
@@ -791,13 +794,8 @@ class wmi(connection):
         if namespace in self.namespaces:
             return self.namespaces[namespace]
         self.logger.debug(f"Getting namespace {namespace}")
-        try:
-            iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
-            self.iWbemLevel1Login.RemRelease()
-        except Exception as e:
-            self.logger.debug(f"Cannot load WMI Namespace {namespace}: {e}")
-            return None
-        self.namespaces[namespace] = iWbemServices
+        self.namespaces[namespace] = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
+        self.iWbemLevel1Login.RemRelease()
         return self.namespaces[namespace]
 
     @property
