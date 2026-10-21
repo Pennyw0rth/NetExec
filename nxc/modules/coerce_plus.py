@@ -48,14 +48,13 @@ class NXCModule:
             """DFSCOERCE START"""
             try:
                 dfscocerceclass = DFSCoerceTrigger(context)
-                target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 dfscocerceconnect = dfscocerceclass.connect(
                     username=connection.username,
                     password=connection.password,
                     domain=connection.domain,
                     lmhash=connection.lmhash,
                     nthash=connection.nthash,
-                    target=target,
+                    target=connection.remoteName,
                     doKerberos=connection.kerberos,
                     dcHost=connection.kdcHost,
                     aesKey=connection.aesKey,
@@ -79,14 +78,13 @@ class NXCModule:
             """ ShadowCoerce START """
             try:
                 shadowcocerceclass = ShadowCoerceTrigger(context)
-                target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 shadowcocerceconnect = shadowcocerceclass.connect(
                     username=connection.username,
                     password=connection.password,
                     domain=connection.domain,
                     lmhash=connection.lmhash,
                     nthash=connection.nthash,
-                    target=target,
+                    target=connection.remoteName,
                     doKerberos=connection.kerberos,
                     dcHost=connection.kdcHost,
                     aesKey=connection.aesKey,
@@ -114,14 +112,13 @@ class NXCModule:
                 context.log.debug(f"Trying to connect to {pipe} pipe")
                 try:
                     petitpotamclass = PetitPotamtTrigger(context)
-                    target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                     petitpotamconnect = petitpotamclass.connect(
                         username=connection.username,
                         password=connection.password,
                         domain=connection.domain,
                         lmhash=connection.lmhash,
                         nthash=connection.nthash,
-                        target=target,
+                        target=connection.remoteName,
                         doKerberos=connection.kerberos,
                         dcHost=connection.kdcHost,
                         aesKey=connection.aesKey,
@@ -151,14 +148,13 @@ class NXCModule:
             for pipe in pipes:
                 try:
                     printerbugclass = PrinterBugTrigger(context)
-                    target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                     printerbugconnect = printerbugclass.connect(
                         username=connection.username,
                         password=connection.password,
                         domain=connection.domain,
                         lmhash=connection.lmhash,
                         nthash=connection.nthash,
-                        target=target,
+                        target=connection.remoteName,
                         doKerberos=connection.kerberos,
                         dcHost=connection.kdcHost,
                         aesKey=connection.aesKey,
@@ -169,7 +165,7 @@ class NXCModule:
                         context.log.debug("Target is vulnerable to PrinterBug")
                         context.log.highlight("VULNERABLE, PrinterBug")
                         if self.listener is not None:  # exploit
-                            exploit_status = printerbugclass.exploit(printerbugconnect, self.listener, target, self.always_continue, pipe)
+                            exploit_status = printerbugclass.exploit(printerbugconnect, self.listener, connection.remoteName, self.always_continue, pipe)
                             if not self.always_continue and exploit_status:
                                 break
                         printerbugconnect.disconnect()
@@ -184,14 +180,13 @@ class NXCModule:
             """ MSEVEN START """
             try:
                 msevenclass = MSEvenTrigger(context)
-                target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 msevenconnect = msevenclass.connect(
                     username=connection.username,
                     password=connection.password,
                     domain=connection.domain,
                     lmhash=connection.lmhash,
                     nthash=connection.nthash,
-                    target=target,
+                    target=connection.remoteName,
                     doKerberos=connection.kerberos,
                     dcHost=connection.kdcHost,
                     aesKey=connection.aesKey,

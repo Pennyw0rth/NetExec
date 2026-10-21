@@ -3,10 +3,11 @@ import ntpath
 
 from io import BytesIO
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.smb import get_smb_connection
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.protocols.ldap.constants import WELL_KNOWN_SIDS
 
-from impacket.smbconnection import SMBConnection, SessionError
+from impacket.smbconnection import SessionError
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.krb5.kerberosv5 import KerberosError
 from impacket import nt_errors
@@ -46,11 +47,6 @@ class NXCModule:
         self.get_SeMachineAccountPrivilege(context, connection)
 
     def get_SeMachineAccountPrivilege(self, context, connection):
-        # A Schannel bind leaves no secret to reuse, and an empty NTLM login on SYSVOL counts as a bad password attempt
-        if connection.args.schannel:
-            context.log.fail("Skipping SeMachineAccountPrivilege: reading SYSVOL needs a password, hash or Kerberos ticket, which --schannel doesn't provide")
-            return
-
         gpo_links = self.get_gpo_links(context, connection)
         if not gpo_links:
             context.log.debug("No enabled GPO links found for the domain and Domain Controllers OU")
@@ -58,9 +54,11 @@ class NXCModule:
         context.log.debug(f"gPLink parsed: {gpo_links}")
 
         try:
-            smb = self.connect_smb(connection)
+            smb = get_smb_connection(context, connection)
         except (OSError, SessionError, NetBIOSError, NetBIOSTimeout, KerberosError) as e:
             context.log.fail(f"Unable to connect to SYSVOL through SMB: {e}")
+            return
+        if not smb:
             return
         context.log.display("Getting SeMachineAccountPrivilege")
 
@@ -147,31 +145,6 @@ class NXCModule:
                 link["priority"] = (0 if scope_dn == connection.baseDN else 1) if link["enforced"] else (2 if scope_dn == ou_dn else 3)
                 gpo_links.append(link)
         return sorted(gpo_links, key=lambda link: (link["priority"], link["link_order"]))
-
-    # Just handle smb connection
-    def connect_smb(self, connection):
-        smb = SMBConnection(
-            remoteName=connection.remoteName,
-            remoteHost=connection.host,
-            sess_port=445,
-            timeout=3,
-        )
-        if connection.kerberos:
-            smb.kerberosLogin(
-                user=connection.username,
-                password=connection.password,
-                domain=connection.domain,
-                lmhash=connection.lmhash,
-                nthash=connection.nthash,
-                aesKey=connection.aesKey,
-                kdcHost=connection.kdcHost,
-                useCache=connection.use_kcache,
-            )
-        elif connection.nthash or connection.lmhash:
-            smb.login(connection.username, "", connection.domain, lmhash=connection.lmhash, nthash=connection.nthash)
-        else:
-            smb.login(connection.username, connection.password, connection.domain)
-        return smb
 
     def resolve_gpo(self, connection, guid):
         resp = connection.search(baseDN=f"CN=Policies,CN=System,{connection.baseDN}", searchFilter=f"(&(objectClass=groupPolicyContainer)(name={{{guid}}}))", attributes=["displayName", "name"])
