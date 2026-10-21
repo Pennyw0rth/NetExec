@@ -199,13 +199,15 @@ class rdp(connection):
 
     async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
+        probe_connection = None
         try:
             self.conn = self._create_rdp_connection(
                 None, supported_protocols=SUPP_PROTOCOLS.SSL
             )
             packetizer = TPKTPacketizer()
             client = UniClient(self.target, packetizer)
-            self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            probe_connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            self.conn._connection = probe_connection
             self.conn._x224net = X224Network(self.conn._connection)
             _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
             # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
@@ -216,8 +218,8 @@ class rdp(connection):
             pass
         finally:
             # this probe socket is not owned by aardwolf, terminate() would not close it
-            if getattr(self.conn, "_connection", None) is not None:
-                await self.conn._connection.close()
+            if probe_connection is not None:
+                await probe_connection.close()
 
     async def connect_rdp(self, auth_only=False):
         """Connect to the RDP server. Does NOT clean up on exit.
@@ -805,7 +807,7 @@ Add-Type -AssemblyName System.Windows.Forms
             else:
                 self.logger.fail(f"No desktop data after {self.args.screentime}s, try a longer --screentime")
         except Exception as e:
-            self.logger.debug(f"Error taking screenshot: {e!s}")
+            self.logger.fail(f"Could not take the screenshot: {e!s}")
         finally:
             await self.terminate_conn()
 
