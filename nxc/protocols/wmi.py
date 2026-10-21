@@ -217,6 +217,7 @@ class wmi(connection):
         self.password = password
         self.username = username
         self.domain = domain
+        self.tgt = None
         self.create_conn_obj()
 
         if password == "":
