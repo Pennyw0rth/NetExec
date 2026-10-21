@@ -172,14 +172,20 @@ class wmi(connection):
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
     def print_host_info(self):
-        self.logger.extra["protocol"] = "RPC"
-        self.logger.extra["port"] = "135"
         self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.targetDomain})")
 
     def check_if_admin(self):
+        # With several credentials, drop the admin flag, namespaces and DCOM connections (cached per target by impacket) of the previous one
+        self.admin_privs = False
+        self.namespaces = {}
+        if self.dcom_conn:
+            self.dcom_conn.disconnect()
+            self.dcom_conn = None
         try:
-            self.dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
-            iInterface = self.dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
+            # Only keep the connection once activated: impacket's disconnect() can't run twice on a target
+            dcom_conn = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.doKerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
+            iInterface = dcom_conn.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
+            self.dcom_conn = dcom_conn
             flag, self.stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.rpc_timeout, self.logger)
         except Exception as e:
             self.logger.debug(f"Received error while checking admin: {e}")
@@ -202,7 +208,6 @@ class wmi(connection):
                         self.logger.fail(str(e))
                         return False
                 else:
-                    self.logger.extra["protocol"] = "WMI"
                     self.admin_privs = True
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
@@ -392,8 +397,10 @@ class wmi(connection):
         escaped_path = remote_path.replace("\\", "\\\\")
 
         # Load the Namespace
-        powershellv3_namespace = self.get_namespace("//./root/Microsoft/Windows/Powershellv3")
-        if powershellv3_namespace is None:
+        try:
+            powershellv3_namespace = self.get_namespace("//./root/Microsoft/Windows/Powershellv3")
+        except Exception as e:
+            self.logger.debug(f"Cannot load WMI Namespace //./root/Microsoft/Windows/Powershellv3: {e}")
             return None
 
         # Read the file
@@ -791,13 +798,8 @@ class wmi(connection):
         if namespace in self.namespaces:
             return self.namespaces[namespace]
         self.logger.debug(f"Getting namespace {namespace}")
-        try:
-            iWbemServices = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
-            self.iWbemLevel1Login.RemRelease()
-        except Exception as e:
-            self.logger.debug(f"Cannot load WMI Namespace {namespace}: {e}")
-            return None
-        self.namespaces[namespace] = iWbemServices
+        self.namespaces[namespace] = self.iWbemLevel1Login.NTLMLogin(namespace, NULL, NULL)
+        self.iWbemLevel1Login.RemRelease()
         return self.namespaces[namespace]
 
     @property
