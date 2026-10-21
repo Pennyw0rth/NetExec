@@ -279,6 +279,7 @@ class rdp(connection):
         return self.conn.authz_result == AUTHZ_ACCESS_DENIED
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        self.username = username
         try:
             lmhash = ""
             nthash = ""
@@ -402,6 +403,7 @@ class rdp(connection):
         return bool(self.args.execute or self.args.ps_execute)
 
     def plaintext_login(self, domain, username, password):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=password,
@@ -451,6 +453,7 @@ class rdp(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=ntlm_hash,
