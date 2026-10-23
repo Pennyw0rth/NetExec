@@ -7,7 +7,7 @@ from impacket.krb5.kerberosv5 import KerberosError
 from impacket.dcerpc.v5 import transport
 from impacket.dcerpc.v5.epm import hept_map
 from impacket.dcerpc.v5.gkdi import MSRPC_UUID_GKDI, GkdiGetKey, GroupKeyEnvelope
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from impacket.dpapi_ng import EncryptedPasswordBlob, KeyIdentifier, compute_kek, create_sd, decrypt_plaintext, unwrap_cek
 
 from nxc.logger import NXCAdapter
@@ -169,7 +169,7 @@ class LDAPConnect:
 
 
 class LAPSv2Extract:
-    def __init__(self, data, username, password, domain, ntlm_hash, do_kerberos, kdcHost, port, dns_server):
+    def __init__(self, data, username, password, domain, ntlm_hash, do_kerberos, kdcHost, port, dns_server, rpc_host=None, rpc_name=None):
         if ntlm_hash.find(":") != -1:
             self.lmhash, self.nthash = ntlm_hash.split(":")
         else:
@@ -184,6 +184,8 @@ class LAPSv2Extract:
         self.kdcHost = kdcHost
         self.logger = None
         self.dns_server = dns_server
+        self.rpc_host = rpc_host or (dns_server if dns_server else domain)
+        self.rpc_name = rpc_name or domain
         self.proto_logger(self.domain, port, self.domain)
 
     def proto_logger(self, host, port, hostname):
@@ -215,8 +217,11 @@ class LAPSv2Extract:
             gke = kds_cache[key_id["RootKeyId"]]
         else:
             # Connect on RPC over TCP to MS-GKDI to call opnum 0 GetKey
-            string_binding = hept_map(destHost=self.domain if not self.dns_server else self.dns_server, remoteIf=MSRPC_UUID_GKDI, protocol="ncacn_ip_tcp")
+            string_binding = hept_map(destHost=self.rpc_host, remoteIf=MSRPC_UUID_GKDI, protocol="ncacn_ip_tcp")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
+            rpc_transport.setRemoteHost(self.rpc_host)
+            if self.rpc_name:
+                rpc_transport.setRemoteName(self.rpc_name)
             if hasattr(rpc_transport, "set_credentials"):
                 rpc_transport.set_credentials(username=self.username, password=self.password, domain=self.domain, lmhash=self.lmhash, nthash=self.nthash)
             if self.do_kerberos:
@@ -224,8 +229,9 @@ class LAPSv2Extract:
                 rpc_transport.set_kerberos(self.do_kerberos, kdcHost=self.kdcHost)
 
             dce = rpc_transport.get_dce_rpc()
-            dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_INTEGRITY)
             dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
+            if self.do_kerberos:
+                dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
             self.logger.info(f"Connecting to {string_binding}")
             try:
                 dce.connect()
@@ -248,15 +254,12 @@ class LAPSv2Extract:
             kds_cache[gke["RootKeyId"]] = gke
 
         kek = compute_kek(gke, key_id)
-        self.logger.info(f"KEK:\t{kek}")
         enc_content_parameter = bytes(parsed_enveloped_data["encryptedContentInfo"]["contentEncryptionAlgorithm"]["parameters"])
         iv, _ = decoder.decode(enc_content_parameter)
         iv = bytes(iv[0])
 
         cek = unwrap_cek(kek, bytes(kek_recipient_info["encryptedKey"]))
-        self.logger.info(f"CEK:\t{cek}")
         plaintext = decrypt_plaintext(cek, iv, remaining)
-        self.logger.info(plaintext[:-18].decode("utf-16le"))
         return plaintext[:-18].decode("utf-16le")
 
 
@@ -325,12 +328,17 @@ def laps_search(self, username, password, cred_type, domain, dns_server):
                     self.kerberos,
                     self.kdcHost,
                     339,
-                    dns_server
+                    dns_server,
+                    self.host,
+                    self.remoteName,
                 )
                 try:
                     data = d.run()
                 except Exception as e:
                     self.logger.fail(str(e))
+                    return None, None, None
+                if not data:
+                    self.logger.fail(f"Failed to decrypt msLAPS-EncryptedPassword for {self.hostname}")
                     return None, None, None
                 r = loads(data)
                 msMCSAdmPwd = r["p"]
