@@ -43,6 +43,7 @@ class WMIEXEC:
 
         if self.__password is None:
             self.__password = ""
+        *_, tgt, _ = smbconnection.getCredentials()
         self.__dcom = DCOMConnection(
             self.__target,
             self.__username,
@@ -55,6 +56,7 @@ class WMIEXEC:
             doKerberos=self.__doKerberos,
             kdcHost=self.__kdcHost,
             remoteHost=self.__remoteHost,
+            TGT=tgt,
         )
         iInterface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
         flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout, self.logger)
