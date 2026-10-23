@@ -2263,8 +2263,23 @@ class smb(connection):
         except Exception as e:
             self.logger.fail(f"RemoteOperations failed: {e}")
 
+    def cleanup_remoteops(self, saved_hive=None):
+        """Restore the RemoteRegistry service and delete the hive copy saved on the target, even after a failed dump"""
+        if self.remote_ops:
+            try:
+                self.remote_ops.finish()
+            except Exception as e:
+                self.logger.fail(f"[OPSEC] RemoteRegistry may not have been restored to its original state: {e}")
+            self.remote_ops = None
+        if saved_hive is not None:
+            try:
+                saved_hive.finish()
+            except Exception as e:
+                self.logger.fail(f"[OPSEC] Error deleting the hive copy saved on the target: {e}")
+
     @requires_admin
     def sam(self):
+        SAM = None
         try:
             self.enable_remoteops(regsecret=(self.args.sam == "regdump"))
             host_id = self.db.get_hosts(filter_term=self.host)[0][0]
@@ -2308,19 +2323,13 @@ class smb(connection):
                 SAM.dump()
                 SAM.export(self.output_filename)
                 self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
-
-                try:
-                    self.remote_ops.finish()
-                except Exception as e:
-                    self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-
-                if self.args.sam == "secdump":
-                    SAM.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
         except Exception as e:
             self.logger.exception(str(e))
+        finally:
+            self.cleanup_remoteops(SAM if self.args.sam != "regdump" else None)
 
     @requires_admin
     def sccm(self):
@@ -2367,6 +2376,7 @@ class smb(connection):
 
     @requires_admin
     def lsa(self, quiet=False):
+        LSA = None
         try:
             self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
 
@@ -2420,17 +2430,13 @@ class smb(connection):
                 LSA.exportSecrets(self.output_filename)
                 if not quiet:
                     self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
-                try:
-                    self.remote_ops.finish()
-                except Exception as e:
-                    self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-                if self.args.lsa == "secdump":
-                    LSA.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping LSA. This is likely due to an endpoint protection.')
         except Exception as e:
             self.logger.exception(str(e))
+        finally:
+            self.cleanup_remoteops(LSA if self.args.lsa != "regdump" else None)
 
     def ntds(self):
         self.enable_remoteops()
