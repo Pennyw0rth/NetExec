@@ -12,7 +12,6 @@ from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
-from dateutil.relativedelta import relativedelta as rd
 
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
@@ -1537,12 +1536,12 @@ class ldap(connection):
         Get the Fine Grained Password Policy/PSOs
         Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
         """
-        # Convert LDAP time to human readable format
+        # Convert LDAP time (100ns intervals) to human readable format
         def pso_days(ldap_time):
-            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
+            return f"{abs(int(ldap_time)) // 864000000000} days"
 
         def pso_mins(ldap_time):
-            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
+            return f"{abs(int(ldap_time)) // 600000000} minutes"
 
         # Are there even any FGPPs?
         self.logger.info("Attempting to enumerate policies...")
