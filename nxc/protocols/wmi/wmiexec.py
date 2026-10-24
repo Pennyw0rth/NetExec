@@ -59,14 +59,18 @@ class WMIEXEC:
         self.logger.info(f"Executing command: {command}")
         try:
             process = self.__win32Process.Create(command, self.__pwd, None)
-            return process.ProcessId if process is not None else None  # impacket swallows a failed ExecMethod and returns None
+            if process is not None and process.ReturnValue == 0:  # impacket swallows a failed ExecMethod and returns None
+                return process.ProcessId
+            self.logger.fail(f"WMIEXEC: Win32_Process.Create failed with return value {process.ReturnValue if process is not None else None}")
         except Exception as e:
             self.logger.error(str(e))
 
     def wait_for_process(self, pid, timeout):
         """Poll Win32_Process until the process and its children have exited or the timeout (in seconds) is reached"""
+        if pid is None:
+            return
         end = time.monotonic() + timeout
-        while pid is not None and time.monotonic() < end:
+        while time.monotonic() < end:
             time.sleep(0.1)
             try:
                 self.__iWbemServices.GetObject(f'Win32_Process.Handle="{pid}"')
@@ -100,11 +104,15 @@ class WMIEXEC:
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(8)}"
 
         # 1. Run the command and write output to file
+        pid = self.execute_remote(f'{self.__shell} ({command}) 1> "{result_output}" 2>&1')
+        if pid is None:  # Not executed, so there is no output to retrieve
+            self.__outputBuffer = None
+            return
         self.logger.info(f"Waiting up to {self.__exec_timeout}s for command to complete.")
-        self.wait_for_process(self.execute_remote(f'{self.__shell} ({command}) 1> "{result_output}" 2>&1'), self.__exec_timeout)
+        self.wait_for_process(pid, self.__exec_timeout)
 
         # 2. Base64 encode the file and store content in registry
-        self.wait_for_process(self.execute_remote(f'{self.__shell} certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 & for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f'), 10)
+        self.wait_for_process(self.execute_remote(f'{self.__shell} certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 & for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f'), max(self.__exec_timeout, 10))
 
         self.queryRegistry(keyName)
         self.clean_up(result_output, result_output_b64)
@@ -137,11 +145,15 @@ class WMIEXEC:
         # 1. Run the command and write output to file
         if not command.lower().startswith("powershell"):
             command = f'powershell -Command "& {{{command}}}"'
+        pid = self.execute_remote(f'{command} > "{result_output}" 2>&1')
+        if pid is None:  # Not executed, so there is no output to retrieve
+            self.__outputBuffer = None
+            return
         self.logger.info(f"Waiting up to {self.__exec_timeout}s for command to complete.")
-        self.wait_for_process(self.execute_remote(f'{command} > "{result_output}" 2>&1'), self.__exec_timeout)
+        self.wait_for_process(pid, self.__exec_timeout)
 
         # 2. Base64 encode the file using PowerShell
-        self.wait_for_process(self.execute_remote(f'powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"'), 10)
+        self.wait_for_process(self.execute_remote(f'powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"'), max(self.__exec_timeout, 10))
 
         # 3. Use PowerShell to split base64 content into 16KB chunks and store in registry
         self.wait_for_process(self.execute_remote(
@@ -153,7 +165,7 @@ class WMIEXEC:
             f'  $name = \\"{keyName}_chunk_$i\\"; '
             f'  reg add \\"HKLM\\{self.__registry_Path}\\" /v $name /t REG_SZ /d $chunk /f }}; '
             f'reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"'
-        ), 10)
+        ), max(self.__exec_timeout, 10))
 
         self.queryRegistry_psh(keyName)
         self.clean_up(result_output, result_output_b64)
