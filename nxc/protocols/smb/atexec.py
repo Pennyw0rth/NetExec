@@ -10,6 +10,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.rpc import NXCRPCConnection
+from nxc.protocols.smb.exec_output import get_output_file
 
 
 class TSCH_EXEC:
@@ -186,42 +187,6 @@ class TSCH_EXEC:
             self.logger.fail(f"[OPSEC] Could not delete scheduled task \\{self.task_name} on the target: {e}")
 
         if self.__retOutput:
-            tries = 1
-            # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
-            sleep(0.4)
-            while True:
-                try:
-                    self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
-                    self.__connection.conn.getFile(self.__share, self.__output_filename, self.output_callback)
-                    break
-                except Exception as e:
-                    if tries >= self.__tries:
-                        self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
-                        break
-                    if "STATUS_BAD_NETWORK_NAME" in str(e):
-                        self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
-                        break
-                    elif "STATUS_VIRUS_INFECTED" in str(e):
-                        self.logger.fail("Command did not run because a virus was detected")
-                        break
-                    # When executing PowerShell and the command is still running, we get a sharing violation
-                    # We can use that information to wait longer than if the file is not found (probably av or something)
-                    if "STATUS_SHARING_VIOLATION" in str(e):
-                        self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
-                        tries += 1
-                        sleep(1)
-                    elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                        self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
-                        tries += 10
-                        sleep(1)
-                    else:
-                        self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
-                        tries += 1
-                        sleep(1)
-            try:
-                self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
-                self.__connection.conn.deleteFile(self.__share, self.__output_filename)
-            except Exception:
-                pass
+            get_output_file(self.__connection.conn, self.__share, self.__output_filename, self.output_callback, self.__tries, self.logger, "ATEXEC")
 
         dce.disconnect()
