@@ -141,7 +141,11 @@ class ModuleLoader:
             attrs = {target.id: node.value for node in module_class.body if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name)}
             methods = {node.name for node in module_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
             name, description, supported_protocols = (ast.literal_eval(attrs[key]) for key in ("name", "description", "supported_protocols"))
+            # Import instead when: a base class or decorator could change the attributes (invisible to ast), the category is not
+            # written CATEGORY.X (the only form CATEGORY[...] resolves), the name is not the filename (the key of the result),
+            # or options()/on_login()/on_admin_login() is missing, so module_is_sane() prints the same error as before
             if not module_class.bases and not module_class.decorator_list and attrs["category"].value.id == "CATEGORY" and name == basename(module_path)[:-3] and "options" in methods and methods & {"on_login", "on_admin_login"}:
+                # No "options" key on purpose: only -M --options reads it, and -M goes through get_module_info()
                 return {name: {"path": module_path, "description": description, "supported_protocols": supported_protocols, "category": CATEGORY[attrs["category"].attr], "requires_admin": "on_admin_login" in methods}}
         except Exception as e:
             self.logger.debug(f"Could not read {module_path} statically: {e}")
@@ -160,7 +164,8 @@ class ModuleLoader:
                 if module[-3:] == ".py" and module != "example_module.py" and (names is None or module[:-3] in names):
                     try:
                         module_path = path_join(path, module)
-                        module_data = self.get_module_info_static(module_path) if names is None else self.get_module_info(module_path)
+                        # -L reads the shipped modules statically, user modules are still imported so a broken one is reported
+                        module_data = self.get_module_info_static(module_path) if names is None and path == modules_paths[0] else self.get_module_info(module_path)
                         modules.update(module_data)
                     except Exception as e:
                         self.logger.debug(f"Error loading module {module}: {e}")
