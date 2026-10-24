@@ -32,7 +32,7 @@ class NXCModule:
                         try:
                             decoded_token = json.loads(urlsafe_b64decode(access_token.split(".")[1] + "=="))
                         except ValueError:
-                            # Encrypted (JWE) or malformed token, the payload is not readable
+                            context.log.debug(f"[{token.winuser}] Skipping a token whose payload is not readable (JWE or malformed): {access_token[:20]}...")
                             continue
                         if "preferred_username" in decoded_token:
                             # Assuming that if there is no preferred_username key, this is not a valid Entra/M365 Access Token
