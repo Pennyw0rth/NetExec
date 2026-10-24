@@ -4,6 +4,7 @@ from time import sleep
 from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
 from nxc.paths import TMP_PATH
+from nxc.protocols.smb.exec_output import get_output_file
 from impacket.dcerpc.v5.dcomrt import DCOMConnection
 from impacket.dcerpc.v5.dcom import wmi
 from impacket.dcerpc.v5.dtypes import NULL
@@ -141,45 +142,4 @@ class WMIEXEC:
             self.__outputBuffer = ""
             return
 
-        tries = 1
-        # Most commands finish within a few hundred ms: read every 0.1s up to 0.4s (not counted in --get-output-tries), then fall back to the 1s polling below
-        fast_polls = 3
-        sleep(0.1)
-        while True:
-            try:
-                self.logger.info(f"Attempting to read {self.__share}\\{self.__output}")
-                self.__smbconnection.getFile(self.__share, self.__output, self.output_callback)
-                break
-            except Exception as e:
-                if fast_polls and ("STATUS_SHARING_VIOLATION" in str(e) or "STATUS_OBJECT_NAME_NOT_FOUND" in str(e)):
-                    fast_polls -= 1
-                    sleep(0.1)
-                elif tries >= self.__tries:
-                    self.logger.fail("wmiexec: Could not retrieve output file, it may have been detected by AV. If it is still failing, try the 'wmi' protocol or another exec method")
-                    break
-                elif "STATUS_BAD_NETWORK_NAME" in str(e):
-                    self.logger.fail(f"SMB connection: target has blocked {self.__share} access (maybe command executed!)")
-                    break
-                elif "STATUS_VIRUS_INFECTED" in str(e):
-                    self.logger.fail("Command did not run because a virus was detected")
-                    break
-                # When executing powershell and the command is still running, we get a sharing violation
-                # We can use that information to wait longer than if the file is not found (probably av or something)
-                elif "STATUS_SHARING_VIOLATION" in str(e):
-                    self.logger.info(f"File {self.__share}\\{self.__output} is still in use with {self.__tries - tries} tries left, retrying...")
-                    sleep(1)
-                    tries += 1
-                elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                    self.logger.info(f"File {self.__share}\\{self.__output} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
-                    tries += 10
-                    sleep(1)
-                else:
-                    self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
-                    tries += 1
-                    sleep(1)
-
-        try:
-            self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
-            self.__smbconnection.deleteFile(self.__share, self.__output)
-        except Exception:
-            pass
+        get_output_file(self.__smbconnection, self.__share, self.__output, self.output_callback, self.__tries, self.logger, "WMIEXEC")
