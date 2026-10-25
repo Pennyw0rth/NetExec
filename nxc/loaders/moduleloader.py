@@ -138,13 +138,21 @@ class ModuleLoader:
         try:
             with open(module_path, "rb") as f:
                 module_class = [node for node in ast.parse(f.read()).body if isinstance(node, ast.ClassDef) and node.name == "NXCModule"][-1]
+
+            # Get the attributes and methods by iterating over the AST nodes
             attrs = {target.id: node.value for node in module_class.body if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name)}
             methods = {node.name for node in module_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
             name, description, supported_protocols = (ast.literal_eval(attrs[key]) for key in ("name", "description", "supported_protocols"))
+
             # Import instead when: a base class or decorator could change the attributes (invisible to ast), the category is not
             # written CATEGORY.X (the only form CATEGORY[...] resolves), the name is not the filename (the key of the result),
             # or options()/on_login()/on_admin_login() is missing, so module_is_sane() prints the same error as before
-            if not module_class.bases and not module_class.decorator_list and attrs["category"].value.id == "CATEGORY" and name == basename(module_path)[:-3] and "options" in methods and methods & {"on_login", "on_admin_login"}:
+            if not module_class.bases \
+                and not module_class.decorator_list \
+                and attrs["category"].value.id == "CATEGORY" \
+                and name == basename(module_path)[:-3] \
+                and "options" in methods \
+                and methods & {"on_login", "on_admin_login"}:
                 # No "options" key on purpose: only -M --options reads it, and -M goes through get_module_info()
                 return {name: {"path": module_path, "description": description, "supported_protocols": supported_protocols, "category": CATEGORY[attrs["category"].attr], "requires_admin": "on_admin_login" in methods}}
         except Exception as e:
