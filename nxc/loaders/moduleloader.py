@@ -7,6 +7,7 @@ import sys
 from os import listdir
 from os.path import basename, dirname
 from os.path import join as path_join
+from types import SimpleNamespace
 
 from nxc.context import Context
 from nxc.helpers.misc import CATEGORY
@@ -76,12 +77,9 @@ class ModuleLoader:
         return cls.module_cache[module_path]
 
     def load_module(self, module_path):
-        """Load a module, initializing it and checking that it has the proper attributes"""
+        """Load and initialize a module, list_modules() already checked that it has the proper attributes"""
         try:
-            module = self.load_module_file(module_path).NXCModule()
-
-            if self.module_is_sane(module, module_path):
-                return module
+            return self.load_module_file(module_path).NXCModule()
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
@@ -139,22 +137,16 @@ class ModuleLoader:
             with open(module_path, "rb") as f:
                 module_class = [node for node in ast.parse(f.read()).body if isinstance(node, ast.ClassDef) and node.name == "NXCModule"][-1]
 
-            # Get the attributes and methods by iterating over the AST nodes
-            attrs = {target.id: node.value for node in module_class.body if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name)}
-            methods = {node.name for node in module_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
-            name, description, supported_protocols = (ast.literal_eval(attrs[key]) for key in ("name", "description", "supported_protocols"))
-
-            # Import instead when: a base class or decorator could change the attributes (invisible to ast), the category is not
-            # written CATEGORY.X (the only form CATEGORY[...] resolves), the name is not the filename (the key of the result),
-            # or options()/on_login()/on_admin_login() is missing, so module_is_sane() prints the same error as before
-            if not module_class.bases \
-                and not module_class.decorator_list \
-                and attrs["category"].value.id == "CATEGORY" \
-                and name == basename(module_path)[:-3] \
-                and "options" in methods \
-                and methods & {"on_login", "on_admin_login"}:
+            # ast can't see what a base class or a decorator adds, so these modules are imported
+            if not module_class.bases and not module_class.decorator_list:
+                values = {target.id: node.value for node in module_class.body if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name)}
+                module = SimpleNamespace(
+                    **{node.name: node for node in module_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)},
+                    **{key: ast.literal_eval(values[key]) for key in ("name", "description", "supported_protocols")},
+                    category=CATEGORY[values["category"].attr],
+                )
                 # No "options" key on purpose: only -M --options reads it, and -M goes through get_module_info()
-                return {name: {"path": module_path, "description": description, "supported_protocols": supported_protocols, "category": CATEGORY[attrs["category"].attr], "requires_admin": "on_admin_login" in methods}}
+                return {module.name: {"path": module_path, "description": module.description, "supported_protocols": module.supported_protocols, "category": module.category, "requires_admin": hasattr(module, "on_admin_login")}} if self.module_is_sane(module, module_path) else {}
         except Exception as e:
             self.logger.debug(f"Could not read {module_path} statically: {e}")
         return self.get_module_info(module_path)
