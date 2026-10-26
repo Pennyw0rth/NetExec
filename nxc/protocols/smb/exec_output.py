@@ -7,12 +7,13 @@ def get_output_file(conn, share, filename, callback, tries, logger, method, firs
     Most commands finish within a few hundred ms, so the file is read every 0.1s during the first 0.4s
     (these quick reads don't count against --get-output-tries), then every 1s.
     """
+    path = f"{share}\\" + filename.lstrip("\\")
     quick_until = monotonic() + 0.4
     sleep(first_read_delay)
     attempt = 1
     while True:
         try:
-            logger.info(f"Attempting to read {share}\\{filename}")
+            logger.info(f"Attempting to read {path}")
             conn.getFile(share, filename, callback)
             break
         except Exception as e:
@@ -30,11 +31,11 @@ def get_output_file(conn, share, filename, callback, tries, logger, method, firs
             # When executing PowerShell and the command is still running, we get a sharing violation
             # We can use that information to wait longer than if the file is not found (probably av or something)
             elif "STATUS_SHARING_VIOLATION" in str(e):
-                logger.info(f"File {share}\\{filename} is still in use with {tries - attempt} tries left, retrying...")
+                logger.info(f"File {path} is still in use with {tries - attempt} tries left, retrying...")
                 attempt += 1
                 sleep(1)
             elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                logger.info(f"File {share}\\{filename} not found with {tries - attempt} tries left, deducting 10 tries and retrying...")
+                logger.info(f"File {path} not found with {tries - attempt} tries left, deducting 10 tries and retrying...")
                 attempt += 10
                 sleep(1)
             else:
@@ -43,10 +44,10 @@ def get_output_file(conn, share, filename, callback, tries, logger, method, firs
                 sleep(1)
 
     try:
-        logger.debug(f"Deleting file {share}\\{filename}")
+        logger.debug(f"Deleting file {path}")
         conn.deleteFile(share, filename)
     except Exception as e:
         if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-            logger.debug(f"No output file {share}\\{filename} to delete")
+            logger.debug(f"No output file {path} to delete")
         else:
-            logger.fail(f"[OPSEC] {method}: Could not delete the output file {share}\\{filename}: {e}")
+            logger.fail(f"[OPSEC] {method}: Could not delete the output file {path}: {e}")
