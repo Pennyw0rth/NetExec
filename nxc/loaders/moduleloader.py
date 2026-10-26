@@ -1,3 +1,4 @@
+import ast
 import nxc
 import importlib
 import traceback
@@ -6,6 +7,7 @@ import sys
 from os import listdir
 from os.path import basename, dirname
 from os.path import join as path_join
+from types import SimpleNamespace
 
 from nxc.context import Context
 from nxc.helpers.misc import CATEGORY
@@ -75,12 +77,9 @@ class ModuleLoader:
         return cls.module_cache[module_path]
 
     def load_module(self, module_path):
-        """Load a module, initializing it and checking that it has the proper attributes"""
+        """Load and initialize a module, list_modules() already checked that it has the proper attributes"""
         try:
-            module = self.load_module_file(module_path).NXCModule()
-
-            if self.module_is_sane(module, module_path):
-                return module
+            return self.load_module_file(module_path).NXCModule()
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
@@ -132,6 +131,26 @@ class ModuleLoader:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
 
+    def get_module_info_static(self, module_path):
+        """Read the listing info of a module from its source without running it, falling back to get_module_info() if it is not plain literals"""
+        try:
+            with open(module_path, "rb") as f:
+                module_class = [node for node in ast.parse(f.read()).body if isinstance(node, ast.ClassDef) and node.name == "NXCModule"][-1]
+
+            # ast can't see what a base class or a decorator adds, so these modules are imported
+            if not module_class.bases and not module_class.decorator_list:
+                values = {target.id: node.value for node in module_class.body if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name)}
+                module = SimpleNamespace(
+                    **{node.name: node for node in module_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)},
+                    **{key: ast.literal_eval(values[key]) for key in ("name", "description", "supported_protocols")},
+                    category=CATEGORY[values["category"].attr],
+                )
+                # No "options" key on purpose: only -M --options reads it, and -M goes through get_module_info()
+                return {module.name: {"path": module_path, "description": module.description, "supported_protocols": module.supported_protocols, "category": module.category, "requires_admin": hasattr(module, "on_admin_login")}} if self.module_is_sane(module, module_path) else {}
+        except Exception as e:
+            self.logger.debug(f"Could not read {module_path} statically: {e}")
+        return self.get_module_info(module_path)
+
     def list_modules(self, names=None):
         """List modules without initializing them, only the ones in names if given"""
         modules = {}
@@ -145,7 +164,8 @@ class ModuleLoader:
                 if module[-3:] == ".py" and module != "example_module.py" and (names is None or module[:-3] in names):
                     try:
                         module_path = path_join(path, module)
-                        module_data = self.get_module_info(module_path)
+                        # -L reads the shipped modules statically, user modules are still imported so a broken one is reported
+                        module_data = self.get_module_info_static(module_path) if names is None and path == modules_paths[0] else self.get_module_info(module_path)
                         modules.update(module_data)
                     except Exception as e:
                         self.logger.debug(f"Error loading module {module}: {e}")
