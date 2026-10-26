@@ -45,7 +45,7 @@ class NXCModule:
                 values = {str(attr["type"]).lower(): attr["vals"][0] for attr in computer["attributes"]}
                 if "mslaps-encryptedpassword" in values:
                     msMCSAdmPwd = values["mslaps-encryptedpassword"]
-                    d = LAPSv2Extract(bytes(msMCSAdmPwd), connection.username if connection.username else "", connection.password if connection.password else "", connection.domain, connection.nthash if connection.nthash else "", connection.kerberos, connection.kdcHost, 339, connection.dns_server, connection.host, connection.remoteName)
+                    d = LAPSv2Extract(bytes(msMCSAdmPwd), connection.username if connection.username else "", connection.password if connection.password else "", connection.domain, connection.nthash if connection.nthash else "", connection.kerberos, connection.kdcHost, 339, connection.dns_server, connection.host, connection.remoteName, connection.aesKey)
                     try:
                         data = d.run()
                     except Exception as e:
@@ -54,11 +54,7 @@ class NXCModule:
                     if not data:
                         context.log.fail(f"Failed to decrypt msLAPS-EncryptedPassword for {values['samaccountname']}")
                         continue
-                    try:
-                        r = json.loads(data)
-                    except (TypeError, ValueError) as e:
-                        context.log.fail(f"Failed to parse decrypted LAPS data for {values['samaccountname']}: {e}")
-                        continue
+                    r = json.loads(data)
                     laps_computers.append((str(values["samaccountname"]), r["n"], str(r["p"])))
                 elif "mslaps-password" in values:
                     r = json.loads(str(values["mslaps-password"]))

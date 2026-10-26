@@ -169,7 +169,7 @@ class LDAPConnect:
 
 
 class LAPSv2Extract:
-    def __init__(self, data, username, password, domain, ntlm_hash, do_kerberos, kdcHost, port, dns_server, rpc_host=None, rpc_name=None):
+    def __init__(self, data, username, password, domain, ntlm_hash, do_kerberos, kdcHost, port, dns_server, rpc_host=None, rpc_name=None, aesKey=""):
         if ntlm_hash.find(":") != -1:
             self.lmhash, self.nthash = ntlm_hash.split(":")
         else:
@@ -182,6 +182,7 @@ class LAPSv2Extract:
         self.domain = domain
         self.do_kerberos = do_kerberos
         self.kdcHost = kdcHost
+        self.aesKey = aesKey
         self.logger = None
         self.dns_server = dns_server
         self.rpc_host = rpc_host or (dns_server if dns_server else domain)
@@ -219,11 +220,8 @@ class LAPSv2Extract:
             # Connect on RPC over TCP to MS-GKDI to call opnum 0 GetKey
             string_binding = hept_map(destHost=self.rpc_host, remoteIf=MSRPC_UUID_GKDI, protocol="ncacn_ip_tcp")
             rpc_transport = transport.DCERPCTransportFactory(string_binding)
-            rpc_transport.setRemoteHost(self.rpc_host)
-            if self.rpc_name:
-                rpc_transport.setRemoteName(self.rpc_name)
-            if hasattr(rpc_transport, "set_credentials"):
-                rpc_transport.set_credentials(username=self.username, password=self.password, domain=self.domain, lmhash=self.lmhash, nthash=self.nthash)
+            rpc_transport.setRemoteName(self.rpc_name)
+            rpc_transport.set_credentials(username=self.username, password=self.password, domain=self.domain, lmhash=self.lmhash, nthash=self.nthash, aesKey=self.aesKey)
             if self.do_kerberos:
                 self.logger.info("Connecting using kerberos")
                 rpc_transport.set_kerberos(self.do_kerberos, kdcHost=self.kdcHost)
@@ -329,8 +327,9 @@ def laps_search(self, username, password, cred_type, domain, dns_server):
                     self.kdcHost,
                     339,
                     dns_server,
-                    self.host,
-                    self.remoteName,
+                    self.kdcHost,
+                    self.kdcHost,
+                    self.aesKey,
                 )
                 try:
                     data = d.run()
