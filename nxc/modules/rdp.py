@@ -232,6 +232,7 @@ class RdpWmi:
             return
 
         try:
+            *_, tgt, _ = connection.conn.getCredentials()
             self.__dcom = DCOMConnection(
                 self.__target,
                 self.__username,
@@ -244,6 +245,7 @@ class RdpWmi:
                 doKerberos=self.__doKerberos,
                 kdcHost=self.__kdcHost,
                 remoteHost=self.__remoteHost,
+                TGT=tgt,
             )
 
             i_interface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
