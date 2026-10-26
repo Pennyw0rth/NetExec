@@ -46,4 +46,7 @@ def get_output_file(conn, share, filename, callback, tries, logger, method, firs
         logger.debug(f"Deleting file {share}\\{filename}")
         conn.deleteFile(share, filename)
     except Exception as e:
-        logger.debug(f"Could not delete {share}\\{filename}: {e}")
+        if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+            logger.debug(f"No output file {share}\\{filename} to delete")
+        else:
+            logger.fail(f"[OPSEC] {method}: Could not delete the output file {share}\\{filename}: {e}")
