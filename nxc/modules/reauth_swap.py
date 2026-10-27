@@ -43,10 +43,10 @@ class NXCModule:
         self.probe_nthash = module_options.get("PROBE_NTHASH", "")
         if not self.probe_user:
             context.log.fail("reauth_swap requires a second account: -o PROBE_USER=<user> PROBE_PASS=<pass> (must differ from the account nxc logged in with)")
-            exit(1)
+            return False
         if not self.probe_pass and not self.probe_nthash:
             context.log.fail("reauth_swap requires PROBE_PASS or PROBE_NTHASH for the second account")
-            exit(1)
+            return False
 
     def on_login(self, context, connection):
         if self.probe_user.lower() == (connection.username or "").lower():
