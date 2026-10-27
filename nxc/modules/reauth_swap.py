@@ -1,10 +1,3 @@
-# Module by Lyderic Lefebvre (@aas_s3curity) - https://blackfield.ch
-# Check if an SMB server still allows a cross-user re-authentication swap on an existing session:
-# log in as one account, then re-authenticate as a different one on the same connection. That swap
-# is the primitive an auth relay uses to keep a privileged session under a signing key it controls,
-# defeating enforced SMB signing. Recent Windows builds allow same-user re-auth only and refuse the
-# swap with ACCESS_DENIED. Not derivable from the build number, so it is probed live.
-# https://blackfield.ch/blog/defeating-enforced-smb-signing/
 import binascii
 import contextlib
 from sys import exit
@@ -18,6 +11,16 @@ from nxc.helpers.misc import CATEGORY
 
 
 class NXCModule:
+    """
+    Module made by: Lyderic Lefebvre (@aas_s3curity) - https://blackfield.ch
+
+    Check if an SMB server still allows a cross-user re-authentication swap on an existing session:
+    log in as one account, then re-authenticate as a different one on the same connection. That swap
+    is the primitive an auth relay uses to keep a privileged session under a signing key it controls,
+    defeating enforced SMB signing. Recent Windows builds allow same-user re-auth only and refuse the
+    swap with ACCESS_DENIED. Not derivable from the build number, so it is probed live.
+    https://blackfield.ch/blog/defeating-enforced-smb-signing/
+    """
     name = "reauth_swap"
     description = "Check if the server allows a cross-user re-auth swap on an SMB session (used to defeat enforced signing); needs a 2nd account"
     supported_protocols = ["smb"]
