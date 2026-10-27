@@ -1,9 +1,7 @@
 import binascii
 import contextlib
-from sys import exit
 
 from impacket import ntlm
-from impacket.smbconnection import SMBConnection
 from impacket.smb3 import SMB2SessionSetup, SMB2SessionSetup_Response
 from impacket.smb3structs import SMB2_SESSION_SETUP
 from impacket.spnego import SPNEGO_NegTokenInit, SPNEGO_NegTokenResp, TypesMech
