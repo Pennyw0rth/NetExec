@@ -68,7 +68,7 @@ class NXCModule:
                 with contextlib.suppress(Exception):
                     new_conn.close()
         except Exception as e:
-            context.log.info(f"could not probe this host: {e.__class__.__name__}: {e}")
+            context.log.fail(f"could not probe this host: {e.__class__.__name__}: {e}")
             return
 
         if status == self.STATUS_SUCCESS:
