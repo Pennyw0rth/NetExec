@@ -8,6 +8,7 @@ from impacket.smb3 import SMB2SessionSetup, SMB2SessionSetup_Response
 from impacket.smb3structs import SMB2_SESSION_SETUP
 from impacket.spnego import SPNEGO_NegTokenInit, SPNEGO_NegTokenResp, TypesMech
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.smb import get_smb_connection
 
 
 class NXCModule:
@@ -58,23 +59,14 @@ class NXCModule:
             context.log.info("SMB signing not enforced, nothing to bypass - skipping")
             return
 
-        domain = connection.domain
-        prim_user = connection.username
-        prim_pass = connection.password or ""
-        prim_nthash = connection.nthash or ""
-
         try:
             # fresh session so nxc's own connection is left untouched
-            conn = SMBConnection(connection.remoteName, connection.host, preferredDialect=0x0311)
-            if connection.kerberos:
-                conn.kerberosLogin(prim_user, prim_pass, domain, connection.lmhash, prim_nthash, connection.aesKey or "", kdcHost=connection.kdcHost, useCache=bool(connection.use_kcache))
-            else:
-                conn.login(prim_user, prim_pass, domain, lmhash=connection.lmhash, nthash=prim_nthash)
+            new_conn = get_smb_connection(context, connection, timeout=connection.args.smb_timeout)
             try:
-                status = self.reauth_as(conn.getSMBServer(), self.probe_user, self.probe_pass, domain, self.probe_nthash)
+                status = self.reauth_as(new_conn.getSMBServer(), self.probe_user, self.probe_pass, connection.domain, self.probe_nthash)
             finally:
                 with contextlib.suppress(Exception):
-                    conn.close()
+                    new_conn.close()
         except Exception as e:
             context.log.info(f"could not probe this host: {e.__class__.__name__}: {e}")
             return
