@@ -2369,7 +2369,8 @@ class smb(connection):
     @requires_admin
     def lsa(self, quiet=False):
         try:
-            self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
+            # --dpapi calls lsa() without --lsa, so it gets the default regdump mode too
+            self.enable_remoteops(regsecret=(self.args.lsa != "secdump"))
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
@@ -2397,7 +2398,7 @@ class smb(connection):
             add_lsa_secret.secrets = 0
 
             if self.remote_ops and self.bootkey:
-                if self.args.lsa == "regdump":
+                if self.args.lsa != "secdump":
                     LSA = RegSecretsLSASecrets(
                         self.bootkey,
                         self.remote_ops,
