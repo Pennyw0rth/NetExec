@@ -30,13 +30,6 @@ class NXCModule:
     STATUS_MORE_PROCESSING_REQUIRED = 0xC0000016
     STATUS_ACCESS_DENIED = 0xC0000022
 
-    def __init__(self, context=None, module_options=None):
-        self.context = context
-        self.module_options = module_options
-        self.probe_user = None
-        self.probe_pass = ""
-        self.probe_nthash = ""
-
     def options(self, context, module_options):
         """
         PROBE_USER      second account, must differ from the login account (required)
