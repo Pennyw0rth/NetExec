@@ -2416,10 +2416,8 @@ class smb(connection):
                 if not quiet:
                     self.logger.display("Dumping LSA secrets")
                 self.output_filename = self.output_file_template.format(output_folder="lsa")
-                if not quiet:
-                    # The DPAPI pass only needs DPAPI_SYSTEM: skip the cached domain logons (MSCache), each one costs remote registry reads
-                    LSA.dumpCachedHashes()
-                    LSA.exportCached(self.output_filename)
+                LSA.dumpCachedHashes()
+                LSA.exportCached(self.output_filename)
                 LSA.dumpSecrets()
                 LSA.exportSecrets(self.output_filename)
                 if not quiet:
