@@ -756,8 +756,10 @@ class wmi(connection):
                 self.args.codec,
                 self.get_namespace("//./root/subscription")
             )
-        output = exec_method.execute(command, get_output, use_powershell=use_powershell)
-        if output is None:  # The command was not executed, the exec method already printed why
+        try:
+            output = exec_method.execute(command, get_output, use_powershell=use_powershell)
+        except Exception as e:
+            self.logger.fail(f"Execute command failed with {self.args.exec_method}: {e}")
             return ""
 
         if get_output and (self.args.execute_psh if use_powershell else self.args.execute):
