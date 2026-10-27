@@ -2369,7 +2369,8 @@ class smb(connection):
     @requires_admin
     def lsa(self, quiet=False):
         try:
-            self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
+            # --dpapi calls lsa() without --lsa, so it gets the default regdump mode too
+            self.enable_remoteops(regsecret=(self.args.lsa != "secdump"))
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
@@ -2397,7 +2398,7 @@ class smb(connection):
             add_lsa_secret.secrets = 0
 
             if self.remote_ops and self.bootkey:
-                if self.args.lsa == "regdump":
+                if self.args.lsa != "secdump":
                     LSA = RegSecretsLSASecrets(
                         self.bootkey,
                         self.remote_ops,
@@ -2415,8 +2416,10 @@ class smb(connection):
                 if not quiet:
                     self.logger.display("Dumping LSA secrets")
                 self.output_filename = self.output_file_template.format(output_folder="lsa")
-                LSA.dumpCachedHashes()
-                LSA.exportCached(self.output_filename)
+                if not quiet:
+                    # The DPAPI pass only needs DPAPI_SYSTEM: skip the cached domain logons (MSCache), each one costs remote registry reads
+                    LSA.dumpCachedHashes()
+                    LSA.exportCached(self.output_filename)
                 LSA.dumpSecrets()
                 LSA.exportSecrets(self.output_filename)
                 if not quiet:
