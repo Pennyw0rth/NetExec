@@ -81,10 +81,12 @@ class NXCModule:
 
     def reauth_as(self, smb, user, password, domain, nthash):
         """Replay an NTLM (Type1/Type3) session setup as `user` on an EXISTING session; return the NTSTATUS."""
+        # Create NTLM Type1 message (challenge)
         type1 = ntlm.getNTLMSSPType1("", domain)
         blob = SPNEGO_NegTokenInit()
         blob["MechTypes"] = [TypesMech["NTLMSSP - Microsoft NTLM Security Support Provider"]]
         blob["MechToken"] = type1.getData()
+
         setup = SMB2SessionSetup()
         setup["Flags"] = 0
         setup["SecurityMode"] = 1
@@ -93,6 +95,7 @@ class NXCModule:
         pkt = smb.SMB_PACKET()
         pkt["Command"] = SMB2_SESSION_SETUP
         pkt["Data"] = setup
+
         ans = smb.recvSMB(smb.sendSMB(pkt))
         if ans["Status"] != self.STATUS_MORE_PROCESSING_REQUIRED:
             return ans["Status"]
@@ -103,20 +106,26 @@ class NXCModule:
         except Exception:
             raw = resp["Buffer"]
             type2 = raw[raw.index(b"NTLMSSP"):]
+
         lm = nt = ""
         if nthash:
             lm = binascii.unhexlify("aad3b435b51404eeaad3b435b51404ee")
             nt = binascii.unhexlify(nthash)
+
+        # Create NTLM Type3 message (authentication)
         type3, _ = ntlm.getNTLMSSPType3(type1, type2, user, password, domain, lmhash=lm, nthash=nt)
         blob2 = SPNEGO_NegTokenResp()
         blob2["ResponseToken"] = type3.getData()
+
         setup2 = SMB2SessionSetup()
         setup2["Flags"] = 0
         setup2["SecurityMode"] = 1
         setup2["SecurityBufferLength"] = len(blob2.getData())
         setup2["Buffer"] = blob2.getData()
+
         pkt2 = smb.SMB_PACKET()
         pkt2["Command"] = SMB2_SESSION_SETUP
         pkt2["Data"] = setup2
+
         ans2 = smb.recvSMB(smb.sendSMB(pkt2))
         return ans2["Status"]
