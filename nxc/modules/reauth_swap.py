@@ -48,6 +48,45 @@ class NXCModule:
             context.log.fail("reauth_swap requires PROBE_PASS or PROBE_NTHASH for the second account")
             exit(1)
 
+    def on_login(self, context, connection):
+        if self.probe_user.lower() == (connection.username or "").lower():
+            context.log.fail("PROBE_USER must differ from the account nxc logged in with: only a cross-user swap is refused, so the same account always succeeds and tests nothing")
+            return
+
+        # without enforced signing there is nothing to bypass: a relayed auth is accepted directly
+        if not connection.signing:
+            context.log.info("SMB signing not enforced, nothing to bypass - skipping")
+            return
+
+        domain = connection.domain
+        prim_user = connection.username
+        prim_pass = connection.password or ""
+        prim_nthash = connection.nthash or ""
+
+        try:
+            # fresh session so nxc's own connection is left untouched
+            conn = SMBConnection(connection.remoteName, connection.host, preferredDialect=0x0311)
+            if connection.kerberos:
+                conn.kerberosLogin(prim_user, prim_pass, domain, connection.lmhash, prim_nthash, connection.aesKey or "", kdcHost=connection.kdcHost, useCache=bool(connection.use_kcache))
+            else:
+                conn.login(prim_user, prim_pass, domain, lmhash=connection.lmhash, nthash=prim_nthash)
+            try:
+                status = self.reauth_as(conn.getSMBServer(), self.probe_user, self.probe_pass, domain, self.probe_nthash)
+            finally:
+                with contextlib.suppress(Exception):
+                    conn.close()
+        except Exception as e:
+            context.log.info(f"could not probe this host: {e.__class__.__name__}: {e}")
+            return
+
+        if status == self.STATUS_SUCCESS:
+            context.log.highlight("VULNERABLE - enforced SMB signing bypassable")
+            context.log.highlight("Next step: https://blackfield.ch/blog/defeating-enforced-smb-signing/")
+        elif status == self.STATUS_ACCESS_DENIED:
+            context.log.display("not vulnerable - cross-user re-auth swap refused (ACCESS_DENIED), same-user re-auth only")
+        else:
+            context.log.display(f"inconclusive - second session setup returned 0x{status:08X}")
+
     def reauth_as(self, smb, user, password, domain, nthash):
         """Replay an NTLM (Type1/Type3) session setup as `user` on an EXISTING session; return the NTSTATUS."""
         type1 = ntlm.getNTLMSSPType1("", domain)
@@ -89,42 +128,3 @@ class NXCModule:
         pkt2["Data"] = setup2
         ans2 = smb.recvSMB(smb.sendSMB(pkt2))
         return ans2["Status"]
-
-    def on_login(self, context, connection):
-        if self.probe_user.lower() == (connection.username or "").lower():
-            context.log.fail("PROBE_USER must differ from the account nxc logged in with: only a cross-user swap is refused, so the same account always succeeds and tests nothing")
-            return
-
-        # without enforced signing there is nothing to bypass: a relayed auth is accepted directly
-        if not connection.signing:
-            context.log.info("SMB signing not enforced, nothing to bypass - skipping")
-            return
-
-        domain = connection.domain
-        prim_user = connection.username
-        prim_pass = connection.password or ""
-        prim_nthash = connection.nthash or ""
-
-        try:
-            # fresh session so nxc's own connection is left untouched
-            conn = SMBConnection(connection.remoteName, connection.host, preferredDialect=0x0311)
-            if connection.kerberos:
-                conn.kerberosLogin(prim_user, prim_pass, domain, connection.lmhash, prim_nthash, connection.aesKey or "", kdcHost=connection.kdcHost, useCache=bool(connection.use_kcache))
-            else:
-                conn.login(prim_user, prim_pass, domain, lmhash=connection.lmhash, nthash=prim_nthash)
-            try:
-                status = self.reauth_as(conn.getSMBServer(), self.probe_user, self.probe_pass, domain, self.probe_nthash)
-            finally:
-                with contextlib.suppress(Exception):
-                    conn.close()
-        except Exception as e:
-            context.log.info(f"could not probe this host: {e.__class__.__name__}: {e}")
-            return
-
-        if status == self.STATUS_SUCCESS:
-            context.log.highlight("VULNERABLE - enforced SMB signing bypassable")
-            context.log.highlight("Next step: https://blackfield.ch/blog/defeating-enforced-smb-signing/")
-        elif status == self.STATUS_ACCESS_DENIED:
-            context.log.display("not vulnerable - cross-user re-auth swap refused (ACCESS_DENIED), same-user re-auth only")
-        else:
-            context.log.display(f"inconclusive - second session setup returned 0x{status:08X}")
