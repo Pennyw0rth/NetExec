@@ -24,8 +24,6 @@ class NXCModule:
     name = "reauth_swap"
     description = "Check if the server allows a cross-user re-auth swap on an SMB session (used to defeat enforced signing); needs a 2nd account"
     supported_protocols = ["smb"]
-    opsec_safe = False  # performs an extra authentication with a second account
-    multiple_hosts = True
     category = CATEGORY.ENUMERATION
 
     STATUS_SUCCESS = 0x00000000
