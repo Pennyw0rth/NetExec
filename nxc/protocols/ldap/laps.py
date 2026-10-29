@@ -235,13 +235,13 @@ class LAPSv2Extract:
                 dce.connect()
             except Exception as e:
                 self.logger.error(f"Something went wrong, check error status => {e}")
-                return False
+                return None
             self.logger.info("Connected")
             try:
                 dce.bind(MSRPC_UUID_GKDI)
             except Exception as e:
                 self.logger.error(f"Something went wrong, check error status => {e!s}")
-                return False
+                return None
             self.logger.info("Successfully bound")
             self.logger.info("Calling MS-GKDI GetKey")
 
