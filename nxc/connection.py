@@ -109,9 +109,13 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
+        self.certificate_auth = bool(self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert)
+        self.unpac = bool(self.protocol == "smb" and self.args.unpac)         # defined by the smb proto_args only
+        self.schannel = bool(self.protocol == "ldap" and self.args.schannel)  # defined by the ldap proto_args only
         self.kerberos = bool(self.args.kerberos or
                              self.args.use_kcache or
                              self.args.aesKey or
+                             (self.certificate_auth and not self.schannel) or   # PKINIT yields a TGT, while Schannel binds the certificate to the LDAP channel itself
                              (hasattr(self.args, "delegate") and self.args.delegate) or
                              (hasattr(self.args, "generate_st") and self.args.generate_st) or
                              (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
@@ -119,7 +123,7 @@ class connection:
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
         self.failed_logins = 0
-        self.has_reusable_secret = not (self.protocol == "ldap" and self.args.schannel)   # a Schannel bind authenticates the LDAP connection only, leaving no secret for a second channel
+        self.has_reusable_secret = not self.schannel   # a Schannel bind authenticates the LDAP connection only, leaving no secret for a second channel
 
         # Network info
         self.domain = None
@@ -223,7 +227,7 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql"):
+            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql" and not self.certificate_auth):   # a failed certificate auth is not a null session
                 self.logger.debug("Calling command arguments")
                 self.call_cmd_args()
                 if self.args.module:
@@ -532,9 +536,9 @@ class connection:
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
 
-        if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
+        if self.certificate_auth:
             self.logger.debug("Trying to authenticate using Certificate pfx")
-            if self.args.protocol == "ldap" and self.args.schannel:
+            if self.schannel:
                 # Schannel maps the certificate to an account server-side, so the supplied username is ignored
                 with sem:
                     return self.plaintext_login(self.domain, "", "")
