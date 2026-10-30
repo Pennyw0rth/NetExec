@@ -64,6 +64,7 @@ from nxc.config import process_secret, host_info_colors, check_guest_account, di
 from nxc.connection import connection, sem, requires_admin
 from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
+from nxc.helpers.klist import klist_display, klist_dump_ccaches
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
@@ -1368,6 +1369,14 @@ class smb(connection):
             self.logger.success("Enumerated qwinsta sessions")
             for row in result:
                 self.logger.highlight(row)
+
+    @requires_admin
+    def klist(self):
+        klist_display(self)
+
+    @requires_admin
+    def klist_dump(self):
+        klist_dump_ccaches(self, self.args.klist_dump)
 
     @requires_admin
     def tasklist(self):
