@@ -40,7 +40,6 @@ class rdp(connection):
         self.domain = None
         self.server_os = None
         self.iosettings = RDPIOSettings()
-        self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
             SUPP_PROTOCOLS.SSL,
@@ -60,8 +59,8 @@ class rdp(connection):
         # servers dont support 8 any more :/
         self.iosettings.video_bpp_min = 15
         self.iosettings.video_bpp_max = 32
-        # PIL produces incorrect picture for some reason?! TODO: check bug
-        self.iosettings.video_out_format = VIDEO_FORMAT.PNG  #
+        # screenshots read the desktop buffer, so don't PNG-encode every update put on ext_out_queue
+        self.iosettings.video_out_format = VIDEO_FORMAT.PIL
         self.domain = None
         self.server_os = None
         self.url = None
@@ -69,6 +68,7 @@ class rdp(connection):
         self.hybrid = False
         self.target = None
         self.auth = None
+        self.screen_conn = None
 
         self.rdp_error_status = {
             "0xc0000071": "STATUS_PASSWORD_EXPIRED",
@@ -136,14 +136,14 @@ class rdp(connection):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
-        asyncio.run(self.check_nla())
+        self.runner.run(self.check_nla())
 
         for proto in reversed(self.protoflags):
             try:
                 self.conn = self._create_rdp_connection(
                     self.auth, supported_protocols=proto
                 )
-                asyncio.run(self.connect_rdp_with_cleanup())
+                self.runner.run(self.connect_rdp_with_cleanup())
             except OSError as e:
                 if "Errno 104" not in str(e):
                     return False
@@ -198,13 +198,15 @@ class rdp(connection):
 
     async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
+        probe_connection = None
         try:
             self.conn = self._create_rdp_connection(
                 None, supported_protocols=SUPP_PROTOCOLS.SSL
             )
             packetizer = TPKTPacketizer()
             client = UniClient(self.target, packetizer)
-            self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            probe_connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            self.conn._connection = probe_connection
             self.conn._x224net = X224Network(self.conn._connection)
             _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
             # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
@@ -213,6 +215,10 @@ class rdp(connection):
                 return
         except Exception:
             pass
+        finally:
+            # this probe socket is not owned by aardwolf, terminate() would not close it
+            if probe_connection is not None:
+                await probe_connection.close()
 
     async def connect_rdp(self, auth_only=False):
         """Connect to the RDP server. Does NOT clean up on exit.
@@ -226,11 +232,12 @@ class rdp(connection):
             raise err
         self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
 
-    async def terminate_conn(self):
-        """Terminate the RDP connection with a timeout so cleanup doesn't hang."""
-        if self.conn is not None:
+    async def terminate_conn(self, conn=None):
+        """Terminate the RDP connection (self.conn unless given) with a timeout so cleanup doesn't hang."""
+        conn = conn or self.conn
+        if conn is not None:
             with contextlib.suppress(Exception):
-                await asyncio.wait_for(self.conn.terminate(), timeout=self.args.rdp_timeout)
+                await asyncio.wait_for(conn.terminate(), timeout=self.args.rdp_timeout)
 
     async def connect_rdp_with_cleanup(self, auth_only=False):
         """Connect to the RDP server and always terminate the connection on exit"""
@@ -240,10 +247,14 @@ class rdp(connection):
             await self.terminate_conn()
 
     async def login_and_confirm(self):
-        """Connect and return whether a real session opened (Save Session Info PDU), always cleaning up.
+        """Connect and return whether a real session opened (Save Session Info PDU).
 
         That PDU never comes when access is authorized but the logon is refused (restricted admin).
+        With --screenshot the session of the last successful login stays open for screen(), so the screenshot needs no second logon.
         """
+        if self.screen_conn is not None:  # drop the session an earlier success kept (--continue-on-success) before it takes a session slot this logon needs
+            await self.terminate_conn(self.screen_conn)
+            self.screen_conn = None
         try:
             await self.connect_rdp()
             try:
@@ -253,7 +264,10 @@ class rdp(connection):
                 self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
                 return False
         finally:
-            await self.terminate_conn()
+            if self.args.screenshot and not self.conn.disconnected_evt.is_set():
+                self.screen_conn = self.conn
+            else:
+                await self.terminate_conn()
 
     def rdp_access_denied(self):
         """Whether the Early User Authorization Result PDU says the account has no RDP access right at all.
@@ -264,6 +278,7 @@ class rdp(connection):
         return self.conn.authz_result == AUTHZ_ACCESS_DENIED
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        self.username = username
         try:
             lmhash = ""
             nthash = ""
@@ -327,13 +342,13 @@ class rdp(connection):
                 # raises, so fall back to a full confirm on a FRESH connection (the failed one is
                 # already torn down and cannot be reconnected), which also sets admin_privs.
                 try:
-                    asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                    self.runner.run(self.connect_rdp_with_cleanup(auth_only=True))
                 except RuntimeError as e:
                     self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
                     self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = asyncio.run(self.login_and_confirm())
+                    self.admin_privs = self.runner.run(self.login_and_confirm())
             else:
-                self.admin_privs = asyncio.run(self.login_and_confirm())
+                self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(
                 "{}\\{}{} {}".format(
@@ -387,6 +402,7 @@ class rdp(connection):
         return bool(self.args.execute or self.args.ps_execute)
 
     def plaintext_login(self, domain, username, password):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=password,
@@ -402,13 +418,13 @@ class rdp(connection):
                 # raises, so fall back to a full confirm on a FRESH connection (the failed one is
                 # already torn down and cannot be reconnected), which also sets admin_privs.
                 try:
-                    asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                    self.runner.run(self.connect_rdp_with_cleanup(auth_only=True))
                 except RuntimeError as e:
                     self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
                     self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = asyncio.run(self.login_and_confirm())
+                    self.admin_privs = self.runner.run(self.login_and_confirm())
             else:
-                self.admin_privs = asyncio.run(self.login_and_confirm())
+                self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -436,6 +452,7 @@ class rdp(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=ntlm_hash,
@@ -451,13 +468,13 @@ class rdp(connection):
                 # raises, so fall back to a full confirm on a FRESH connection (the failed one is
                 # already torn down and cannot be reconnected), which also sets admin_privs.
                 try:
-                    asyncio.run(self.connect_rdp_with_cleanup(auth_only=True))
+                    self.runner.run(self.connect_rdp_with_cleanup(auth_only=True))
                 except RuntimeError as e:
                     self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
                     self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = asyncio.run(self.login_and_confirm())
+                    self.admin_privs = self.runner.run(self.login_and_confirm())
             else:
-                self.admin_privs = asyncio.run(self.login_and_confirm())
+                self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -760,7 +777,7 @@ Add-Type -AssemblyName System.Windows.Forms
         self.logger.success(f"Executing command: {payload}")
 
         try:
-            result = asyncio.run(self.execute_shell(payload, get_output, shell_type))
+            result = self.runner.run(self.execute_shell(payload, get_output, shell_type))
 
             if result is not None:
                 self.logger.debug("Command execution completed")
@@ -772,29 +789,36 @@ Add-Type -AssemblyName System.Windows.Forms
     def ps_execute(self):
         self.execute(payload=self.args.ps_execute, shell_type="powershell")
 
-    async def screen(self):
-        try:
-            self.conn = self._create_rdp_connection(self.auth)
-            await self.connect_rdp()
+    async def save_screenshot(self, desktop, label):
+        filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
+        filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
+        desktop.save(filename, "png")
+        self.logger.highlight(f"{label} saved {filename}")
 
-            await asyncio.sleep(5)
-            if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-                buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
-                filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
-                buffer.save(filename, "png")
-                self.logger.highlight(f"Screenshot saved {filename}")
+    async def screen(self):
+        # reuse the session left open by the login, or open one when the login only checked the credentials (-x/-X)
+        try:
+            if self.screen_conn is None:
+                self.conn = self._create_rdp_connection(self.auth)
+                await self.connect_rdp()
+            else:
+                self.conn, self.screen_conn = self.screen_conn, None
+            await asyncio.sleep(self.args.screentime)
+            if self.conn.desktop_buffer_has_data:
+                await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "Screenshot")
+            else:
+                self.logger.fail(f"No desktop data after {self.args.screentime}s, try a longer --screentime")
         except Exception as e:
-            self.logger.debug(f"Error taking screenshot: {e!s}")
+            self.logger.fail(f"Could not take the screenshot: {e!s}")
         finally:
             await self.terminate_conn()
 
     def screenshot(self):
-        asyncio.run(self.screen())
+        self.runner.run(self.screen())
 
     async def nla_screen(self):
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
-
+        connected = False
         for proto in self.protoflags_nla:
             try:
                 self.conn = self._create_rdp_connection(
@@ -806,18 +830,25 @@ Add-Type -AssemblyName System.Windows.Forms
                 await self.terminate_conn()
                 continue
 
+            connected = True
             try:
-                await asyncio.sleep(int(self.args.screentime))
+                await asyncio.sleep(self.args.screentime)
                 if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-                    buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                    filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
-                    filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
-                    buffer.save(filename, "png")
-                    self.logger.highlight(f"NLA Screenshot saved {filename}")
+                    await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "NLA Screenshot")
                     return
             finally:
                 await self.terminate_conn()
+        self.logger.fail(f"No login screen data after {self.args.screentime}s, try a longer --screentime" if connected else "Could not connect without NLA to capture the login screen")
 
     def nla_screenshot(self):
         if not self.nla:
-            asyncio.run(self.nla_screen())
+            self.runner.run(self.nla_screen())
+
+    def proto_flow(self):
+        # one event loop per target, so the session opened by the login can be reused by --screenshot
+        with asyncio.Runner() as self.runner:
+            try:
+                super().proto_flow()
+            finally:
+                if self.screen_conn is not None:  # the login kept a session that screen() did not use
+                    self.runner.run(self.terminate_conn(self.screen_conn))
