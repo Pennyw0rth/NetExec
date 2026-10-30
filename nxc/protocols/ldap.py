@@ -1778,7 +1778,7 @@ class ldap(connection):
             if self.args.kerberos:
                 self.logger.highlight("Using kerberos auth without ccache, getting TGT")
                 auth.get_tgt()
-            if self.args.use_kcache:
+            if self.use_kcache:
                 self.logger.highlight("Using kerberos auth from ccache")
                 auth.load_ccache()
 
