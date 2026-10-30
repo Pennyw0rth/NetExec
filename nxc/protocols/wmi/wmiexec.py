@@ -57,10 +57,40 @@ class WMIEXEC:
 
     def execute_remote(self, command):
         self.logger.info(f"Executing command: {command}")
+        process = self.__win32Process.Create(command, self.__pwd, None)
+        if process.ReturnValue != 0:
+            raise Exception(f"Win32_Process.Create returned {process.ReturnValue}")
+        return process.ProcessId
+
+    def wait_for_process(self, pid, timeout):
+        """Poll Win32_Process until the process and its children have exited or the timeout (in seconds) is reached"""
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            time.sleep(0.1)
+            try:
+                self.__iWbemServices.GetObject(f'Win32_Process.Handle="{pid}"')
+            except Exception as e:
+                if "WBEM_E_NOT_FOUND" not in str(e):
+                    self.logger.debug(f"Could not query process {pid}: {e}")
+                    continue
+                # Children (e.g. "start /b") keep the ParentProcessId after the parent exits and may still hold the output file open
+                while time.monotonic() < end and self.has_children(pid):
+                    time.sleep(0.2)
+                return
+
+    def has_children(self, pid):
         try:
-            self.__win32Process.Create(command, self.__pwd, None)
+            enum = self.__iWbemServices.ExecQuery(f"SELECT ProcessId FROM Win32_Process WHERE ParentProcessId = {pid}")
         except Exception as e:
-            self.logger.error(str(e))
+            self.logger.debug(f"Could not query children of process {pid}: {e}")
+            return False
+        try:
+            enum.Next(0xFFFFFFFF, 1)
+            return True
+        except Exception:
+            return False
+        finally:
+            enum.RemRelease()
 
     def execute_WithOutput(self, command):
         result_output = f"C:\\windows\\temp\\{uuid.uuid4()!s}.txt"
@@ -69,17 +99,11 @@ class WMIEXEC:
         self.__registry_Path = f"Software\\Classes\\{gen_random_string(8)}"
 
         # 1. Run the command and write output to file
-        self.execute_remote(f'{self.__shell} ({command}) 1> "{result_output}" 2>&1')
-        self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
-        time.sleep(self.__exec_timeout)
+        self.logger.info(f"Waiting up to {self.__exec_timeout}s for command to complete.")
+        self.wait_for_process(self.execute_remote(f'{self.__shell} ({command}) 1> "{result_output}" 2>&1'), self.__exec_timeout)
 
-        # 2. Base64 encode the file
-        self.execute_remote(f"{self.__shell} certutil -encodehex -f {result_output} {result_output_b64} 0x40000001")
-        time.sleep(0.5)
-
-        # 3. Store content in registry
-        self.execute_remote(f'{self.__shell} for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f')
-        time.sleep(0.1)
+        # 2. Base64 encode the file and store content in registry
+        self.wait_for_process(self.execute_remote(f'{self.__shell} certutil -encodehex -f {result_output} {result_output_b64} 0x40000001 & for /F "usebackq" %G in ("{result_output_b64}") do reg add HKLM\\{self.__registry_Path} /v {keyName} /t REG_SZ /d "%G" /f'), self.__exec_timeout)
 
         self.queryRegistry(keyName)
         self.clean_up(result_output, result_output_b64)
@@ -112,16 +136,14 @@ class WMIEXEC:
         # 1. Run the command and write output to file
         if not command.lower().startswith("powershell"):
             command = f'powershell -Command "& {{{command}}}"'
-        self.execute_remote(f'{command} > "{result_output}" 2>&1')
-        self.logger.info(f"Waiting {self.__exec_timeout}s for command to complete.")
-        time.sleep(self.__exec_timeout)
+        self.logger.info(f"Waiting up to {self.__exec_timeout}s for command to complete.")
+        self.wait_for_process(self.execute_remote(f'{command} > "{result_output}" 2>&1'), self.__exec_timeout)
 
         # 2. Base64 encode the file using PowerShell
-        self.execute_remote(f'powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"')
-        time.sleep(0.5)
+        self.wait_for_process(self.execute_remote(f'powershell -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes(\'{result_output}\')) | Out-File -Encoding ASCII \'{result_output_b64}\'"'), self.__exec_timeout)
 
         # 3. Use PowerShell to split base64 content into 16KB chunks and store in registry
-        self.execute_remote(
+        self.wait_for_process(self.execute_remote(
             f'powershell -Command "$b64 = Get-Content -Raw \'{result_output_b64}\'; '
             f'$chunksize = 16000; '
             f'$count = [math]::Ceiling($b64.Length / $chunksize); '
@@ -130,8 +152,7 @@ class WMIEXEC:
             f'  $name = \\"{keyName}_chunk_$i\\"; '
             f'  reg add \\"HKLM\\{self.__registry_Path}\\" /v $name /t REG_SZ /d $chunk /f }}; '
             f'reg add \\"HKLM\\{self.__registry_Path}\\" /v \\"{keyName}\\" /t REG_DWORD /d $count /f"'
-        )
-        time.sleep(0.1)
+        ), self.__exec_timeout)
 
         self.queryRegistry_psh(keyName)
         self.clean_up(result_output, result_output_b64)

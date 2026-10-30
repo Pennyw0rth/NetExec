@@ -771,17 +771,18 @@ class wmi(connection):
                 self.args.codec,
                 self.get_namespace("//./root/subscription")
             )
-        output = exec_method.execute(command, get_output, use_powershell=use_powershell)
+        try:
+            output = exec_method.execute(command, get_output, use_powershell=use_powershell)
+        except Exception as e:
+            self.logger.fail(f"Execute command failed with {self.args.exec_method}: {e}")
+            return ""
 
-        if self.args.execute and get_output:
-            self.logger.success(f'Executed command: "{command}" via {self.args.exec_method}')
-            buf = StringIO(output).readlines()
-            for line in buf:
+        if get_output and (self.args.execute_psh if use_powershell else self.args.execute):
+            self.logger.success(f'Executed {"PowerShell " if use_powershell else ""}command: "{command}" via {self.args.exec_method}')
+            for line in StringIO(output).readlines():
                 if line.strip():
                     self.logger.highlight(line.strip())
-            return output
-        else:
-            return output
+        return output
 
     def execute_psh(self, command=None, get_output=False):
         # Execution via -X
@@ -789,18 +790,7 @@ class wmi(connection):
             command = self.args.execute_psh
             if not self.args.no_output:
                 get_output = True
-
-        output = self.execute(command, get_output, use_powershell=True)
-
-        if self.args.execute_psh and get_output:
-            self.logger.success(f'Executed PowerShell command: "{command}" via {self.args.exec_method}')
-            buf = StringIO(output).readlines()
-            for line in buf:
-                if line.strip():
-                    self.logger.highlight(line.strip())
-            return output
-        else:
-            return output
+        return self.execute(command, get_output, use_powershell=True)
 
     def get_namespace(self, namespace: str) -> IWbemServices:
         """Load WMI namespaces and place them in cache. If a namespace is already loaded in cache, return the namespace in cache"""
