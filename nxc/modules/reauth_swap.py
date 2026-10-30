@@ -17,7 +17,9 @@ class NXCModule:
     log in as one account, then re-authenticate as a different one on the same connection. That swap
     is the primitive an auth relay uses to keep a privileged session under a signing key it controls,
     defeating enforced SMB signing. Recent Windows builds allow same-user re-auth only and refuse the
-    swap with ACCESS_DENIED. Not derivable from the build number, so it is probed live.
+    swap with ACCESS_DENIED. Microsoft fixed this server-side as CVE-2026-69676 (September 2026
+    cumulative updates). Not derivable from the build number (feature-flagged: the same build can
+    allow or refuse it), so it is probed live.
     https://blackfield.ch/blog/defeating-enforced-smb-signing/
     """
     name = "reauth_swap"
@@ -28,6 +30,8 @@ class NXCModule:
     STATUS_SUCCESS = 0x00000000
     STATUS_MORE_PROCESSING_REQUIRED = 0xC0000016
     STATUS_ACCESS_DENIED = 0xC0000022
+    STATUS_LOGON_FAILURE = 0xC000006D
+    STATUS_ACCOUNT_LOCKED_OUT = 0xC0000234
 
     def options(self, context, module_options):
         """
@@ -36,6 +40,13 @@ class NXCModule:
         PROBE_NTHASH    second account NT hash (instead of PROBE_PASS)
 
         The second account is probed over NTLM; its privileges do not matter.
+
+        Lockout warning: every target triggers one real NTLM logon as PROBE_USER
+        (in the login account's domain). A correct password never increments
+        badPwdCount, whether the host is patched (ACCESS_DENIED) or not (SUCCESS).
+        A wrong PROBE_PASS/PROBE_NTHASH, or a PROBE_USER that does not exist in that
+        domain, returns LOGON_FAILURE and raises badPwdCount once per host.
+        Validate PROBE_USER on a single host before running wide.
         """
         self.probe_user = module_options.get("PROBE_USER")
         self.probe_pass = module_options.get("PROBE_PASS", "")
@@ -74,6 +85,10 @@ class NXCModule:
             context.log.highlight("Next step: https://blackfield.ch/blog/defeating-enforced-smb-signing/")
         elif status == self.STATUS_ACCESS_DENIED:
             context.log.display("not vulnerable - cross-user re-auth swap refused (ACCESS_DENIED), same-user re-auth only")
+        elif status == self.STATUS_LOGON_FAILURE:
+            context.log.fail("PROBE_USER login failed (LOGON_FAILURE) - stop before repeated attempts lock the account out")
+        elif status == self.STATUS_ACCOUNT_LOCKED_OUT:
+            context.log.fail("PROBE_USER is locked out (ACCOUNT_LOCKED_OUT) - stop and let it reset")
         else:
             context.log.display(f"inconclusive - second session setup returned 0x{status:08X}")
 
