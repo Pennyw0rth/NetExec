@@ -91,11 +91,10 @@ def build_admin_check_request(timeout=20, session_id=None):
 class KerberosFallbackTransport:
     """Kerberos transport which retries through Negotiate when GSS fails."""
 
-    def __init__(self, url, credentials, timeout):
+    def __init__(self, url, credentials):
         self.url = url
         self.credentials = credentials
-        self.timeout = timeout
-        self.transport = KerberosTransport(url, credentials, timeout=timeout)
+        self.transport = KerberosTransport(url, credentials)
         self.fallback_attempted = False
 
     def send(self, request):
@@ -107,7 +106,7 @@ class KerberosFallbackTransport:
 
             self.fallback_attempted = True
             self.transport.close()
-            self.transport = NegotiateTransport(self.url, self.credentials, timeout=self.timeout)
+            self.transport = NegotiateTransport(self.url, self.credentials)
             return self.transport.send(request)
 
     def close(self):
@@ -238,7 +237,7 @@ class winrm(connection):
     def connect_winrs(self, username, password=None, hashes=None, use_cache=False):
         self.disconnect()
 
-        timeout = self.args.http_timeout
+        # Like on main, --http-timeout only covers the probe: impacket's WinRS timeouts keep the socket (30s) above the operation timeout (20s)
         url = self.endpoint
         lmhash, nthash = parse_hashes(hashes or "")
 
@@ -255,13 +254,13 @@ class winrm(connection):
             if not self.ssl:
                 raise WinRMTransportError("Client certificate authentication requires HTTPS")
 
-            transport = ClientCertificateTransport(url, cert_pem, cert_key, timeout=timeout)
+            transport = ClientCertificateTransport(url, cert_pem, cert_key)
 
         elif use_basic:
             if not username or password is None or password == "":
                 raise WinRMTransportError("Basic authentication requires a username and password")
 
-            transport = BasicTransport(url, username, password, timeout=timeout)
+            transport = BasicTransport(url, username, password)
 
         elif self.kerberos:
             kerberos_credentials = get_kerberos_credential(f"HTTP/{self.hostname}", domain=self.domain, username=username, password=password or "", lmhash=lmhash, nthash=nthash, aes_key=self.aesKey, kdc_host=self.kdcHost, use_cache=use_cache)
@@ -270,9 +269,9 @@ class winrm(connection):
                 if not kerberos_credentials.password:
                     raise WinRMTransportError("CredSSP needs a plaintext password, even when using Kerberos")
 
-                transport = CredSSPTransport(url, kerberos_credentials, timeout=timeout)
+                transport = CredSSPTransport(url, kerberos_credentials)
             else:
-                transport = KerberosFallbackTransport(url, kerberos_credentials, timeout=timeout)
+                transport = KerberosFallbackTransport(url, kerberos_credentials)
 
         else:
             credentials = NTCredential(
@@ -287,11 +286,11 @@ class winrm(connection):
                 if not credentials.username or not credentials.password:
                     raise WinRMTransportError("CredSSP needs a username and plaintext password")
 
-                transport = CredSSPTransport(url, credentials, timeout=timeout)
+                transport = CredSSPTransport(url, credentials)
             else:
-                transport = NegotiateTransport(url, credentials, timeout=timeout)
+                transport = NegotiateTransport(url, credentials)
 
-        self.conn = WinRSClient(transport, timeout=timeout)
+        self.conn = WinRSClient(transport)
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
