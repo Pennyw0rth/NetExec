@@ -110,12 +110,10 @@ class connection:
         self.password = ""
         self.username = ""
         self.certificate_auth = bool(self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert)
-        self.unpac = bool(self.protocol == "smb" and self.args.unpac)         # defined by the smb proto_args only
-        self.schannel = bool(self.protocol == "ldap" and self.args.schannel)  # defined by the ldap proto_args only
         self.kerberos = bool(self.args.kerberos or
                              self.args.use_kcache or
                              self.args.aesKey or
-                             (self.certificate_auth and not self.schannel) or   # PKINIT yields a TGT, while Schannel binds the certificate to the LDAP channel itself
+                             (self.certificate_auth and not (self.protocol == "ldap" and self.args.schannel)) or   # PKINIT yields a TGT, while Schannel binds the certificate to the LDAP channel itself
                              (hasattr(self.args, "delegate") and self.args.delegate) or
                              (hasattr(self.args, "generate_st") and self.args.generate_st) or
                              (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
@@ -123,7 +121,7 @@ class connection:
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
         self.failed_logins = 0
-        self.has_reusable_secret = not self.schannel   # a Schannel bind authenticates the LDAP connection only, leaving no secret for a second channel
+        self.has_reusable_secret = not (self.protocol == "ldap" and self.args.schannel)   # a Schannel bind authenticates the LDAP connection only, leaving no secret for a second channel
 
         # Network info
         self.domain = None
@@ -538,16 +536,16 @@ class connection:
 
         if self.certificate_auth:
             self.logger.debug("Trying to authenticate using Certificate pfx")
-            if self.schannel:
+            if self.args.protocol == "ldap" and self.args.schannel:
                 # Schannel maps the certificate to an account server-side, so the supplied username is ignored
                 with sem:
                     return self.plaintext_login(self.domain, "", "")
-            if not self.args.username:
+            if not username:
                 self.logger.fail("You must specify a username when using certificate authentication")
                 return False
             with sem:
                 from nxc.helpers.pfx import pfx_auth
-                return pfx_auth(self)
+                return pfx_auth(self, domain[0], username[0])
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")

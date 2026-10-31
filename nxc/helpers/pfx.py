@@ -143,11 +143,10 @@ def unpac_the_hash(connection, username, tgt, cipher, reply_key, session_key):
         return None
 
 
-def pfx_auth(self):
+def pfx_auth(self, domain, username):
     """Authenticate with a client certificate through PKINIT, then optionally unPAC the NT hash"""
-    username = self.args.username[0]
     if not self.kdcHost:
-        self.logger.fail(f"Could not resolve KDC host for domain {self.domain}. Use --kdcHost to specify the domain controller IP")
+        self.logger.fail(f"Could not resolve KDC host for domain {domain}. Use --kdcHost to specify the domain controller IP")
         return False
 
     self.logger.info("Loading certificate and key from file")
@@ -164,10 +163,10 @@ def pfx_auth(self):
         self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
         return False
 
-    self.logger.info(f"Requesting TGT for {username}@{self.domain} with the certificate")
+    self.logger.info(f"Requesting TGT for {username}@{domain} with the certificate")
     client_name = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
     try:
-        tgt, cipher, reply_key, session_key = getKerberosTGTPKINIT(client_name, self.domain, credentials, kdcHost=self.kdcHost)
+        tgt, cipher, reply_key, session_key = getKerberosTGTPKINIT(client_name, domain, credentials, kdcHost=self.kdcHost)
     except (PKINITError, KerberosError, OSError) as e:
         self.logger.fail(f"Failed to get a TGT with the certificate: {e}")
         return False
@@ -181,18 +180,18 @@ def pfx_auth(self):
 
     if self.protocol == "winrm":   # nxc winrm has no Kerberos login: log in over NTLM with the unPACed hash, as before
         nthash = unpac_the_hash(self, username, tgt, cipher, reply_key, session_key)
-        return bool(nthash) and self.hash_login(self.domain, username, nthash)
+        return bool(nthash) and self.hash_login(domain, username, nthash)
 
     # Impacket reads the TGT of a Kerberos login from the cache this variable points at, for the whole process
     os.environ["KRB5CCNAME"] = ccache_path
     self.use_kcache = True
-    logged_in = self.kerberos_login(self.domain, username, "", "", "", self.kdcHost, True)
+    logged_in = self.kerberos_login(domain, username, "", "", "", self.kdcHost, True)
 
-    if self.unpac:
+    if self.protocol == "smb" and self.args.unpac:
         nthash = unpac_the_hash(self, username, tgt, cipher, reply_key, session_key)
         if nthash:
-            self.logger.highlight(f"{self.domain}\\{username} NT hash: {nthash}")
-            self.db.add_credential("hash", self.domain, username, nthash)
+            self.logger.highlight(f"{domain}\\{username} NT hash: {nthash}")
+            self.db.add_credential("hash", domain, username, nthash)
 
     return logged_in
 
