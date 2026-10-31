@@ -33,7 +33,6 @@ from impacket.winrm import (
     get_kerberos_credential,
     _build_envelope
 )
-from impacket.krb5.kerberosv5 import SessionError
 
 
 urllib3.disable_warnings()
@@ -274,18 +273,13 @@ class winrm(connection):
                 pass
             self._transport = None
 
-    def _connect_winrs(self, username, password=None, hashes=None):
+    def _connect_winrs(self, username, password=None, hashes=None, use_cache=False):
         self._close_winrs()
 
-        timeout = getattr(self.args, "http_timeout", 1) or 1
+        timeout = self.args.http_timeout
         url = self._winrm_url()
         lmhash, nthash = _parse_hashes(hashes or "")
 
-        use_kerberos = bool(
-            getattr(self, "kerberos", False)
-            or getattr(self.args, "kerberos", False)
-            or getattr(self.args, "k", False)
-        )
         use_basic = bool(getattr(self.args, "basic", False))
         use_credssp = bool(getattr(self.args, "credssp", False))
 
@@ -307,44 +301,8 @@ class winrm(connection):
 
             transport = BasicTransport(url, username, password, timeout=timeout)
 
-        elif use_kerberos:
-            target_hostname = self.hostname or self.host
-            if not target_hostname:
-                raise WinRMTransportError("Unable to determine the target hostname for Kerberos")
-
-            spn = f"HTTP/{target_hostname}"
-
-            aes_key = (
-                getattr(self, "aesKey", None)
-                or getattr(self.args, "aesKey", "")
-                or getattr(self.args, "aes_key", "")
-            )
-
-            if isinstance(aes_key, (list, tuple)):
-                aes_key = aes_key[0] if aes_key else ""
-
-            kdc_host = (
-                getattr(self.args, "dc_ip", None)
-                or getattr(self, "kdcHost", None)
-            )
-
-            try:
-                kerberos_credentials = get_kerberos_credential(
-                    spn,
-                    domain=self.domain,
-                    username=username,
-                    password=password or "",
-                    lmhash=lmhash,
-                    nthash=nthash,
-                    aes_key=aes_key,
-                    kdc_host=kdc_host,
-                    use_cache=True,
-                )
-            except SessionError as e:
-                error = str(e)
-                if "KDC_ERR_S_PRINCIPAL_UNKNOWN" in error:
-                    raise WinRMTransportError("KDC_ERR_S_PRINCIPAL_UNKNOWN: unable to find Kerberos service principal")
-                raise WinRMTransportError(error) from e
+        elif self.kerberos:
+            kerberos_credentials = get_kerberos_credential(f"HTTP/{self.hostname}", domain=self.domain, username=username, password=password or "", lmhash=lmhash, nthash=nthash, aes_key=self.aesKey, kdc_host=self.kdcHost, use_cache=use_cache)
 
             if use_credssp:
                 if not kerberos_credentials.password:
@@ -381,18 +339,18 @@ class winrm(connection):
         self.domain = domain
         self.username = username
         self.password = password or ""
+        secret = aesKey or ntlm_hash or password
+        used_ccache = " from ccache" if useCache else f":{process_secret(secret)}"
 
         try:
             self.kdcHost = kdcHost or self.kdcHost
             if aesKey:
                 self.aesKey = aesKey
 
-            self._connect_winrs(username, password=password, hashes=ntlm_hash)
+            self._connect_winrs(username, password=password, hashes=ntlm_hash, use_cache=useCache)
 
             self.check_if_admin()
-            secret = aesKey or ntlm_hash or password
-            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(secret)} {self.mark_pwned()}"
-            )
+            self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
             cred_type = "hash" if ntlm_hash or aesKey else "plaintext"
 
@@ -410,8 +368,7 @@ class winrm(connection):
             return True
 
         except Exception as e:
-            secret = aesKey or ntlm_hash or password
-            self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(secret)} {e!s}")
+            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} {e!s}")
             self._close_winrs()
             return False
 
