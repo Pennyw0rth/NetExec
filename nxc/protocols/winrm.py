@@ -311,15 +311,17 @@ class winrm(connection):
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
 
-            cred_type = "hash" if ntlm_hash or aesKey else "plaintext"
-
-            self.db.add_credential(cred_type, domain, self.username, secret)
-            user_id = self.db.get_credential(cred_type, domain, self.username, secret)
-            host_id = self.db.get_hosts(self.host)[0].id
-            self.db.add_loggedin_relation(user_id, host_id)
+            # The creds DB only holds passwords and NT hashes, not AES keys or ccache logins
+            if not aesKey and not useCache:
+                cred_type = "hash" if ntlm_hash else "plaintext"
+                self.db.add_credential(cred_type, domain, self.username, secret)
+                user_id = self.db.get_credential(cred_type, domain, self.username, secret)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
+                if self.admin_privs:
+                    self.db.add_admin_user(cred_type, domain, self.username, secret, self.host, user_id=user_id)
 
             if self.admin_privs:
-                self.db.add_admin_user(cred_type, domain, self.username, secret, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if self.username:
