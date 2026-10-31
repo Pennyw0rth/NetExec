@@ -1,9 +1,11 @@
 from io import BytesIO
 from os import makedirs
-from os.path import join, abspath
+from os.path import join
+from pathlib import Path
 import re
 import time
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 from impacket.smbconnection import SessionError
 
@@ -161,9 +163,12 @@ class NXCModule:
                                     content_lines.append(string)  # Store the string value only
 
                             # Save to file
-                            filename = f"{connection.host}_{directory.get_longname()}_notepad_tabstate_{found}.txt"
+                            filename = sanitize_path_component(f"{connection.host}_{directory.get_longname()}_notepad_tabstate_{found}.txt")
                             export_path = join(NXC_PATH, "modules", "notepad")
-                            path = abspath(join(export_path, filename))
+                            path = Path(export_path, filename).resolve()
+                            if Path(export_path).resolve() not in path.parents:
+                                context.log.fail(f"Path traversal detected in {filename!r}, skipping")
+                                continue
                             makedirs(export_path, exist_ok=True)
 
                             with open(path, "w+") as output_file:

@@ -63,7 +63,7 @@ class NXCModule:
         if len(answers) > 0:
             context.log.success("Found following users: ")
             for answer in answers:
-                context.log.highlight(f"User: {answer[0]} description: {answer[1]}")
+                context.log.highlight(f"User: {answer[0]:<20} description: {answer[1]}")
 
     def filter_answer(self, context, answers):
         # No option to filter

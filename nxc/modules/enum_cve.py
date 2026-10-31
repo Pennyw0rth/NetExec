@@ -36,6 +36,7 @@ class NXCModule:
         - CVE-2024-49019 (EKUwu / ESC15)
         - CVE-2026-54121 (Certighost)
         - CVE-2026-27912 (ResetNightmare)
+        - CVE-2026-102217 (PetitPotam WebDAV coercion)
 
         CVE             Filter for specific CVE number (default: All)
         EXPLOITATION    Also provide sources for exploitation details (default: False)
@@ -220,5 +221,25 @@ class NXCModule:
             },
             "message": "Password reset of any account possible via Kerberos change password abuse",
             "exploitation": "https://www.semperis.com/blog/identity-crisis-novel-vulnerabilities-leading-to-kerberos-downgrade-dos-and-full-domain-takeover/",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-102217
+        "CVE-2026-102217": {
+            "alias": "PetitPotam WebDAV coercion",
+            "patches": {
+                (6, 2, 9200): 26434,      # Windows Server 2012
+                (6, 3, 9600): 23470,      # Windows Server 2012 R2
+                (10, 0, 14393): 9612,     # Windows Server 2016
+                (10, 0, 17763): 9376,     # Windows Server 2019
+                (10, 0, 19044): 7807,     # Windows 10 21H2
+                (10, 0, 19045): 7807,     # Windows 10 22H2
+                (10, 0, 20348): 5761,     # Windows Server 2022
+                (10, 0, 22631): 7652,     # Windows 11 23H2
+                (10, 0, 26100): 33650,    # Windows Server 2025 (Win11 24H2 ships the same build patched at 9711)
+                (10, 0, 26200): 9711,     # Windows 11 25H2
+                (10, 0, 26300): 9711,     # Windows 11 26H2
+                (10, 0, 28000): 3231,     # Windows 11 26H1
+            },
+            "message": "PetitPotam (EFSRPC) can coerce to a WebDAV listener, the HTTP authentication can be relayed to LDAP/LDAPS",
+            "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
         },
     }

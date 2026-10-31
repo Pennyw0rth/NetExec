@@ -12,7 +12,6 @@ from re import sub, IGNORECASE
 from zipfile import ZipFile
 from termcolor import colored
 from dns import resolver
-from dateutil.relativedelta import relativedelta as rd
 
 from OpenSSL.SSL import SysCallError
 from bloodhound.ad.authentication import ADAuthentication
@@ -41,7 +40,8 @@ from impacket.ntlm import getNTLMSSPType1
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
-from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument
+from nxc.helpers.pfx import certificate_options
+from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument, sanitize_dns
 from nxc.logger import NXCAdapter
 from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
@@ -64,6 +64,9 @@ ldap_error_status = {
     "KDC_ERR_CLIENT_REVOKED": "KDC_ERR_CLIENT_REVOKED",
     "KDC_ERR_PREAUTH_FAILED": "KDC_ERR_PREAUTH_FAILED",
 }
+
+# LDAP authenticationChoice sent to the DC, as displayed to the operator
+auth_methods = {"sasl": "NTLM", "simple": "SIMPLE bind", "external": "Schannel"}
 
 
 class ldap(connection):
@@ -133,25 +136,20 @@ class ldap(connection):
         return True
 
     def get_ldap_username(self):
-        extended_request = ldapasn1_impacket.ExtendedRequest()
-        extended_request["requestName"] = "1.3.6.1.4.1.4203.1.11.3"  # whoami
-
-        response = self.ldap_connection.sendReceive(extended_request)
-        for message in response:
-            search_result = message["protocolOp"].getComponent()
-            if search_result["resultCode"] == ldapasn1_impacket.ResultCode("success"):
-                response_value = search_result["responseValue"]
-                if response_value.hasValue():
-                    value = response_value.asOctets().decode(response_value.encoding)[2:]
-                    return value.split("\\")[1]
-        return ""
+        try:
+            # impacket returns the raw RFC 4532 identity, "u:DOMAIN\user" on a DC
+            return self.ldap_connection.whoami().split("\\")[-1]
+        except ldap_impacket.LDAPSessionError as e:
+            self.logger.debug(f"LDAP whoami request failed: {e}")
+            return ""
 
     def check_ldap_signing(self):
-        self.signing_required = False
+        self.signing_required = None
         ldap_url = f"ldap://{self.target}"
         try:
             ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=False, timeout=self.args.ldap_timeout)
             ldap_connection.login(domain=self.domain)
+            self.signing_required = False
             self.logger.debug(f"LDAP signing is not enforced on {self.host}")
         except ldap_impacket.LDAPSessionError as e:
             if str(e).find("strongerAuthRequired") >= 0:
@@ -159,6 +157,8 @@ class ldap(connection):
                 self.signing_required = True
             else:
                 self.logger.debug(f"LDAPSessionError while checking for signing requirements (likely NTLM disabled): {e!s}")
+        except OSError as e:
+            self.logger.debug(f"Connection error while checking LDAP signing on {self.host}: {e!s}")
 
     def check_ldaps_cbt(self):
         self.cbt_status = "Never"
@@ -185,6 +185,7 @@ class ldap(connection):
                         self.cbt_status = "When Supported"  # CBT is When Supported
             else:
                 self.logger.debug(f"LDAPSessionError while checking for channel binding requirements (likely NTLM disabled): {e!s}")
+                self.cbt_status = "Unknown"
         except SysCallError as e:
             self.logger.debug(f"Received SysCallError when trying to enumerate channel binding support: {e!s}")
             if e.args[1] in ["ECONNRESET", "WSAECONNRESET", "Unexpected EOF"]:
@@ -222,14 +223,14 @@ class ldap(connection):
         except Exception as e:
             self.logger.fail(f"Failed to enumerate host info for {self.host}, error: {e!s}")
 
-        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
-        self.target = target
-        self.targetDomain = target_domain
+        self.target = sanitize_dns(target or self.host, self.logger)
+        self.targetDomain = sanitize_dns(target_domain or (target.split(".", 1)[1] if "." in target else target), self.logger)
         self.baseDN = base_dn
+        self.logger.debug(f"Target: {target}; target_domain: {target_domain}; base_dn: {base_dn}")
 
         # Parse hostname and remoteName
-        self.hostname = self.target.split(".")[0].upper() if "." in self.target else self.target
-        self.remoteName = self.target
+        self.hostname = sanitize_dns(self.target.split(".", 1)[0].upper() or self.host, self.logger)
+        self.remoteName = self.target if self.kerberos else self.host
 
         # Parse NTLM challenge
         ntlm_challenge = None
@@ -283,7 +284,12 @@ class ldap(connection):
 
     def print_host_info(self):
         self.logger.debug("Printing host info for LDAP")
-        signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"]) if self.signing_required else colored("signing:None", host_info_colors[1], attrs=["bold"])
+        if self.signing_required is True:
+            signing = colored("signing:Enforced", host_info_colors[0], attrs=["bold"])
+        elif self.signing_required is False:
+            signing = colored("signing:None", host_info_colors[1], attrs=["bold"])
+        else:
+            signing = colored("signing:Unknown", host_info_colors[2], attrs=["bold"])
         cbt_status = colored(f"channel binding:{self.cbt_status}", host_info_colors[3], attrs=["bold"]) if self.cbt_status == "Always" else colored(f"channel binding:{self.cbt_status}", host_info_colors[2], attrs=["bold"])
         ntlm = colored(f"(NTLM:{not self.no_ntlm})", host_info_colors[2], attrs=["bold"]) if self.no_ntlm else ""
 
@@ -334,7 +340,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if self.port == 636 else "389"
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [1]")
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} using Kerberos")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
             self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
             if self.username == "":
@@ -393,7 +399,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [2]")
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} using Kerberos")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
                     self.ldap_connection.kerberosLogin(username, password, domain, self.lmhash, self.nthash, aesKey, kdcHost=kdcHost, useCache=useCache)
                     if self.username == "":
@@ -451,21 +457,42 @@ class ldap(connection):
                     hash_asreproast.write(f"{hash_tgt}\n")
             return False
 
+        cert_options = {}
+        cert_tmp_file = None
+        if self.args.schannel:
+            try:
+                cert_options, cert_tmp_file = certificate_options(self.args)
+            except (OSError, ValueError) as e:
+                self.logger.fail(f"Failed to load the certificate material: {e}")
+                return False
+
         try:
             # Connect to LDAP
             self.logger.extra["protocol"] = "LDAPS" if self.port == 636 else "LDAP"
             self.logger.extra["port"] = "636" if self.port == 636 else "389"
             proto = "ldaps" if self.port == 636 else "ldap"
             ldap_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} [3]")
-            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple", timeout=self.args.ldap_timeout)
-            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
-            self.check_if_admin()
-            self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
-            self.db.add_credential("plaintext", domain, self.username, self.password)
+            authentication_choice = "external" if self.args.schannel else self.auth_choice
+            self.logger.info(f"Connecting to {ldap_url} - {self.baseDN} - {self.host} using {auth_methods[authentication_choice]}")
+            self.ldap_connection = ldap_impacket.LDAPConnection(url=ldap_url, baseDN=self.baseDN, dstIp=self.host, signing=self.auth_choice != "simple", timeout=self.args.ldap_timeout, **cert_options)
+            self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=authentication_choice)
 
-            # Prepare success credential text
-            self.logger.success(f"{domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
+            if self.args.schannel:
+                # The certificate is mapped to an account server-side, so whoami is the only way to know who we are
+                netbios_domain, _, self.username = self.ldap_connection.whoami().removeprefix("u:").partition("\\")
+                # The mapped account can belong to another domain of the forest, and whoami only returns its NetBIOS domain name
+                cross_ref = parse_result_attributes(self.search(f"(&(objectClass=crossRef)(nETBIOSName={netbios_domain}))", ["dnsRoot"], baseDN=f"CN=Partitions,{self.configuration_context}"))
+                self.domain = cross_ref[0]["dnsRoot"] if cross_ref else netbios_domain
+
+            self.check_if_admin()
+
+            # A certificate bind has no secret to store, the account comes from the certificate mapping
+            if not self.args.schannel:
+                self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
+                self.db.add_credential("plaintext", domain, self.username, self.password)
+
+            used_certificate = " from certificate" if self.args.schannel else f":{process_secret(self.password)}"
+            self.logger.success(f"{self.domain}\\{self.username}{used_certificate} {self.mark_pwned()}")
 
             if self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
@@ -473,6 +500,13 @@ class ldap(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except ldap_impacket.LDAPSessionError as e:
+            if self.args.schannel:
+                # The error mapping below reads NTLM status codes, which a certificate bind never returns
+                if "did not receive any credentials via TLS" in str(e) or "connection is anonymous" in str(e):
+                    self.logger.fail("Schannel authentication failed: the DC did not map the certificate to an account")
+                else:
+                    self.logger.fail(f"Schannel authentication failed: {e}")
+                return False
             if str(e).find("strongerAuthRequired") >= 0:
                 # This should actually not happen anymore as impacket now supports LDAP signing/sealing via GSSAPI
                 if self.args.simple_bind:
@@ -486,7 +520,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} [4]")
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} using {auth_methods[self.auth_choice]}")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash, authenticationChoice=self.auth_choice)
                     self.check_if_admin()
@@ -517,6 +551,9 @@ class ldap(connection):
         except OSError as e:
             self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {'Error connecting to the domain, are you sure LDAP service is running on the target?'} \nError: {e}")
             return False
+        finally:
+            if cert_tmp_file and os.path.exists(cert_tmp_file):
+                os.remove(cert_tmp_file)
 
     def hash_login(self, domain, username, ntlm_hash):
         self.logger.extra["protocol"] = "LDAP"
@@ -553,7 +590,7 @@ class ldap(connection):
             self.logger.extra["port"] = "636" if self.port == 636 else "389"
             proto = "ldaps" if self.port == 636 else "ldap"
             ldaps_url = f"{proto}://{self.target}"
-            self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
+            self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} using NT hash")
             self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
             self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
             self.check_if_admin()
@@ -579,7 +616,7 @@ class ldap(connection):
                     self.logger.extra["port"] = "636"
                     self.port = 636
                     ldaps_url = f"ldaps://{self.target}"
-                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host}")
+                    self.logger.info(f"Connecting to {ldaps_url} - {self.baseDN} - {self.host} using NT hash")
                     self.ldap_connection = ldap_impacket.LDAPConnection(url=ldaps_url, baseDN=self.baseDN, dstIp=self.host, timeout=self.args.ldap_timeout)
                     self.ldap_connection.login(self.username, self.password, self.domain, self.lmhash, self.nthash)
                     self.check_if_admin()
@@ -622,7 +659,7 @@ class ldap(connection):
         resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
 
-        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache) and self.username != "":
+        if resp and (self.password != "" or self.lmhash != "" or self.nthash != "" or self.aesKey != "" or self.use_kcache or self.args.schannel) and self.username != "":
             for item in resp_parsed:
                 self.sid_domain = "-".join(item["objectSid"].split("-")[:-1])
 
@@ -931,8 +968,7 @@ class ldap(connection):
         resp_parse = parse_result_attributes(resp)
         for item in resp_parse:
             if "dNSHostName" in item:  # Get dNSHostName attribute
-                name = item["dNSHostName"]
-                resolve_and_display_hostname(name)
+                resolve_and_display_hostname(item["dNSHostName"])
 
         # Find all trusted domains
         self.logger.info("Enumerating Trusted Domains...")
@@ -1216,22 +1252,21 @@ class ldap(connection):
         self.logger.debug(f"Querying LDAP server with filter: {search_filter} and attributes: {attributes}")
         try:
             resp = self.search(search_filter, attributes, 0)
-            resp_parsed = parse_result_attributes(resp)
         except LDAPFilterSyntaxError as e:
             self.logger.fail(f"LDAP Filter Syntax Error: {e}")
             return
-        for idx, entry in enumerate(resp_parsed):
-            if not isinstance(resp[idx], ldapasn1_impacket.SearchResultEntry):
-                idx += 1  # Skip non-entry responses
-            self.logger.success(f"Response for object: {resp[idx]['objectName']}")
-            for attribute in entry:
-                if isinstance(entry[attribute], list) and entry[attribute]:
+        # A search response also holds SearchResultReference objects, which carry no attributes and must not be indexed like an entry.
+        entries = [item for item in resp if isinstance(item, ldapasn1_impacket.SearchResultEntry)]
+        for entry, attribute_map in zip(entries, parse_result_attributes(entries), strict=True):
+            self.logger.success(f"Response for object: {entry['objectName']}")
+            for attribute, value in attribute_map.items():
+                if isinstance(value, list) and value:
                     # Display first item in the same line as attribute
-                    self.logger.highlight(f"{attribute:<20} {entry[attribute].pop(0)}")
-                    for item in entry[attribute]:
+                    self.logger.highlight(f"{attribute:<20} {value.pop(0)}")
+                    for item in value:
                         self.logger.highlight(f"{'':<20} {item}")
                 else:
-                    self.logger.highlight(f"{attribute:<20} {entry[attribute]}")
+                    self.logger.highlight(f"{attribute:<20} {value}")
 
     def find_delegation(self):
         def printTable(items, header):
@@ -1501,12 +1536,12 @@ class ldap(connection):
         Get the Fine Grained Password Policy/PSOs
         Initial FGPP/PSO script written by @n00py: https://github.com/n00py/GetFGPP
         """
-        # Convert LDAP time to human readable format
+        # Convert LDAP time (100ns intervals) to human readable format
         def pso_days(ldap_time):
-            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).days} days"
+            return f"{abs(int(ldap_time)) // 864000000000} days"
 
         def pso_mins(ldap_time):
-            return f"{rd(seconds=int(abs(int(ldap_time)) / 10000000)).minutes} minutes"
+            return f"{abs(int(ldap_time)) // 600000000} minutes"
 
         # Are there even any FGPPs?
         self.logger.info("Attempting to enumerate policies...")
@@ -1723,6 +1758,7 @@ class ldap(connection):
                 aeskey=self.aesKey,
                 kdc=self.kdcHost,
                 auth_method="auto",
+                ldap_channel_binding=self.cbt_status == "Always"
             )
             ad = AD(
                 auth=auth,
@@ -1761,9 +1797,13 @@ class ldap(connection):
                     exclude_dcs=False,
                 )
             except Exception as e:
-                self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
-                self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
-                return
+                if "ldap3-bleeding-edge" in str(e):
+                    self.logger.fail("Bloodhound collection failed due to channel binding requirements. Inject 'ldap3-bleeding-edge': pipx inject netexec ldap3-bleeding-edge")
+                    return
+                else:
+                    self.logger.fail(f"BloodHound collection failed: {e.__class__.__name__} - {e}")
+                    self.logger.debug(f"BloodHound collection failed: {e.__class__.__name__} - {e}", exc_info=True)
+                    return
 
         # Collect ADCS data using CertiHound if requested
         if "adcs" in collect:

@@ -10,6 +10,7 @@ from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 
 from nxc.helpers.misc import gen_random_string
 from nxc.helpers.rpc import NXCRPCConnection
+from nxc.protocols.smb.exec_output import get_output_file
 
 
 class TSCH_EXEC:
@@ -162,62 +163,30 @@ class TSCH_EXEC:
             except tsch.DCERPCSessionError as e:
                 self.logger.debug(f"hSchRpcRun returned: {e}")
 
-        done = False
-        while not done:
+        # A task starts within seconds of the RegistrationTrigger. Poll for up to RUN_TIMEOUT seconds so a
+        # slow host still gets a grace period, and a task that can never run (e.g. a run-as user with no
+        # interactive session, which a TASK_LOGON_NONE task needs) is detected instead of looping forever.
+        RUN_TIMEOUT = 30
+        RUN_CHECK_DELAY = 2
+        last_error = None
+        for _ in range(RUN_TIMEOUT // RUN_CHECK_DELAY):
             self.logger.debug(f"Calling SchRpcGetLastRunInfo for \\{self.task_name}")
             try:
-                resp = tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")
+                if tsch.hSchRpcGetLastRunInfo(dce, f"\\{self.task_name}")["pLastRuntime"]["wYear"] != 0:
+                    break  # the task has run
             except tsch.DCERPCSessionError as e:
-                if e.error_code == 0x00041303:
-                    sleep(2)
-                    continue
-                self.logger.fail(f"Error retrieving task last run info: {e}")
-                break
-            if resp["pLastRuntime"]["wYear"] != 0:
-                done = True
-            else:
-                sleep(2)
+                last_error = e  # SCHED_S_TASK_HAS_NOT_RUN or a transient error right after registration; keep polling
+            sleep(RUN_CHECK_DELAY)
+        else:
+            self.logger.fail(f"Task \\{self.task_name} did not start within {RUN_TIMEOUT}s. If a specific run-as user was set, it likely has no interactive session on the target (a TASK_LOGON_NONE task only runs while that user is logged on). Last error: {last_error}")
 
         self.logger.info(f"Deleting task \\{self.task_name}")
-        tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
+        try:
+            tsch.hSchRpcDelete(dce, f"\\{self.task_name}")
+        except Exception as e:
+            self.logger.fail(f"[OPSEC] Could not delete scheduled task \\{self.task_name} on the target: {e}")
 
         if self.__retOutput:
-            tries = 1
-            # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
-            sleep(0.4)
-            while True:
-                try:
-                    self.logger.info(f"Attempting to read {self.__share}\\{self.__output_filename}")
-                    self.__connection.conn.getFile(self.__share, self.__output_filename, self.output_callback)
-                    break
-                except Exception as e:
-                    if tries >= self.__tries:
-                        self.logger.fail("ATEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
-                        break
-                    if "STATUS_BAD_NETWORK_NAME" in str(e):
-                        self.logger.fail(f"ATEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
-                        break
-                    elif "STATUS_VIRUS_INFECTED" in str(e):
-                        self.logger.fail("Command did not run because a virus was detected")
-                        break
-                    # When executing PowerShell and the command is still running, we get a sharing violation
-                    # We can use that information to wait longer than if the file is not found (probably av or something)
-                    if "STATUS_SHARING_VIOLATION" in str(e):
-                        self.logger.info(f"File {self.__share}\\{self.__output_filename} is still in use with {self.__tries - tries} tries left, retrying...")
-                        tries += 1
-                        sleep(1)
-                    elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                        self.logger.info(f"File {self.__share}\\{self.__output_filename} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
-                        tries += 10
-                        sleep(1)
-                    else:
-                        self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
-                        tries += 1
-                        sleep(1)
-            try:
-                self.logger.debug(f"Deleting file {self.__share}\\{self.__output_filename}")
-                self.__connection.conn.deleteFile(self.__share, self.__output_filename)
-            except Exception:
-                pass
+            get_output_file(self.__connection.conn, self.__share, self.__output_filename, self.output_callback, self.__tries, self.logger, "ATEXEC")
 
         dce.disconnect()

