@@ -39,23 +39,13 @@ from impacket.winrm import (
 
 urllib3.disable_warnings()
 
-WSMAN_ENUMERATE_ACTION = (
-    "http://schemas.xmlsoap.org/ws/2004/09/enumeration/Enumerate"
-)
+WSMAN_ENUMERATE_ACTION = "http://schemas.xmlsoap.org/ws/2004/09/enumeration/Enumerate"
+WSMAN_SHELL_RESOURCE_URI = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell"
+WSEN_NAMESPACE = "http://schemas.xmlsoap.org/ws/2004/09/enumeration"
+WSMAN_NAMESPACE = "http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd"
 
-WSMAN_SHELL_RESOURCE_URI = (
-    "http://schemas.microsoft.com/wbem/wsman/1/windows/shell"
-)
 
-WSEN_NAMESPACE = (
-    "http://schemas.xmlsoap.org/ws/2004/09/enumeration"
-)
-
-WSMAN_NAMESPACE = (
-    "http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd"
-)
-
-def _parse_hashes(hashes):
+def parse_hashes(hashes):
     if not hashes:
         return "", ""
 
@@ -66,11 +56,11 @@ def _parse_hashes(hashes):
     return "", hashes
 
 
-def _build_command(command, shell_type):
+def build_command(command, shell_type):
     if shell_type == "powershell":
-        command = f'$ProgressPreference="SilentlyContinue ";{command}'
+        command = f'$ProgressPreference="SilentlyContinue";{command}'
         encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
-        return "powershell.exe", ["-NoP", "-NoL", "-sta", "-NonI", "-W", "Hidden", "-Exec", "Bypass", "-Enc", encoded] 
+        return "powershell.exe", ["-NoP", "-NoL", "-sta", "-NonI", "-W", "Hidden", "-Exec", "Bypass", "-Enc", encoded]
     return "cmd.exe", ["/Q", "/c", command]
 
 
@@ -82,13 +72,8 @@ def parse_clixml(stderr):
     return re.sub(r"_x([0-9A-F]{4})_", lambda match: chr(int(match[1], 16)), errors)
 
 
-def _build_winrm_admin_check_request(timeout=20, session_id=None):
-    envelope, header, body = _build_envelope(
-        "create",
-        resource_uri=WSMAN_SHELL_RESOURCE_URI,
-        timeout=timeout,
-        session_id=session_id,
-    )
+def build_admin_check_request(timeout=20, session_id=None):
+    envelope, header, body = _build_envelope("create", resource_uri=WSMAN_SHELL_RESOURCE_URI, timeout=timeout, session_id=session_id)
 
     action = header.find("{http://schemas.xmlsoap.org/ws/2004/08/addressing}Action")
 
@@ -97,37 +82,35 @@ def _build_winrm_admin_check_request(timeout=20, session_id=None):
     action.text = WSMAN_ENUMERATE_ACTION
     enumerate_msg = ET.SubElement(body, f"{{{WSEN_NAMESPACE}}}Enumerate")
     ET.SubElement(enumerate_msg, f"{{{WSMAN_NAMESPACE}}}OptimizeEnumeration")
-    ET.SubElement(enumerate_msg, f"{{{WSMAN_NAMESPACE}}}MaxElements", ).text = "32000"
+    ET.SubElement(enumerate_msg, f"{{{WSMAN_NAMESPACE}}}MaxElements").text = "32000"
 
     return envelope
 
 
-class _KerberosFallbackTransport:
+class KerberosFallbackTransport:
     """Kerberos transport which retries through Negotiate when GSS fails."""
 
     def __init__(self, url, credentials, timeout):
-        self._url = url
-        self._credentials = credentials
-        self._timeout = timeout
-        self._transport = KerberosTransport(url, credentials, timeout=timeout)
-        self._fallback_attempted = False
+        self.url = url
+        self.credentials = credentials
+        self.timeout = timeout
+        self.transport = KerberosTransport(url, credentials, timeout=timeout)
+        self.fallback_attempted = False
 
     def send(self, request):
         try:
-            return self._transport.send(request)
+            return self.transport.send(request)
         except WinRMAuthError:
-            if self._fallback_attempted:
+            if self.fallback_attempted:
                 raise
 
-            self._fallback_attempted = True
-            self._transport.close()
-            self._transport = NegotiateTransport(
-                self._url, self._credentials, timeout=self._timeout
-            )
-            return self._transport.send(request)
+            self.fallback_attempted = True
+            self.transport.close()
+            self.transport = NegotiateTransport(self.url, self.credentials, timeout=self.timeout)
+            return self.transport.send(request)
 
     def close(self):
-        self._transport.close()
+        self.transport.close()
 
 
 class winrm(connection):
@@ -141,7 +124,6 @@ class winrm(connection):
         self.challenge_header = None
         self.targetDomain = None
         self.no_ntlm = False
-        self._transport = None
         self.dpapi_system_key = None
         self.no_da = None
 
@@ -243,13 +225,8 @@ class winrm(connection):
     def check_if_admin(self):
         self.admin_privs = False
 
-        if self.conn is None:
-            self.logger.debug("WinRM session is not established")
-            return False
-
         try:
-            request = _build_winrm_admin_check_request(timeout=self.conn.timeout, session_id=self.conn.session_id,)
-            self.conn._send(request)
+            self.conn._send(build_admin_check_request(timeout=self.conn.timeout, session_id=self.conn.session_id))
             self.admin_privs = True
 
         except WinRMFaultError as e:
@@ -257,37 +234,12 @@ class winrm(connection):
 
         return self.admin_privs
 
-    def _winrm_url(self):
-        if self.endpoint:
-            return self.endpoint
-
-        scheme = "https" if self.ssl else "http"
-        host = self.host if not self.is_ipv6 else f"[{self.host}]"
-        return f"{scheme}://{host}:{self.port}/wsman"
-
-    def _close_winrs(self):
-        if self.conn is not None:
-            try:
-                close = getattr(self.conn, "close", None)
-                if close:
-                    close()
-            except Exception:
-                pass
-            self.conn = None
-
-        if self._transport is not None:
-            try:
-                self._transport.close()
-            except Exception:
-                pass
-            self._transport = None
-
-    def _connect_winrs(self, username, password=None, hashes=None, use_cache=False):
-        self._close_winrs()
+    def connect_winrs(self, username, password=None, hashes=None, use_cache=False):
+        self.disconnect()
 
         timeout = self.args.http_timeout
-        url = self._winrm_url()
-        lmhash, nthash = _parse_hashes(hashes or "")
+        url = self.endpoint
+        lmhash, nthash = parse_hashes(hashes or "")
 
         use_basic = bool(getattr(self.args, "basic", False))
         use_credssp = bool(getattr(self.args, "credssp", False))
@@ -319,7 +271,7 @@ class winrm(connection):
 
                 transport = CredSSPTransport(url, kerberos_credentials, timeout=timeout)
             else:
-                transport = _KerberosFallbackTransport(url, kerberos_credentials, timeout=timeout)
+                transport = KerberosFallbackTransport(url, kerberos_credentials, timeout=timeout)
 
         else:
             credentials = NTCredential(
@@ -338,9 +290,7 @@ class winrm(connection):
             else:
                 transport = NegotiateTransport(url, credentials, timeout=timeout)
 
-        self._transport = transport
-        self.conn = WinRSClient(self._transport, timeout=self.args.http_timeout)
-        return self.conn
+        self.conn = WinRSClient(transport, timeout=timeout)
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
@@ -356,7 +306,7 @@ class winrm(connection):
             if aesKey:
                 self.aesKey = aesKey
 
-            self._connect_winrs(username, password=password, hashes=ntlm_hash, use_cache=useCache)
+            self.connect_winrs(username, password=password, hashes=ntlm_hash, use_cache=useCache)
 
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
@@ -378,7 +328,7 @@ class winrm(connection):
 
         except Exception as e:
             self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} {e!s}")
-            self._close_winrs()
+            self.disconnect()
             return False
 
     def plaintext_login(self, domain, username, password):
@@ -389,7 +339,7 @@ class winrm(connection):
         self.domain = domain
 
         try:
-            self._connect_winrs(username, password=password)
+            self.connect_winrs(username, password=password)
 
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
@@ -411,8 +361,8 @@ class winrm(connection):
             if "status 401" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}: {process_secret(self.password)} {e!s}")
-            self._close_winrs()
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {e!s}")
+            self.disconnect()
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
@@ -424,7 +374,7 @@ class winrm(connection):
         self.lmhash, self.nthash = ntlm_hash.split(":") if ":" in ntlm_hash else ("00000000000000000000000000000000", ntlm_hash)
 
         try:
-            self._connect_winrs(username, hashes=ntlm_hash)
+            self.connect_winrs(username, hashes=ntlm_hash)
 
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
@@ -446,16 +396,18 @@ class winrm(connection):
             if "status 401" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)}")
             else:
-                self.logger.fail(f"{self.domain}\\{self.username}: {process_secret(self.nthash)} {e!s}")
-            self._close_winrs()
+                self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
+            self.disconnect()
             return False
 
     def disconnect(self):
-        self._close_winrs()
+        if self.conn is not None:
+            self.conn.close()
+            self.conn = None
 
     def run_command(self, command, shell_type="cmd"):
         """Run a command in the WinRS shell and return its stdout, its stderr (error messages only for powershell) and its exit code"""
-        executable, arguments = _build_command(command, shell_type)
+        executable, arguments = build_command(command, shell_type)
         output = self.conn.execute(executable, arguments=arguments).iter_output()
         streams = {"stdout": b"", "stderr": b""}
         try:
