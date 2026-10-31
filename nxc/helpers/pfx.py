@@ -1,575 +1,199 @@
-# SECUREAUTH LABS. Copyright 2018 SecureAuth Corporation. All rights reserved.
-#
-# This software is provided under under a slightly modified version
-# of the Apache Software License. See the accompanying LICENSE file
-# for more information.
-#
-# Author:
-#  Alberto Solino (@agsolino)
-#  Dirk-jan Mollema (@_dirkjan)
-#
-# Description:
-#     This script will use an existing TGT to request a PAC for the current user using U2U.
-#     When the TGT was obtained using PKINIT, the resulting PAC will contain the NT hash which can be
-#     used for silver tickets and for backwards compatibility with other tooling.
+# Certificate authentication for nxc: PKINIT (RFC 4556) through impacket, plus UnPAC the hash
 #
 # References:
-#
+#     PKINIT: https://www.rfc-editor.org/rfc/rfc4556
 #     U2U: https://tools.ietf.org/html/draft-ietf-cat-user2user-02
 #
-# Based on examples from minikerberos by skelsec
-# Parts of this code was inspired by the following project by @rubin_mor
-# https://github.com/morRubin/AzureADJoinedMachinePTC
-#
-# Author:
-#  Tamas Jos (@skelsec)
-#  Dirk-jan Mollema (@_dirkjan)
-#
+# Authors:
+#  Azox (@azoxlpf) for the PKINIT implementation, in impacket and in nxc
+#  Dirk-jan Mollema (@_dirkjan) for the original UnPAC the hash implementation
 
-import os
-import secrets
-import tempfile
-import hashlib
-import datetime
-import random
 import base64
+import datetime
+import os
+import random
+import tempfile
 
-from binascii import unhexlify, hexlify
-
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography.x509 import load_pem_x509_certificate, load_der_x509_certificate
-
-from asn1crypto import cms
-from asn1crypto import algos
-from asn1crypto import core
-from asn1crypto import keys
-from asn1crypto import x509
-
-from minikerberos.protocol.dirtydh import DirtyDH
-from minikerberos.protocol.constants import NAME_TYPE, PaDataType
-from minikerberos.protocol.encryption import Enctype, _enctype_table, Key
-from minikerberos.protocol.asn1_structs import KDC_REQ_BODY, PrincipalName, KDCOptions, EncASRepPart, AS_REQ, PADATA_TYPE, PA_PAC_REQUEST
-from minikerberos.protocol.rfc4556 import PKAuthenticator, AuthPack, PA_PK_AS_REP, KDCDHKeyInfo, PA_PK_AS_REQ
+from binascii import hexlify
 
 from pyasn1.codec.der import decoder, encoder
+from pyasn1.error import PyAsn1Error
 from pyasn1.type.univ import noValue
 
 from impacket.dcerpc.v5.rpcrt import TypeSerialization1
 from impacket.krb5 import constants
-from impacket.krb5.asn1 import AP_REQ, AS_REP, TGS_REQ, Authenticator, TGS_REP, seq_set, seq_set_iter, EncTicketPart, AD_IF_RELEVANT, Ticket as TicketAsn1
-from impacket.krb5.kerberosv5 import sendReceive
-from impacket.krb5.pac import PACTYPE, PAC_INFO_BUFFER, PAC_CREDENTIAL_INFO, \
-    PAC_CREDENTIAL_DATA, NTLM_SUPPLEMENTAL_CREDENTIAL
-from impacket.krb5.types import Principal, KerberosTime, Ticket
+from impacket.krb5.asn1 import AD_IF_RELEVANT, AP_REQ, AS_REP, Authenticator, EncTicketPart, TGS_REP, TGS_REQ, Ticket as TicketAsn1, seq_set, seq_set_iter
+from impacket.krb5.ccache import CCache
+from impacket.krb5.crypto import InvalidChecksum, _enctype_table
+from impacket.krb5.kerberosv5 import KerberosError, sendReceive
+from impacket.krb5.pac import NTLM_SUPPLEMENTAL_CREDENTIAL, PACTYPE, PAC_CREDENTIAL_DATA, PAC_CREDENTIAL_INFO, PAC_INFO_BUFFER
+from impacket.krb5.pkinit import PKINITCredentials, PKINITError, getKerberosTGTPKINIT
+from impacket.krb5.types import KerberosTime, Principal, Ticket
 
-# Imports for pfx_auth
-from minikerberos.network.clientsocket import KerberosClientSocket
-from minikerberos.common.target import KerberosTarget
-from minikerberos.common.ccache import CCACHE
-
-from impacket.krb5.ccache import CCache as impacket_CCache
-
-from nxc.paths import NXC_PATH, TMP_PATH
 from nxc.helpers.path import sanitize_path_component
-from nxc.logger import nxc_logger
+from nxc.paths import NXC_PATH, TMP_PATH
 
 
-def _load_asn1_certificate(data):
-    """Load a certificate as an asn1crypto object, accepting both PEM and DER input
+def pkinit_credentials(args):
+    """Load the client certificate and its private key as the PKINIT credentials impacket expects"""
+    if args.pfx_cert:
+        return PKINITCredentials.fromPFX(args.pfx_cert, args.pfx_pass)
 
-    The certificate is parsed by cryptography and re-encoded, so that malformed input is
-    rejected here instead of failing later inside asn1crypto, which parses lazily
+    if args.pfx_base64:
+        with open(args.pfx_base64, "rb") as pfx_base64_file:
+            pfxdata = base64.b64decode(pfx_base64_file.read())
+        return PKINITCredentials.fromPFXData(pfxdata, args.pfx_pass, source=f"the base64 PFX file {args.pfx_base64}")
+
+    if args.pem_cert and args.pem_key:
+        return PKINITCredentials.fromPEM(args.pem_cert, args.pem_key, args.pfx_pass)
+
+    return None
+
+
+def read_nt_hash_from_pac(connection, enc_ticket_part, reply_key):
+    """Return the NT hash held by the PAC_CREDENTIAL_INFO of a ticket, or None when the PAC carries none"""
+    decoded_ticket_part = decoder.decode(enc_ticket_part, asn1Spec=EncTicketPart())[0]
+    ad_if_relevant = decoder.decode(decoded_ticket_part["authorization-data"][0]["ad-data"], asn1Spec=AD_IF_RELEVANT())[0]
+    pac_type = PACTYPE(ad_if_relevant[0]["ad-data"].asOctets())
+
+    buffers = pac_type["Buffers"]
+    for _ in range(pac_type["cBuffers"]):
+        info_buffer = PAC_INFO_BUFFER(buffers)
+        buffers = buffers[len(info_buffer):]
+        connection.logger.debug(f"PAC buffer type {info_buffer['ulType']}")
+        if info_buffer["ulType"] != 2:   # PAC_CREDENTIAL_INFO
+            continue
+
+        credential_info = PAC_CREDENTIAL_INFO(pac_type["Buffers"][info_buffer["Offset"] - 8:][:info_buffer["cbBufferSize"]])
+        cipher = _enctype_table[credential_info["EncryptionType"]]
+        # Key usage 16: the PAC credential info, encrypted with the AS reply key
+        credential_data = cipher.decrypt(reply_key, 16, credential_info["SerializedData"])
+        serialization_header = TypeSerialization1(credential_data)
+        # Skip the 4 bytes of the ReferentID of the pointer following the header
+        credentials = PAC_CREDENTIAL_DATA(credential_data[len(serialization_header) + 4:])
+        for credential in credentials["Credentials"]:
+            supplemental_credential = NTLM_SUPPLEMENTAL_CREDENTIAL(b"".join(credential["Credentials"]))
+            return hexlify(supplemental_credential["NtPassword"]).decode()
+
+    connection.logger.fail("The PAC holds no PAC_CREDENTIAL_INFO: the account has no NT hash stored, or the TGT did not come from PKINIT")
+    return None
+
+
+def unpac_the_hash(connection, username, tgt, cipher, reply_key, session_key):
+    """Recover the NT hash of the account the TGT belongs to, through a U2U service ticket to itself
+
+    Only a PKINIT AS-REP carries a PAC_CREDENTIAL_INFO, and the KDC encrypts it with the AS reply key,
+    which the TGT does not expose: it has to be read from a ticket requested with that very TGT.
+    Returns None, after logging why, when the hash cannot be recovered
     """
-    cert = load_pem_x509_certificate(data) if b"-----BEGIN" in data else load_der_x509_certificate(data)
-    return _to_asn1_certificate(cert)
-
-
-def _to_asn1_certificate(cert):
-    """Convert a cryptography certificate to the asn1crypto object the CMS structures need"""
-    return x509.Certificate.load(cert.public_bytes(serialization.Encoding.DER))
-
-
-def _check_rsa_privkey(privkey):
-    """PKINIT signing here is RSA PKCS#1 v1.5 only, so reject anything else early"""
-    if not isinstance(privkey, rsa.RSAPrivateKey):
-        raise Exception(f"PKINIT requires an RSA private key, got {type(privkey).__name__}")
-    return privkey
-
-
-class myPKINIT:
-    """
-    Copy of minikerberos PKINIT
-    With some changes where it differs from PKINIT used in NegoEx
-
-    This does not subclass minikerberos.pkinit.PKINIT on purpose: that module imports oscrypto,
-    which fails at import time on any OpenSSL whose version has a two digit component
-    """
-
-    def __init__(self):
-        self.privkey = None
-        self.certificate = None
-        self.issuer = None
-        self.cname = None
-        self.diffie = None
-
-    @staticmethod
-    def from_pfx(pfxfile, pfxpass, dh_params=None, b64=False):
-        with open(pfxfile, "rb") as f:
-            pfxdata = f.read()
-
-        if b64:
-            pfxdata = base64.b64decode(pfxdata)
-
-        return myPKINIT.from_pfx_data(pfxdata, pfxpass, dh_params)
-
-    @staticmethod
-    def from_pfx_data(pfxdata, pfxpass, dh_params=None):
-        pkinit = myPKINIT()
-        if isinstance(pfxpass, str):
-            pfxpass = pfxpass.encode()
-        # cryptography requires None (not an empty password) for a pfx without password
-        privkey, cert, _ = pkcs12.load_key_and_certificates(pfxdata, pfxpass if pfxpass else None)
-        # a pfx holding only a certificate parses fine, so check the key before the certificate
-        if privkey is None:
-            raise Exception("No private key found in the PFX file")
-        if cert is None:
-            raise Exception("No certificate found in the PFX file")
-        pkinit.privkey = _check_rsa_privkey(privkey)
-        pkinit.certificate = _to_asn1_certificate(cert)
-        pkinit.setup(dh_params=dh_params)
-        return pkinit
-
-    @staticmethod
-    def from_pem(certfile, privkeyfile, dh_params=None):
-        pkinit = myPKINIT()
-        with open(certfile, "rb") as f:
-            pkinit.certificate = _load_asn1_certificate(f.read())
-        with open(privkeyfile, "rb") as f:
-            keydata = f.read()
-        try:
-            try:
-                privkey = serialization.load_pem_private_key(keydata, password=None)
-            except ValueError:
-                privkey = serialization.load_der_private_key(keydata, password=None)
-        except TypeError as e:
-            # raised by both loaders when the key is encrypted and no password was given
-            raise Exception(f"Private key {privkeyfile} is password protected, which is not supported. Decrypt it first with: openssl rsa -in {privkeyfile} -out decrypted.pem") from e
-        pkinit.privkey = _check_rsa_privkey(privkey)
-        pkinit.setup(dh_params=dh_params)
-        return pkinit
-
-    def sign_authpack(self, data, wrap_signed=False):
-        return self.sign_authpack_native(data, wrap_signed)
-
-    def setup(self, dh_params=None):
-        self.issuer = self.certificate.issuer.native["common_name"]
-        if dh_params is None:
-            nxc_logger.display("Generating DH params...")
-            nxc_logger.display("DH params generated.")
-        else:
-            if isinstance(dh_params, dict):
-                self.diffie = DirtyDH.from_dict(dh_params)
-            elif isinstance(dh_params, bytes):
-                self.diffie = DirtyDH.from_asn1(dh_params)
-            elif isinstance(dh_params, DirtyDH):
-                self.diffie = dh_params
-            else:
-                raise Exception("DH params must be either a bytearray or a dict")
-
-    def build_asreq(self, domain=None, cname=None, kdcopts=None):
-        if kdcopts is None:
-            kdcopts = ["forwardable", "renewable", "renewable-ok"]
-        if isinstance(kdcopts, list):
-            kdcopts = set(kdcopts)
-        if cname is not None:
-            if isinstance(cname, str):
-                cname = [cname]
-        else:
-            cname = [self.cname]
-
-        now = datetime.datetime.now(datetime.UTC)
-
-        kdc_req_body_data = {}
-        kdc_req_body_data["kdc-options"] = KDCOptions(kdcopts)
-        kdc_req_body_data["cname"] = PrincipalName({"name-type": NAME_TYPE.PRINCIPAL.value, "name-string": cname})
-        kdc_req_body_data["realm"] = domain.upper()
-        kdc_req_body_data["sname"] = PrincipalName({"name-type": NAME_TYPE.SRV_INST.value, "name-string": ["krbtgt", domain.upper()]})
-        kdc_req_body_data["till"] = (now + datetime.timedelta(days=1)).replace(microsecond=0)
-        kdc_req_body_data["rtime"] = (now + datetime.timedelta(days=1)).replace(microsecond=0)
-        kdc_req_body_data["nonce"] = secrets.randbits(31)
-        kdc_req_body_data["etype"] = [18, 17]  # 23 breaks...
-        kdc_req_body = KDC_REQ_BODY(kdc_req_body_data)
-
-        checksum = hashlib.sha1(kdc_req_body.dump()).digest()
-
-        authenticator = {}
-        authenticator["cusec"] = now.microsecond
-        authenticator["ctime"] = now.replace(microsecond=0)
-        authenticator["nonce"] = secrets.randbits(31)
-        authenticator["paChecksum"] = checksum
-
-        dp = {}
-        dp["p"] = self.diffie.p
-        dp["g"] = self.diffie.g
-        dp["q"] = 0  # mandatory parameter, but it is not needed
-
-        pka = {}
-        pka["algorithm"] = "1.2.840.10046.2.1"
-        pka["parameters"] = keys.DomainParameters(dp)
-
-        spki = {}
-        spki["algorithm"] = keys.PublicKeyAlgorithm(pka)
-        spki["public_key"] = self.diffie.get_public_key()
-
-        authpack = {}
-        authpack["pkAuthenticator"] = PKAuthenticator(authenticator)
-        authpack["clientPublicValue"] = keys.PublicKeyInfo(spki)
-        authpack["clientDHNonce"] = self.diffie.dh_nonce
-
-        authpack = AuthPack(authpack)
-        signed_authpack = self.sign_authpack(authpack.dump(), wrap_signed=True)
-
-        payload = PA_PK_AS_REQ()
-        payload["signedAuthPack"] = signed_authpack
-
-        pa_data_1 = {}
-        pa_data_1["padata-type"] = PaDataType.PK_AS_REQ.value
-        pa_data_1["padata-value"] = payload.dump()
-
-        pa_data_0 = {}
-        pa_data_0["padata-type"] = int(PADATA_TYPE("PA-PAC-REQUEST"))
-        pa_data_0["padata-value"] = PA_PAC_REQUEST({"include-pac": True}).dump()
-
-        asreq = {}
-        asreq["pvno"] = 5
-        asreq["msg-type"] = 10
-        asreq["padata"] = [pa_data_0, pa_data_1]
-        asreq["req-body"] = kdc_req_body
-
-        return AS_REQ(asreq).dump()
-
-    def sign_authpack_native(self, data, wrap_signed=False):
-        """
-        Creating PKCS7 blob which contains the following things:
-
-        1. 'data' blob which is an ASN1 encoded "AuthPack" structure
-        2. the certificate used to sign the data blob
-        3. the singed 'signed_attrs' structure (ASN1) which points to the "data" structure (in point 1)
-        """
-        da = {}
-        da["algorithm"] = algos.DigestAlgorithmId("1.3.14.3.2.26")  # for sha1
-
-        si = {}
-        si["version"] = "v1"
-        si["sid"] = cms.IssuerAndSerialNumber({
-            "issuer":  self.certificate.issuer,
-            "serial_number":  self.certificate.serial_number,
-        })
-
-        si["digest_algorithm"] = algos.DigestAlgorithm(da)
-        si["signed_attrs"] = [
-            cms.CMSAttribute({"type": "content_type", "values": ["1.3.6.1.5.2.3.1"]}),  # indicates that the encap_content_info's authdata struct (marked with OID '1.3.6.1.5.2.3.1' is signed )
-            cms.CMSAttribute({"type": "message_digest", "values": [hashlib.sha1(data).digest()]}),  # hash of the data, the data itself will not be signed, but this block of data will be.
-        ]
-        si["signature_algorithm"] = algos.SignedDigestAlgorithm({"algorithm": "1.2.840.113549.1.1.1"})
-        si["signature"] = self.privkey.sign(cms.CMSAttributes(si["signed_attrs"]).dump(), padding.PKCS1v15(), hashes.SHA1())
-
-        ec = {}
-        ec["content_type"] = "1.3.6.1.5.2.3.1"
-        ec["content"] = data
-
-        sd = {}
-        sd["version"] = "v3"
-        sd["digest_algorithms"] = [algos.DigestAlgorithm(da)]  # must have only one
-        sd["encap_content_info"] = cms.EncapsulatedContentInfo(ec)
-        sd["certificates"] = [self.certificate]
-        sd["signer_infos"] = cms.SignerInfos([cms.SignerInfo(si)])
-
-        if wrap_signed is True:
-            ci = {}
-            ci["content_type"] = "1.2.840.113549.1.7.2"  # signed data OID
-            ci["content"] = cms.SignedData(sd)
-            return cms.ContentInfo(ci).dump()
-
-        return cms.SignedData(sd).dump()
-
-    def decrypt_asrep(self, as_rep):
-        def truncate_key(value, keysize):
-            output = b""
-            currentNum = 0
-            while len(output) < keysize:
-                currentDigest = hashlib.sha1(bytes([currentNum]) + value).digest()
-                if len(output) + len(currentDigest) > keysize:
-                    output += currentDigest[:keysize - len(output)]
-                    break
-                output += currentDigest
-                currentNum += 1
-
-            return output
-
-        for pa in as_rep["padata"]:
-            if pa["padata-type"] == 17:
-                pkasrep = PA_PK_AS_REP.load(pa["padata-value"]).native
-                break
-        else:
-            raise Exception("PA_PK_AS_REP not found!")
-        ci = cms.ContentInfo.load(pkasrep["dhSignedData"]).native
-        sd = ci["content"]
-        keyinfo = sd["encap_content_info"]
-        if keyinfo["content_type"] != "1.3.6.1.5.2.3.2":
-            raise Exception("Keyinfo content type unexpected value")
-        authdata = KDCDHKeyInfo.load(keyinfo["content"]).native
-        pubkey = int("".join(["1"] + [str(x) for x in authdata["subjectPublicKey"]]), 2)
-
-        pubkey = int.from_bytes(core.BitString(authdata["subjectPublicKey"]).dump()[7:], "big", signed=False)
-        shared_key = self.diffie.exchange(pubkey)
-
-        server_nonce = pkasrep["serverDHNonce"]
-        fullKey = shared_key + self.diffie.dh_nonce + server_nonce
-
-        etype = as_rep["enc-part"]["etype"]
-        cipher = _enctype_table[etype]
-        if etype == Enctype.AES256:
-            t_key = truncate_key(fullKey, 32)
-        elif etype == Enctype.AES128:
-            t_key = truncate_key(fullKey, 16)
-        elif etype == Enctype.RC4:
-            raise NotImplementedError("RC4 key truncation documentation missing. it is different from AES")
-
-        key = Key(cipher.enctype, t_key)
-        enc_data = as_rep["enc-part"]["cipher"]
-        nxc_logger.info("AS-REP encryption key (you might need this later):")
-        nxc_logger.info(hexlify(t_key).decode("utf-8"))
-        dec_data = cipher.decrypt(key, 3, enc_data)
-        encasrep = EncASRepPart.load(dec_data).native
-        cipher = _enctype_table[int(encasrep["key"]["keytype"])]
-        session_key = Key(cipher.enctype, encasrep["key"]["keyvalue"])
-        return encasrep, session_key, cipher, hexlify(t_key).decode("utf-8")
-
-
-class GETPAC:
-
-    def printPac(self, data, key=None):
-        nthash = None
-        encTicketPart = decoder.decode(data, asn1Spec=EncTicketPart())[0]
-        adIfRelevant = decoder.decode(encTicketPart["authorization-data"][0]["ad-data"], asn1Spec=AD_IF_RELEVANT())[
-            0]
-        # So here we have the PAC
-        pacType = PACTYPE(adIfRelevant[0]["ad-data"].asOctets())
-        buff = pacType["Buffers"]
-        found = False
-        for _bufferN in range(pacType["cBuffers"]):
-            infoBuffer = PAC_INFO_BUFFER(buff)
-            data = pacType["Buffers"][infoBuffer["Offset"] - 8:][:infoBuffer["cbBufferSize"]]
-            nxc_logger.debug(f"TYPE 0x{infoBuffer['ulType']}")
-            if infoBuffer["ulType"] == 2:
-                found = True
-                credinfo = PAC_CREDENTIAL_INFO(data)
-                newCipher = _enctype_table[credinfo["EncryptionType"]]
-                out = newCipher.decrypt(key, 16, credinfo["SerializedData"])
-                type1 = TypeSerialization1(out)
-                # I'm skipping here 4 bytes with its the ReferentID for the pointer
-                newdata = out[len(type1) + 4:]
-                pcc = PAC_CREDENTIAL_DATA(newdata)
-                for cred in pcc["Credentials"]:
-                    credstruct = NTLM_SUPPLEMENTAL_CREDENTIAL(b"".join(cred["Credentials"]))
-
-                    nxc_logger.info("Recovered NT Hash")
-                    nxc_logger.info(hexlify(credstruct["NtPassword"]).decode("utf-8"))
-                    nthash = hexlify(credstruct["NtPassword"]).decode("utf-8")
-
-            buff = buff[len(infoBuffer):]
-
-        if not found:
-            nxc_logger.info("Did not find the PAC_CREDENTIAL_INFO in the PAC. Are you sure your TGT originated from a PKINIT operation?")
-        return nthash
-
-    def __init__(self, username, domain, kdcHost, key, tgt):
-        self.__username = username
-        self.__domain = domain.upper()
-        self.__kdcHost = kdcHost
-        self.__asrep_key = key
-        self.__tgt = tgt["KDC_REP"]
-        self.__cipher = tgt["cipher"]
-        self.__sessionKey = tgt["sessionKey"]
-
-    def dump(self):
-        # Try all requested protocols until one works.
-        tgt = self.__tgt
-        cipher = self.__cipher
-        sessionKey = self.__sessionKey
-
-        decodedTGT = decoder.decode(tgt, asn1Spec=AS_REP())[0]
-
-        # Extract the ticket from the TGT
-        ticket = Ticket()
-        ticket.from_asn1(decodedTGT["ticket"])
-
-        apReq = AP_REQ()
-        apReq["pvno"] = 5
-        apReq["msg-type"] = int(constants.ApplicationTagNumbers.AP_REQ.value)
-
-        opts = []
-        apReq["ap-options"] = constants.encodeFlags(opts)
-        seq_set(apReq, "ticket", ticket.to_asn1)
-
-        authenticator = Authenticator()
-        authenticator["authenticator-vno"] = 5
-        authenticator["crealm"] = str(decodedTGT["crealm"])
-
-        clientName = Principal()
-        clientName.from_asn1(decodedTGT, "crealm", "cname")
-
-        seq_set(authenticator, "cname", clientName.components_to_asn1)
-
-        now = datetime.datetime.utcnow()
-        authenticator["cusec"] = now.microsecond
-        authenticator["ctime"] = KerberosTime.to_asn1(now)
-
-        nxc_logger.debug("AUTHENTICATOR")
-        nxc_logger.debug(authenticator.prettyPrint() + "\n")
-
-        encodedAuthenticator = encoder.encode(authenticator)
-
-        # Key Usage 7
-        # TGS-REQ PA-TGS-REQ padata AP-REQ Authenticator (includes
-        # TGS authenticator subkey), encrypted with the TGS session
-        # key (Section 5.5.1)
-        encryptedEncodedAuthenticator = cipher.encrypt(sessionKey, 7, encodedAuthenticator, None)
-
-        apReq["authenticator"] = noValue
-        apReq["authenticator"]["etype"] = cipher.enctype
-        apReq["authenticator"]["cipher"] = encryptedEncodedAuthenticator
-
-        encodedApReq = encoder.encode(apReq)
-
-        tgsReq = TGS_REQ()
-
-        tgsReq["pvno"] = 5
-        tgsReq["msg-type"] = int(constants.ApplicationTagNumbers.TGS_REQ.value)
-
-        tgsReq["padata"] = noValue
-        tgsReq["padata"][0] = noValue
-        tgsReq["padata"][0]["padata-type"] = int(constants.PreAuthenticationDataTypes.PA_TGS_REQ.value)
-        tgsReq["padata"][0]["padata-value"] = encodedApReq
-
-        reqBody = seq_set(tgsReq, "req-body")
-
-        opts = []
-        opts.append(constants.KDCOptions.forwardable.value)
-        opts.append(constants.KDCOptions.renewable.value)
-        opts.append(constants.KDCOptions.canonicalize.value)
-        opts.append(constants.KDCOptions.enc_tkt_in_skey.value)
-
-        reqBody["kdc-options"] = constants.encodeFlags(opts)
-
-        serverName = Principal(self.__username, type=constants.PrincipalNameType.NT_UNKNOWN.value)
-
-        seq_set(reqBody, "sname", serverName.components_to_asn1)
-        reqBody["realm"] = str(decodedTGT["crealm"])
-
-        now = datetime.datetime.utcnow() + datetime.timedelta(days=1)
-
-        reqBody["till"] = KerberosTime.to_asn1(now)
-        reqBody["nonce"] = random.getrandbits(31)
-        seq_set_iter(reqBody, "etype",
-                     (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
-
-        myTicket = ticket.to_asn1(TicketAsn1())
-        seq_set_iter(reqBody, "additional-tickets", (myTicket,))
-        nxc_logger.debug("Final TGS")
-        nxc_logger.debug(tgsReq.prettyPrint())
-
-        message = encoder.encode(tgsReq)
-        nxc_logger.info("Requesting ticket to self with PAC")
-
-        r = sendReceive(message, self.__domain, self.__kdcHost)
-
-        tgs = decoder.decode(r, asn1Spec=TGS_REP())[0]
-
-        nxc_logger.debug("TGS_REP")
-        nxc_logger.debug(tgs.prettyPrint())
-
-        cipherText = tgs["ticket"]["enc-part"]["cipher"]
-
-        # Key Usage 2
-        # AS-REP Ticket and TGS-REP Ticket (includes tgs session key or
-        #  application session key), encrypted with the service key
-        #  (section 5.4.2)
-
-        # S4USelf + U2U uses this other key
-        plainText = cipher.decrypt(sessionKey, 2, cipherText)
-        specialkey = Key(18, unhexlify(self.__asrep_key))
-        return self.printPac(plainText, specialkey)
-
-
-def pfx_auth(self):
-    """Handles the authentication using a PFX or PEM file"""
-    # Static DH params because the ones generated by cryptography are considered unsafe by AD for some weird reason
-    dhparams = {
-        "p": int("00ffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece65381ffffffffffffffff", 16),
-        "g": 2
-    }
-    self.logger.info("Loading certificate and key from file")
-
-    # Load the certificate and key from file
+    decoded_tgt = decoder.decode(tgt, asn1Spec=AS_REP())[0]
+    ticket = Ticket()
+    ticket.from_asn1(decoded_tgt["ticket"])
+    realm = str(decoded_tgt["crealm"])
+    now = datetime.datetime.now(datetime.UTC)
+
+    client_name = Principal()
+    client_name.from_asn1(decoded_tgt, "crealm", "cname")
+
+    authenticator = Authenticator()
+    authenticator["authenticator-vno"] = 5
+    authenticator["crealm"] = realm
+    seq_set(authenticator, "cname", client_name.components_to_asn1)
+    authenticator["cusec"] = now.microsecond
+    authenticator["ctime"] = KerberosTime.to_asn1(now)
+    connection.logger.debug(f"U2U authenticator: {authenticator.prettyPrint()}")
+
+    ap_req = AP_REQ()
+    ap_req["pvno"] = 5
+    ap_req["msg-type"] = int(constants.ApplicationTagNumbers.AP_REQ.value)
+    ap_req["ap-options"] = constants.encodeFlags([])
+    seq_set(ap_req, "ticket", ticket.to_asn1)
+    ap_req["authenticator"] = noValue
+    ap_req["authenticator"]["etype"] = cipher.enctype
+    # Key usage 7: the AP-REQ authenticator of a PA-TGS-REQ, encrypted with the TGT session key
+    ap_req["authenticator"]["cipher"] = cipher.encrypt(session_key, 7, encoder.encode(authenticator), None)
+
+    tgs_req = TGS_REQ()
+    tgs_req["pvno"] = 5
+    tgs_req["msg-type"] = int(constants.ApplicationTagNumbers.TGS_REQ.value)
+    tgs_req["padata"] = noValue
+    tgs_req["padata"][0] = noValue
+    tgs_req["padata"][0]["padata-type"] = int(constants.PreAuthenticationDataTypes.PA_TGS_REQ.value)
+    tgs_req["padata"][0]["padata-value"] = encoder.encode(ap_req)
+
+    req_body = seq_set(tgs_req, "req-body")
+    req_body["kdc-options"] = constants.encodeFlags([constants.KDCOptions.forwardable.value, constants.KDCOptions.renewable.value, constants.KDCOptions.canonicalize.value, constants.KDCOptions.enc_tkt_in_skey.value])
+    req_body["realm"] = realm
+    seq_set(req_body, "sname", Principal(username, type=constants.PrincipalNameType.NT_UNKNOWN.value).components_to_asn1)
+    req_body["till"] = KerberosTime.to_asn1(now + datetime.timedelta(days=1))
+    req_body["nonce"] = random.getrandbits(31)
+    seq_set_iter(req_body, "etype", (int(cipher.enctype), int(constants.EncryptionTypes.rc4_hmac.value)))
+    seq_set_iter(req_body, "additional-tickets", (ticket.to_asn1(TicketAsn1()),))
+
+    connection.logger.info("Requesting a U2U service ticket to ourselves to read the PAC")
     try:
-        if self.args.pfx_cert or self.args.pfx_base64:
-            pfx = self.args.pfx_cert if self.args.pfx_cert else self.args.pfx_base64
-            ini = myPKINIT.from_pfx(pfx, self.args.pfx_pass, dhparams, bool(self.args.pfx_base64))
-        elif self.args.pem_cert and self.args.pem_key:
-            ini = myPKINIT.from_pem(self.args.pem_cert, self.args.pem_key, dhparams)
-        else:
-            self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
-            return None
+        response = sendReceive(encoder.encode(tgs_req), connection.domain, connection.kdcHost)
+        tgs_rep = decoder.decode(response, asn1Spec=TGS_REP())[0]
+        connection.logger.debug(f"U2U TGS-REP: {tgs_rep.prettyPrint()}")
+        # Key usage 2: with enc-tkt-in-skey the ticket is encrypted with the session key of the TGT sent along
+        enc_ticket_part = cipher.decrypt(session_key, 2, tgs_rep["ticket"]["enc-part"]["cipher"])
+        return read_nt_hash_from_pac(connection, enc_ticket_part, reply_key)
+    except (KerberosError, InvalidChecksum, PyAsn1Error, OSError, IndexError, KeyError) as e:   # IndexError: empty AD-IF-RELEVANT, KeyError: unknown etype
+        connection.logger.fail(f"Failed to unPAC the hash: {e}")
+        return None
+
+
+def pfx_auth(self, domain, username):
+    """Authenticate with a client certificate through PKINIT, then optionally unPAC the NT hash"""
+    if not self.kdcHost:
+        self.logger.fail(f"Could not resolve KDC host for domain {domain}. Use --kdcHost to specify the domain controller IP")
+        return False
+
+    self.logger.info("Loading certificate and key from file")
+    try:
+        credentials = pkinit_credentials(self.args)
     except FileNotFoundError as e:
         self.logger.fail(f"Certificate or key file not found: {e.filename}")
         return False
-    except Exception as e:
+    except (PKINITError, ValueError) as e:
         self.logger.fail(f"Failed to load certificate/key: {e}")
         return False
 
-    username = self.args.username[0]
-    basename = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache")
-    log_ccache = os.path.normpath(os.path.expanduser(os.path.join(NXC_PATH, "logs", basename)))
-
-    # Request a TGT with the cert data
-    req = ini.build_asreq(self.domain, username)
-    self.logger.info("Requesting TGT")
-
-    if not self.kdcHost:
-        self.logger.fail(f"Could not resolve KDC host for domain {self.domain}. Use --kdcHost to specify the domain controller IP")
+    if credentials is None:
+        self.logger.fail("You must either specify a PFX file + optional password or a combination of Cert PEM file and Private key PEM file")
         return False
 
-    sock = KerberosClientSocket(KerberosTarget(self.kdcHost))
+    self.logger.info(f"Requesting TGT for {username}@{domain} with the certificate")
+    client_name = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
     try:
-        res = sock.sendrecv(req)
-    except Exception as e:
-        self.logger.fail(str(e))
+        tgt, cipher, reply_key, session_key = getKerberosTGTPKINIT(client_name, domain, credentials, kdcHost=self.kdcHost)
+    except (PKINITError, KerberosError, OSError) as e:
+        self.logger.fail(f"Failed to get a TGT with the certificate: {e}")
         return False
 
-    encasrep, session_key, cipher, key = ini.decrypt_asrep(res.native)
-    ccache_minikerberos = CCACHE()
-    ccache_minikerberos.add_tgt(res.native, encasrep)
-    ccache_minikerberos.to_file(log_ccache)
-    self.logger.info(f"Saved TGT to file {log_ccache}")
-    self.logger.info(f"Using Kerberos Cache {log_ccache}")
-    ccache = impacket_CCache.loadFile(log_ccache)
-    principal = f"krbtgt/{self.domain.upper()}@{self.domain.upper()}"
-    creds = ccache.getCredential(principal)
-    if creds is not None:
-        tgt = creds.toTGT()
-        dumper = GETPAC(username, self.domain, self.kdcHost, key, tgt)
-        nthash = dumper.dump()
-        if not self.kerberos:
-            self.hash_login(self.domain, username, nthash)
-        else:
-            self.kerberos_login(self.domain, username, "", nthash, "", self.kdcHost, False)
+    ccache = CCache()
+    ccache.fromTGT(tgt, reply_key, session_key)
+    basename = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{username}.ccache")
+    ccache_path = os.path.normpath(os.path.expanduser(os.path.join(NXC_PATH, "logs", basename)))
+    ccache.saveFile(ccache_path)
+    self.logger.info(f"Saved TGT to {ccache_path}")
 
-    self.logger.info("Successfully authenticated using Certificate")
-    return True
+    if self.protocol == "winrm":   # nxc winrm has no Kerberos login: log in over NTLM with the unPACed hash, as before
+        nthash = unpac_the_hash(self, username, tgt, cipher, reply_key, session_key)
+        return bool(nthash) and self.hash_login(domain, username, nthash)
+
+    # Impacket reads the TGT of a Kerberos login from the cache this variable points at, for the whole process
+    os.environ["KRB5CCNAME"] = ccache_path
+    self.use_kcache = True
+    logged_in = self.kerberos_login(domain, username, "", "", "", self.kdcHost, True)
+
+    if self.protocol == "smb" and self.args.unpac:
+        nthash = unpac_the_hash(self, username, tgt, cipher, reply_key, session_key)
+        if nthash:
+            self.logger.highlight(f"{domain}\\{username} NT hash: {nthash}")
+            self.db.add_credential("hash", domain, username, nthash)
+
+    return logged_in
 
 
 def certificate_options(args):

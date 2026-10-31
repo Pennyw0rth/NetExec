@@ -861,8 +861,8 @@ wheels = [
 
 [[package]]
 name = "impacket"
-version = "0.14.0.dev0+20261028.21646.3ee67be6"
-source = { git = "https://github.com/fortra/impacket#3ee67be6e18de57b481f901b336d771a54e07e18" }
+version = "0.14.0.dev0+20261028.173308.40b1eb7a"
+source = { git = "https://github.com/fortra/impacket#40b1eb7a0d25e1f378c5824c17a87be3fd44260a" }
 dependencies = [
     { name = "charset-normalizer" },
     { name = "flask" },
@@ -1251,7 +1251,6 @@ dependencies = [
     { name = "impacket" },
     { name = "lsassy" },
     { name = "masky" },
-    { name = "minikerberos" },
     { name = "neo4j" },
     { name = "netifaces" },
     { name = "paramiko" },
@@ -1291,7 +1290,6 @@ requires-dist = [
     { name = "impacket", git = "https://github.com/fortra/impacket" },
     { name = "lsassy", specifier = ">=3.1.11" },
     { name = "masky", specifier = ">=0.2.1" },
-    { name = "minikerberos", specifier = ">=0.4.1" },
     { name = "neo4j", specifier = ">=5.0.0" },
     { name = "netifaces", specifier = ">=0.11.0,<0.12.0" },
     { name = "paramiko", specifier = ">=3.3.1" },

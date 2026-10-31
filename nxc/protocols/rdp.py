@@ -284,14 +284,10 @@ class rdp(connection):
 
             if useCache:
                 stype = asyauthSecret.CCACHE
-                if not password:
-                    password = password if password else getenv("KRB5CCNAME")
-                    if "/" in password:
-                        self.logger.fail("Kerberos ticket need to be on the local directory")
-                        return False
-                    ccache = CCache.loadFile(getenv("KRB5CCNAME"))
-                    ticketCreds = ccache.credentials[0]
-                    username = ticketCreds["client"].prettyPrint().decode().split("@")[0]
+                password = getenv("KRB5CCNAME")
+                ccache = CCache.loadFile(password)
+                ticketCreds = ccache.credentials[0]
+                username = ticketCreds["client"].prettyPrint().decode().split("@")[0]
             elif aesKey:
                 stype = asyauthSecret.AES
                 password = aesKey
