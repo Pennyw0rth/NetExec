@@ -1,4 +1,6 @@
-from nxc.helpers.args import DisplayDefaultsNotNone
+from argparse import _StoreTrueAction
+
+from nxc.helpers.args import DisplayDefaultsNotNone, get_conditional_action
 
 
 def proto_args(parser, parents):
@@ -17,6 +19,13 @@ def proto_args(parser, parents):
     cgroup.add_argument("--dump-method", action="store", default="cmd", choices={"cmd", "powershell"}, help="Select shell type in hashes dump for sam or lsa")
     cgroup.add_argument("--sam", action="store_true", help="dump SAM hashes from target systems")
     cgroup.add_argument("--lsa", action="store_true", help="dump LSA secrets from target systems")
+    ntds_arg = cgroup.add_argument("--ntds", choices={"vss"}, help="dump NTDS.dit from a DC using DiskShadow (requires SeBackupPrivilege)")
+    cgroup.add_argument("--history", action="store_true", help="Also retrieve password history (NTDS.dit)")
+    kerb_keys_arg = cgroup.add_argument("--kerberos-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Kerberos AES and DES keys from target DC (NTDS.dit)")
+    enabled_arg = cgroup.add_argument("--enabled", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only dump enabled targets from DC (NTDS.dit)")
+    kerb_keys_arg.make_required = [ntds_arg]
+    enabled_arg.make_required = [ntds_arg]
+    cgroup.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
     cgroup.add_argument("--dpapi", action="store_true", help="dump user's Credential Manager secrets from target systems")
 
     mapping_enum_group = winrm_parser.add_argument_group("Mapping/Enumeration")
