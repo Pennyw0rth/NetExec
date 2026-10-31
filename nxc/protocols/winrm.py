@@ -1,6 +1,8 @@
 import os
 import base64
 import binascii
+import html
+import re
 import traceback
 import requests
 import urllib3
@@ -70,6 +72,14 @@ def _build_command(command, shell_type):
         encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
         return "powershell.exe", ["-NoP", "-NoL", "-sta", "-NonI", "-W", "Hidden", "-Exec", "Bypass", "-Enc", encoded] 
     return "cmd.exe", ["/Q", "/c", command]
+
+
+def parse_clixml(stderr):
+    """powershell.exe writes its error stream to stderr as CLIXML, keep the error messages only"""
+    if not stderr.startswith("#< CLIXML"):
+        return stderr
+    errors = html.unescape("".join(re.findall(r'<S S="Error">(.*?)</S>', stderr, re.DOTALL)))
+    return re.sub(r"_x([0-9A-F]{4})_", lambda match: chr(int(match[1], 16)), errors)
 
 
 def _build_winrm_admin_check_request(timeout=20, session_id=None):
@@ -443,82 +453,53 @@ class winrm(connection):
     def disconnect(self):
         self._close_winrs()
 
+    def run_command(self, command, shell_type="cmd"):
+        """Run a command in the WinRS shell and return its stdout, its stderr (error messages only for powershell) and its exit code"""
+        executable, arguments = _build_command(command, shell_type)
+        output = self.conn.execute(executable, arguments=arguments).iter_output()
+        streams = {"stdout": b"", "stderr": b""}
+        try:
+            while True:
+                stream_name, data = next(output)
+                streams[stream_name] += data
+        except StopIteration as e:
+            exit_code = e.value
+        return streams["stdout"].decode(self.args.codec, errors="replace"), parse_clixml(streams["stderr"].decode(self.args.codec, errors="replace")), exit_code
+
     def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:
             payload = self.args.execute
 
-        if self.conn is None:
-            self.logger.fail("WinRM session is not established")
-            return None
-
-        command, arguments = _build_command(payload, shell_type)
-        codec = getattr(self.args, "codec", None) or "utf-8"
-
         try:
-            remote_command = self.conn.execute(command, arguments=arguments)
-
-            output = remote_command.iter_output()
-
-            stdout = []
-            stderr = []
-            interrupted = False
-
-            while True:
-                try:
-                    stream_name, data = next(output)
-                except StopIteration:
-                    break
-                except KeyboardInterrupt:
-                    if interrupted:
-                        raise
-                    interrupted = True
-                    self.logger.info("Sending Ctrl+C to the remote command")
-                    remote_command.interrupt()
-                    continue
-
-                if not data:
-                    continue
-
-                try:
-                    text = data.decode(codec)
-                except UnicodeDecodeError:
-                    self.logger.debug("Decoding error detected, retrying with replacement characters")
-                    text = data.decode(codec, errors="replace")
-
-                if stream_name == "stderr":
-                    stderr.append(text)
-                else:
-                    stdout.append(text)
-
-            stdout_text = "".join(stdout)
-            stderr_text = "".join(stderr)
-
-            if get_output:
-                return stdout_text
-
-            if not getattr(self.args, "no_output", False):
-                for line in stdout_text.replace("\r", "").splitlines():
-                    self.logger.highlight(line.rstrip())
-
-                for line in stderr_text.replace("\r", "").splitlines():
-                    self.logger.fail(line.rstrip())
-
-            if stderr_text:
-                self.logger.fail("Command execution failed")
-
-            return stdout_text
-
-        except (WinRMAuthError, WinRMFaultError, WinRMTransportError) as e:
-            if getattr(e, "code", None) == 5:
-                self.logger.fail(f"Execute command failed, current user: {self.domain}\\{self.username}' has no 'Invoke' rights to execute command (shell type: {shell_type})")
+            stdout, stderr, exit_code = self.run_command(payload, shell_type)
+        except Exception as e:
+            self.logger.debug(traceback.format_exc())
+            if isinstance(e, WinRMFaultError) and "AccessDenied" in e.code:
+                self.logger.fail(f"Execute command failed, current user: '{self.domain}\\{self.username}' has no 'Invoke' rights to execute command (shell type: {shell_type})")
             else:
                 self.logger.fail(f"Execute command failed, error: {e!s}")
             return None
 
-        except Exception as e:
-            self.logger.debug(traceback.format_exc())
-            self.logger.fail(f"Execute command failed, error: {e!s}")
+        if get_output:
+            return stdout
+        self.logger.success(f"Executed command (shell type: {shell_type})")
+        if self.args.no_output:
             return None
+
+        if shell_type == "powershell":
+            if exit_code:
+                self.logger.fail("Error executing powershell command, non-zero return code")
+            for line in stderr.replace("\r", "").splitlines():
+                self.logger.fail(line.rstrip())
+            for line in stdout.replace("\r", "").splitlines():
+                self.logger.highlight(line.rstrip())
+        elif exit_code == 0:
+            for line in stdout.replace("\r", "").splitlines():
+                self.logger.highlight(line.rstrip())
+        else:
+            for line in stderr.replace("\r", "").splitlines():
+                self.logger.fail(line.rstrip())
+        return None
 
     def ps_execute(self, payload=None, get_output=False):
         command = payload if payload else self.args.ps_execute
