@@ -165,17 +165,16 @@ class winrm(connection):
         except Exception as e:
             self.logger.debug(f"Error parsing NTLM challenge: {e!s}")
             self.logger.debug(f"Raw challenge: {self.challenge_header.split(' ')[1].replace(',', '')[:20]}...")
-            self.logger.error("Invalid NTLM challenge received from server. This may indicate NTLM is not supported and nxc winrm only support NTLM currently")
+            self.logger.error("Invalid NTLM challenge received from server. This may indicate NTLM is not supported, use Kerberos")
             self.no_ntlm = True
-            return False
-
-        dns_hostname = ntlm_info["dns_hostname"] or ""
-        hostname = ntlm_info["hostname"] or dns_hostname.split(".", 1)[0] or self.host
-        domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
-        self.hostname = sanitize_dns(hostname, self.logger)
-        self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
-        self.server_os = ntlm_info["os_version"]
-        self.logger.extra["hostname"] = self.hostname
+        else:
+            dns_hostname = ntlm_info["dns_hostname"] or ""
+            hostname = ntlm_info["hostname"] or dns_hostname.split(".", 1)[0] or self.host
+            domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
+            self.hostname = sanitize_dns(hostname, self.logger)
+            self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
+            self.server_os = ntlm_info["os_version"]
+            self.logger.extra["hostname"] = self.hostname
 
         try:
             self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
