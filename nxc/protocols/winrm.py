@@ -530,29 +530,19 @@ class winrm(connection):
     def put_file(self, local_path=None, remote_path=None):
         local_path = local_path if local_path else self.args.put_file[0]
         remote_path = remote_path if remote_path else self.args.put_file[1]
-        remote_path += (
-            os.path.basename(local_path)
-            if remote_path.endswith(("\\", "/"))
-            else ""
-        )
+        remote_path += os.path.basename(local_path) if remote_path.endswith(("\\", "/")) else ""
 
         try:
             self.logger.display(f'Uploading "{local_path}" to "{remote_path}"')
-
             with open(local_path, "rb") as fp:
                 encoded = base64.b64encode(fp.read()).decode("ascii")
-
             escaped = remote_path.replace("'", "''")
-            command = f"$b=[Convert]::FromBase64String('{encoded}'); [IO.File]::WriteAllBytes('{escaped}',$b)"
-
-            self.ps_execute(command)
-
+            _, stderr, exit_code = self.run_command(f"[IO.File]::WriteAllBytes('{escaped}', [Convert]::FromBase64String('{encoded}'))", "powershell")
+            if exit_code:
+                raise RuntimeError(stderr.strip().splitlines()[0])
             self.logger.success(f"File {local_path} has been uploaded to {remote_path}")
-            return True
-
         except Exception as e:
             self.logger.fail(f"Failed to put file {local_path} to {remote_path}, error: {e!s}")
-            return False
 
     def dir(self, directory=None):
         directory = directory if directory else self.args.dir
