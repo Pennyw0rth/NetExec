@@ -22,9 +22,6 @@ from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
 from impacket.winrm import (
-    BasicTransport,
-    ClientCertificateTransport,
-    CredSSPTransport,
     KerberosTransport,
     NegotiateTransport,
     NTCredential,
@@ -238,58 +235,13 @@ class winrm(connection):
         self.disconnect()
 
         # Like on main, --http-timeout only covers the probe: impacket's WinRS timeouts keep the socket (30s) above the operation timeout (20s)
-        url = self.endpoint
         lmhash, nthash = parse_hashes(hashes or "")
-
-        use_basic = bool(getattr(self.args, "basic", False))
-        use_credssp = bool(getattr(self.args, "credssp", False))
-
-        cert_pem = getattr(self.args, "cert_pem", "") or ""
-        cert_key = getattr(self.args, "cert_key", "") or ""
-
-        if cert_pem or cert_key:
-            if not cert_pem or not cert_key:
-                raise WinRMTransportError("Client certificate authentication requires both -cert-pem and -cert-key")
-
-            if not self.ssl:
-                raise WinRMTransportError("Client certificate authentication requires HTTPS")
-
-            transport = ClientCertificateTransport(url, cert_pem, cert_key)
-
-        elif use_basic:
-            if not username or password is None or password == "":
-                raise WinRMTransportError("Basic authentication requires a username and password")
-
-            transport = BasicTransport(url, username, password)
-
-        elif self.kerberos:
-            kerberos_credentials = get_kerberos_credential(f"HTTP/{self.hostname}", domain=self.domain, username=username, password=password or "", lmhash=lmhash, nthash=nthash, aes_key=self.aesKey, kdc_host=self.kdcHost, use_cache=use_cache)
-
-            if use_credssp:
-                if not kerberos_credentials.password:
-                    raise WinRMTransportError("CredSSP needs a plaintext password, even when using Kerberos")
-
-                transport = CredSSPTransport(url, kerberos_credentials)
-            else:
-                transport = KerberosFallbackTransport(url, kerberos_credentials)
-
+        if self.kerberos:
+            credentials = get_kerberos_credential(f"HTTP/{self.hostname}", domain=self.domain, username=username, password=password or "", lmhash=lmhash, nthash=nthash, aes_key=self.aesKey, kdc_host=self.kdcHost, use_cache=use_cache)
+            transport = KerberosFallbackTransport(self.endpoint, credentials)
         else:
-            credentials = NTCredential(
-                domain=self.domain or "",
-                username=username or "",
-                password=password or "",
-                lmhash=bytes.fromhex(lmhash) if lmhash else "",
-                nthash=bytes.fromhex(nthash) if nthash else "",
-            )
-
-            if use_credssp:
-                if not credentials.username or not credentials.password:
-                    raise WinRMTransportError("CredSSP needs a username and plaintext password")
-
-                transport = CredSSPTransport(url, credentials)
-            else:
-                transport = NegotiateTransport(url, credentials)
-
+            credentials = NTCredential(domain=self.domain or "", username=username or "", password=password or "", lmhash=bytes.fromhex(lmhash) if lmhash else "", nthash=bytes.fromhex(nthash) if nthash else "")
+            transport = NegotiateTransport(self.endpoint, credentials)
         self.conn = WinRSClient(transport)
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
