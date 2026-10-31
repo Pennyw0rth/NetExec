@@ -61,7 +61,8 @@ def build_command(command, shell_type):
         command = f'$ProgressPreference="SilentlyContinue";{command}'
         encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
         return "powershell.exe", ["-NoP", "-NoL", "-sta", "-NonI", "-W", "Hidden", "-Exec", "Bypass", "-Enc", encoded]
-    return "cmd.exe", ["/Q", "/c", command]
+    # The WinRS shell already runs the command line through cmd.exe /c
+    return command, []
 
 
 def parse_clixml(stderr):
