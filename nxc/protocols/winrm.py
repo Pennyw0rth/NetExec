@@ -421,7 +421,8 @@ class winrm(connection):
         self.admin_privs = False
         self.username = username
         self.domain = domain
-        self.lmhash, self.nthash = _parse_hashes(ntlm_hash)
+        # dploot's pypsrp session (--dpapi) only takes the hash in the LM:NT form
+        self.lmhash, self.nthash = ntlm_hash.split(":") if ":" in ntlm_hash else ("00000000000000000000000000000000", ntlm_hash)
 
         try:
             self._connect_winrs(username, hashes=ntlm_hash)
