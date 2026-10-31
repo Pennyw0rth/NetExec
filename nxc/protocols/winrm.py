@@ -247,9 +247,6 @@ class winrm(connection):
         except WinRMFaultError as e:
             self.logger.debug(f"WinRM administrator check failed: {e!s}")
 
-        except Exception as e:
-            self.logger.debug(f"Error checking administrator privileges: {e!s}")
-
         return self.admin_privs
 
     def _winrm_url(self):
@@ -445,7 +442,7 @@ class winrm(connection):
             return True
 
         except Exception as e:
-            if "with ntlm" in str(e):
+            if "status 401" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)}")
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}: {process_secret(self.password)} {e!s}")
@@ -479,7 +476,7 @@ class winrm(connection):
             return True
 
         except Exception as e:
-            if "with ntlm" in str(e):
+            if "status 401" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)}")
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}: {process_secret(self.nthash)} {e!s}")
