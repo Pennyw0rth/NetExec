@@ -20,6 +20,7 @@ from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.dpapi import DPAPITriage
 from nxc.helpers.misc import gen_random_string, sanitize_dns
+from nxc.helpers.klist import klist_display, klist_dump_ccaches
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
@@ -339,6 +340,12 @@ class winrm(connection):
         if out is not None:
             for line in out.splitlines():
                 self.logger.highlight(line.rstrip())
+
+    def klist(self):
+        klist_display(self)
+
+    def klist_dump(self):
+        klist_dump_ccaches(self, self.args.klist_dump)
 
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
