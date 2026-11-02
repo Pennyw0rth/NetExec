@@ -704,6 +704,9 @@ Add-Type -AssemblyName System.Windows.Forms
 
         get_output = bool(not self.args.no_output)
 
+        if not self.username:  # see screenshot()
+            self.logger.fail("-x/-X need credentials")
+            return None
         if self.conn.disconnected_evt.is_set():  # valid credentials without the RDP right open no session: skip silently, like smb -x without admin rights
             return None
         self.logger.success(f"Executing command: {payload}")
@@ -738,7 +741,9 @@ Add-Type -AssemblyName System.Windows.Forms
             self.logger.fail(f"Could not take the screenshot: {e!s}")
 
     def screenshot(self):
-        if not self.conn.disconnected_evt.is_set():  # no session to capture: same silent skip as execute()
+        if not self.username:  # every login method sets it, so empty means no credentials were given and there is no desktop to capture
+            self.logger.fail("--screenshot needs credentials, use --nla-screenshot to capture the login screen")
+        elif not self.conn.disconnected_evt.is_set():  # no session to capture: same silent skip as execute()
             self.runner.run(self.screen())
 
     async def nla_screen(self):
