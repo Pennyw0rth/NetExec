@@ -68,7 +68,6 @@ class rdp(connection):
         self.hybrid = False
         self.target = None
         self.auth = None
-        self.screen_conn = None
 
         self.rdp_error_status = {
             "0xc0000071": "STATUS_PASSWORD_EXPIRED",
@@ -87,7 +86,9 @@ class rdp(connection):
             "KDC_ERR_PREAUTH_FAILED": "KDC_ERR_PREAUTH_FAILED",
         }
 
-        connection.__init__(self, args, db, host)
+        # one event loop per target: aardwolf's reader tasks die with their loop, so a session can only be reused on the loop that opened it
+        with asyncio.Runner() as self.runner:
+            connection.__init__(self, args, db, host)
 
     def proto_logger(self):
         import platform
@@ -220,54 +221,43 @@ class rdp(connection):
             if probe_connection is not None:
                 await probe_connection.close()
 
-    async def connect_rdp(self, auth_only=False):
-        """Connect to the RDP server. Does NOT clean up on exit.
-
-        When auth_only is True, performs only CredSSP/NLA authentication
-        without establishing a full RDP session. This verifies credentials
-        without creating a disconnected session on single-session hosts.
-        """
-        _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout)
+    async def connect_rdp(self):
+        """Connect to the RDP server. Does NOT clean up on exit."""
+        _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
         if err is not None:
             raise err
         self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
 
-    async def terminate_conn(self, conn=None):
-        """Terminate the RDP connection (self.conn unless given) with a timeout so cleanup doesn't hang."""
-        conn = conn or self.conn
-        if conn is not None:
+    async def terminate_conn(self):
+        """Terminate the RDP connection with a timeout so cleanup doesn't hang (https://github.com/skelsec/aardwolf/issues/43)."""
+        if self.conn is not None:
             with contextlib.suppress(Exception):
-                await asyncio.wait_for(conn.terminate(), timeout=self.args.rdp_timeout)
+                await asyncio.wait_for(self.conn.terminate(), timeout=self.args.rdp_timeout)
 
-    async def connect_rdp_with_cleanup(self, auth_only=False):
+    def disconnect(self):
+        self.runner.run(self.terminate_conn())
+
+    async def connect_rdp_with_cleanup(self):
         """Connect to the RDP server and always terminate the connection on exit"""
         try:
-            await self.connect_rdp(auth_only=auth_only)
+            await self.connect_rdp()
         finally:
             await self.terminate_conn()
 
     async def login_and_confirm(self):
-        """Connect and return whether a real session opened (Save Session Info PDU).
+        """Log on and return whether a real session opened (Save Session Info PDU). The session stays open for -x/-X/--screenshot until disconnect().
 
         That PDU never comes when access is authorized but the logon is refused (restricted admin).
-        With --screenshot the session of the last successful login stays open for screen(), so the screenshot needs no second logon.
         """
-        if self.screen_conn is not None:  # drop the session an earlier success kept (--continue-on-success) before it takes a session slot this logon needs
-            await self.terminate_conn(self.screen_conn)
-            self.screen_conn = None
+        await self.terminate_conn()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
+        self.conn = self._create_rdp_connection(self.auth)
+        await self.connect_rdp()
         try:
-            await self.connect_rdp()
-            try:
-                await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
-                return True
-            except TimeoutError:
-                self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
-                return False
-        finally:
-            if self.args.screenshot and not self.conn.disconnected_evt.is_set():
-                self.screen_conn = self.conn
-            else:
-                await self.terminate_conn()
+            await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
+            return True
+        except TimeoutError:
+            self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
+            return False
 
     def rdp_access_denied(self):
         """Whether the Early User Authorization Result PDU says the account has no RDP access right at all.
@@ -334,21 +324,7 @@ class rdp(connection):
                 domain=domain,
                 stype=stype,
             )
-            self.conn = self._create_rdp_connection(self.auth)
-            if self._execution_pending():
-                # auth_only verifies creds without opening a full session, which on single-session
-                # Win11 hosts would be left disconnected and break the clipboard execute_shell uses
-                # (commit ac6f5814). It needs CredSSP/NLA; if the server doesn't negotiate it aardwolf
-                # raises, so fall back to a full confirm on a FRESH connection (the failed one is
-                # already torn down and cannot be reconnected), which also sets admin_privs.
-                try:
-                    self.runner.run(self.connect_rdp_with_cleanup(auth_only=True))
-                except RuntimeError as e:
-                    self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
-                    self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = self.runner.run(self.login_and_confirm())
-            else:
-                self.admin_privs = self.runner.run(self.login_and_confirm())
+            self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(
                 "{}\\{}{} {}".format(
@@ -397,10 +373,6 @@ class rdp(connection):
                 )
             return False
 
-    def _execution_pending(self):
-        """Check if command execution will follow authentication."""
-        return bool(self.args.execute or self.args.ps_execute)
-
     def plaintext_login(self, domain, username, password):
         self.username = username
         try:
@@ -410,21 +382,7 @@ class rdp(connection):
                 domain=domain,
                 stype=asyauthSecret.PASS,
             )
-            self.conn = self._create_rdp_connection(self.auth)
-            if self._execution_pending():
-                # auth_only verifies creds without opening a full session, which on single-session
-                # Win11 hosts would be left disconnected and break the clipboard execute_shell uses
-                # (commit ac6f5814). It needs CredSSP/NLA; if the server doesn't negotiate it aardwolf
-                # raises, so fall back to a full confirm on a FRESH connection (the failed one is
-                # already torn down and cannot be reconnected), which also sets admin_privs.
-                try:
-                    self.runner.run(self.connect_rdp_with_cleanup(auth_only=True))
-                except RuntimeError as e:
-                    self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
-                    self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = self.runner.run(self.login_and_confirm())
-            else:
-                self.admin_privs = self.runner.run(self.login_and_confirm())
+            self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -460,21 +418,7 @@ class rdp(connection):
                 domain=domain,
                 stype=asyauthSecret.NT,
             )
-            self.conn = self._create_rdp_connection(self.auth)
-            if self._execution_pending():
-                # auth_only verifies creds without opening a full session, which on single-session
-                # Win11 hosts would be left disconnected and break the clipboard execute_shell uses
-                # (commit ac6f5814). It needs CredSSP/NLA; if the server doesn't negotiate it aardwolf
-                # raises, so fall back to a full confirm on a FRESH connection (the failed one is
-                # already torn down and cannot be reconnected), which also sets admin_privs.
-                try:
-                    self.runner.run(self.connect_rdp_with_cleanup(auth_only=True))
-                except RuntimeError as e:
-                    self.logger.debug(f"auth_only unavailable ({e!s}); retrying with a full logon")
-                    self.conn = self._create_rdp_connection(self.auth)
-                    self.admin_privs = self.runner.run(self.login_and_confirm())
-            else:
-                self.admin_privs = self.runner.run(self.login_and_confirm())
+            self.admin_privs = self.runner.run(self.login_and_confirm())
 
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -691,16 +635,6 @@ Add-Type -AssemblyName System.Windows.Forms
         self.logger.debug(f"Executing {shell_type} command through {'an encoded PowerShell launcher' if get_output else 'interactive keyboard input'}")
 
         try:
-            self.conn = self._create_rdp_connection(self.auth)
-            await self.connect_rdp()
-        except Exception as e:
-            self.logger.debug(f"Error connecting to RDP: {e!s}")
-            if "CredSSP" in str(e) or "STATUS_LOGON" in str(e):
-                self.logger.fail(f"Authentication failed: {e!s}")
-            await self.terminate_conn()
-            return None
-
-        try:
             if get_output:
                 self.logger.success("Waiting for clipboard to be ready...")
                 try:
@@ -762,10 +696,6 @@ Add-Type -AssemblyName System.Windows.Forms
             self.logger.debug(f"Unexpected error: {e!s}")
             self.logger.fail(f"Command execution failed: {e!s}")
             return None
-        finally:
-            # clean up the connection with a timeout to prevent aardwolf deadlock (see https://github.com/skelsec/aardwolf/issues/43)
-            self.logger.debug("Terminating RDP connection")
-            await self.terminate_conn()
 
     def execute(self, payload=None, shell_type="cmd"):
         """Execute a command via RDP"""
@@ -774,6 +704,8 @@ Add-Type -AssemblyName System.Windows.Forms
 
         get_output = bool(not self.args.no_output)
 
+        if self.conn.disconnected_evt.is_set():  # valid credentials without the RDP right open no session: skip silently, like smb -x without admin rights
+            return None
         self.logger.success(f"Executing command: {payload}")
 
         try:
@@ -796,13 +728,7 @@ Add-Type -AssemblyName System.Windows.Forms
         self.logger.highlight(f"{label} saved {filename}")
 
     async def screen(self):
-        # reuse the session left open by the login, or open one when the login only checked the credentials (-x/-X)
         try:
-            if self.screen_conn is None:
-                self.conn = self._create_rdp_connection(self.auth)
-                await self.connect_rdp()
-            else:
-                self.conn, self.screen_conn = self.screen_conn, None
             await asyncio.sleep(self.args.screentime)
             if self.conn.desktop_buffer_has_data:
                 await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "Screenshot")
@@ -810,11 +736,10 @@ Add-Type -AssemblyName System.Windows.Forms
                 self.logger.fail(f"No desktop data after {self.args.screentime}s, try a longer --screentime")
         except Exception as e:
             self.logger.fail(f"Could not take the screenshot: {e!s}")
-        finally:
-            await self.terminate_conn()
 
     def screenshot(self):
-        self.runner.run(self.screen())
+        if not self.conn.disconnected_evt.is_set():  # no session to capture: same silent skip as execute()
+            self.runner.run(self.screen())
 
     async def nla_screen(self):
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
@@ -843,12 +768,3 @@ Add-Type -AssemblyName System.Windows.Forms
     def nla_screenshot(self):
         if not self.nla:
             self.runner.run(self.nla_screen())
-
-    def proto_flow(self):
-        # one event loop per target, so the session opened by the login can be reused by --screenshot
-        with asyncio.Runner() as self.runner:
-            try:
-                super().proto_flow()
-            finally:
-                if self.screen_conn is not None:  # the login kept a session that screen() did not use
-                    self.runner.run(self.terminate_conn(self.screen_conn))
