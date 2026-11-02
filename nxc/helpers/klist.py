@@ -29,9 +29,6 @@ class Klist:
         self.logger = connection.logger
         self.bias_minutes = 0
 
-    def run(self, command):
-        return self.connection.execute(command, True)
-
     def display(self):
         tgts = self.load_tgts()
         if tgts is None:
@@ -67,7 +64,7 @@ class Klist:
 
     def load_tgts(self):
         """Returns None when klist itself could not run, a (possibly empty) list otherwise."""
-        output = self.run("klist sessions")
+        output = self.connection.execute("klist sessions", True)
         if not output:
             self.logger.fail("Failed to enumerate Kerberos sessions")
             return None
@@ -110,7 +107,7 @@ class Klist:
         klist prints local wallclock with no zone, so without this the ccache times and the
         expiry check are off by the target's UTC offset whenever it differs from ours.
         """
-        output = self.run(r'reg query "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v ActiveTimeBias')
+        output = self.connection.execute(r'reg query "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v ActiveTimeBias', True)
         match = re.search(r"ActiveTimeBias\s+REG_DWORD\s+0x([0-9a-fA-F]+)", output) if output else None
         if not match:
             self.logger.debug("Could not read ActiveTimeBias, assuming target is in UTC")
@@ -124,7 +121,7 @@ class Klist:
         now = datetime.now(UTC).timestamp()
         tgts = []
         for logon_hex, account in sessions:
-            tgt_text = self.run(f"klist tgt -li {logon_hex}")
+            tgt_text = self.connection.execute(f"klist tgt -li {logon_hex}", True)
             if not tgt_text:
                 self.logger.debug(f"{account} ({logon_hex}): no output from klist tgt")
                 continue
@@ -211,8 +208,7 @@ class Klist:
             "ticket_data": ticket_bytes,
         }
 
-    @staticmethod
-    def build_principal(components, realm):
+    def build_principal(self, components, realm):
         source = types.Principal([components, realm], type=constants.PrincipalNameType.NT_PRINCIPAL.value)
         principal = Principal()
         principal.fromPrincipal(source)
@@ -256,15 +252,12 @@ class Klist:
 
         ccache.credentials = [credential]
         ccache.saveFile(path)
-        return path
 
-    @staticmethod
-    def fmt_time(timestamp):
+    def fmt_time(self, timestamp):
         if not timestamp:
             return "N/A"
         return datetime.fromtimestamp(timestamp, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
 
-    @staticmethod
-    def ccache_path(prefix, info, logon_hex):
+    def ccache_path(self, prefix, info, logon_hex):
         name = sanitize_path_component(f"{info['client']}@{info['realm']}_{logon_hex}")
         return f"{prefix}_{name}.ccache"
