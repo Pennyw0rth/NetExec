@@ -51,6 +51,8 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
+    cred_gathering_group.add_argument("--klist", action="store_true", help="Enumerate Kerberos sessions on the target")
+    cred_gathering_group.add_argument("--klist-dump", nargs="*", type=int, metavar="NUM", dest="klist_dump", help="Dump TGTs as ccache files: no value dumps all, or give session number(s) from --klist, e.g. --klist-dump 1 3")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
     shares_arg = mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")
@@ -73,8 +75,6 @@ def proto_args(parser, parents):
     mapping_enum_group.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, if a user is specified than a regex filter is applied.")
     mapping_enum_group.add_argument("--loggedon-users-filter", action="store", help="only search for specific user, works with regex")
     mapping_enum_group.add_argument("--qwinsta", type=str, nargs="?", const="", help="Enumerate user sessions. If a username is given, filter for it; if a file is given, filter for listed usernames. If no value is given, list all.")
-    mapping_enum_group.add_argument("--klist", action="store_true", help="Enumerate Kerberos sessions on the target")
-    mapping_enum_group.add_argument("--klist-dump", nargs="*", metavar="NUM", dest="klist_dump", help="Dump TGTs as ccache files: no value dumps all, or give session number(s) from --klist, e.g. --klist-dump 1 3")
     mapping_enum_group.add_argument("--tasklist", type=str, nargs="?", const=True, help="Enumerate running processes and filter for the specified one if specified")
     mapping_enum_group.add_argument("--taskkill", type=str, help="Kills a specific PID or a proces name's PID's")
 
