@@ -722,8 +722,6 @@ class wmi(connection):
 
     @requires_admin
     def execute(self, command=None, get_output=False, use_powershell=False):
-        output = ""
-
         # Execution via -x
         if not command and self.args.execute:
             command = self.args.execute

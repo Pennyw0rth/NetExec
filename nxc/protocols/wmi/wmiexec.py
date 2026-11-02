@@ -74,9 +74,9 @@ class WMIEXEC:
                     self.logger.debug(f"Could not query process {pid}: {e}")
                     continue
                 # Children (e.g. "start /b") keep the ParentProcessId after the parent exits and may still hold the output file open
-                while time.monotonic() < end and self.has_children(pid):
-                    time.sleep(0.2)
-                return
+                if not self.has_children(pid):
+                    return
+        self.logger.fail(f"WMIEXEC: Process {pid} still running after {timeout}s, output may be incomplete. Please try a higher '--exec-timeout'")
 
     def has_children(self, pid):
         try:
@@ -186,13 +186,12 @@ class WMIEXEC:
             self.logger.fail("WMIEXEC: Could not retrieve output file! Either command timed out or AV killed the process. Please try increasing the timeout: '--exec-timeout 10'")
 
     def clean_up(self, result_output, result_output_b64):
-        """Deletes the output file, the base64 output file, and the registry path where the base64 content was stored."""
-        self.execute_remote(f'{self.__shell} del /q /f "{result_output}" "{result_output_b64}"')
-
+        """Deletes the registry path where the base64 content was stored, the output file and the base64 output file."""
         try:
             self.logger.debug(f"Removing temporary registry path: HKLM\\{self.__registry_Path}")
             descriptor, _ = self.__iWbemServices.GetObject("StdRegProv")
             descriptor = descriptor.SpawnInstance()
             descriptor.DeleteKey(0x80000002, self.__registry_Path)
+            self.execute_remote(f'{self.__shell} del /q /f "{result_output}" "{result_output_b64}"')
         except Exception as e:
-            self.logger.fail(f"Target: {self.__target} removing temporary registry path error: {e!s}")
+            self.logger.fail(f"WMIEXEC: Cleanup failed, traces may be left on the target ({result_output}, {result_output_b64}, HKLM\\{self.__registry_Path}): {e}")
