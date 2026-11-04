@@ -254,24 +254,6 @@ class rdp(connection):
         finally:
             await self.terminate_conn()
 
-    async def check_logon(self):
-        """Tell whether the credentials were accepted when the handshake itself did not check them.
-
-        Only CredSSP authenticates during the handshake. Elsewhere the server takes the connection
-        whatever we send, then reports a successful logon with a Save Session Info PDU. A refused
-        logon gets no PDU at all on current Windows, hence the wait for --rdp-logon-timeout.
-        """
-        if SUPP_PROTOCOLS.HYBRID in self.conn.x224_protocol or SUPP_PROTOCOLS.HYBRID_EX in self.conn.x224_protocol:
-            return
-        try:
-            await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_logon_timeout)
-        except TimeoutError:
-            if self.conn.logon_error is None:
-                self.logger.debug("Server sent no Save Session Info PDU, the logon never completed")
-                raise Exception("STATUS_LOGON_FAILURE") from None
-        if self.conn.logon_error is not None:
-            raise Exception(f"Logon refused by the server: {self.conn.logon_error.name}")
-
     async def login_and_confirm(self):
         """Connect and return whether a real session opened (Save Session Info PDU), always cleaning up.
 
@@ -279,7 +261,6 @@ class rdp(connection):
         """
         try:
             await self.connect_rdp()
-            await self.check_logon()
             try:
                 await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
                 return True
