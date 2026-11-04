@@ -53,6 +53,7 @@ class rdp(connection):
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
         self.selected_proto = None
+        self.login_proto = None
         width, height = args.res.upper().split("X")
         height = int(height)
         width = int(width)
@@ -128,8 +129,9 @@ class rdp(connection):
         iosettings = self.iosettings.clone_for_connection()
         # Explicit protocols are used by discovery and screenshot fallbacks.
         # Authenticated connections leave this unset so aardwolf selects the
-        # X224 flags appropriate for the credential type.
-        iosettings.supported_protocols = supported_protocols
+        # X224 flags appropriate for the credential type, unless the server
+        # has no CredSSP and only takes the protocol create_conn_obj() found.
+        iosettings.supported_protocols = self.login_proto if supported_protocols is None else supported_protocols
         return RDPConnection(
             iosettings=iosettings,
             target=copy.deepcopy(self.target),
@@ -173,8 +175,8 @@ class rdp(connection):
 
         if self.selected_proto is None:
             self.logger.debug("Server rejected every protocol we offered")
-        else:
-            self.iosettings.supported_protocols = self.selected_proto
+        elif self.selected_proto in (SUPP_PROTOCOLS.RDP, SUPP_PROTOCOLS.SSL):
+            self.login_proto = self.selected_proto
 
         if self.args.domain:
             self.domain = self.args.domain
