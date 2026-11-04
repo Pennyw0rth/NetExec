@@ -238,7 +238,8 @@ class rdp(connection):
         without establishing a full RDP session. This verifies credentials
         without creating a disconnected session on single-session hosts.
         """
-        _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout)
+        # Without CredSSP, connect() also waits up to autologon_timeout for the server to confirm the logon
+        _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout + (self.conn.autologon_timeout if self.login_proto is not None else 0))
         if err is not None:
             raise err
         self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
