@@ -198,9 +198,20 @@ class NXCModule:
         if file is None:
             context.log.fail("Unable to dump lsass")
             return False
-        credentials, tickets, masterkeys = Parser(host, file).parse()
-        file.close()
-        ImpacketFile.delete(session, file.get_file_path())
+        try:
+            parsed = Parser(host, file).parse()
+        finally:
+            # Delete the remote file even when parsing failed, and even if closing it fails
+            try:
+                file.close()
+            except Exception as e:
+                context.log.debug(f"Error closing dumper file: {e}")
+            if not ImpacketFile.delete(session, file.get_file_path()):
+                context.log.fail(f"[OPSEC] Failed to delete lsassy dumper file: {file.get_file_path()}")
+        if parsed is None:
+            context.log.fail("Unable to parse lsass dump")
+            return False
+        credentials, tickets, masterkeys = parsed
         if credentials is None:
             credentials = []
         credentials = [cred.get_object() for cred in credentials if not cred.get_username().endswith("$")]
@@ -246,7 +257,9 @@ class NXCModule:
                         connection.nthash = user[1]
                         connection.nthash = user[1]
                         try:
-                            self.run_lsassy(context, connection, cursor)
+                            if self.run_lsassy(context, connection, cursor) is False:
+                                context.log.fail(f"Failed to dump lsassy on {pc[0]}")
+                                continue
                             cursor.execute("UPDATE pc_and_admins SET dumped = 'TRUE' WHERE pc_name = ?", [pc[0]])
 
                             process_creds(

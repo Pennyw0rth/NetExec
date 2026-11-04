@@ -11,6 +11,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--generate-st", type=str, dest="generate_st", help="Store a Service Ticket in the specified file. Use with --delegate to save the S4U ST, or without --delegate (together with --spn) to request a regular ST for the given SPN")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
     u2u_arg = smb_parser.add_argument("--u2u", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Use User-to-User (U2U) authentication with S4U2Self")
+    smb_parser.add_argument("--unpac", action="store_true", help="UnPAC the hash: recover the NT hash from the PAC of the PKINIT TGT (requires a certificate)")
 
     dgroup = smb_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", "--domain", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
