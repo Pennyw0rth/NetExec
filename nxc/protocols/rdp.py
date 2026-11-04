@@ -220,31 +220,12 @@ class rdp(connection):
         """
         self.disconnect()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
         self.create_conn_obj(self.auth)
-        self.runner.run(self.check_logon())
         try:
             self.runner.run(asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout))
             return True
         except TimeoutError:
             self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
             return False
-
-    async def check_logon(self):
-        """Tell whether the credentials were accepted when the handshake itself did not check them.
-
-        Only CredSSP authenticates during the handshake. Elsewhere the server takes the connection
-        whatever we send, then reports a successful logon with a Save Session Info PDU. A refused
-        logon gets no PDU at all on current Windows, hence the wait for --rdp-logon-timeout.
-        """
-        if SUPP_PROTOCOLS.HYBRID in self.conn.x224_protocol or SUPP_PROTOCOLS.HYBRID_EX in self.conn.x224_protocol:
-            return
-        try:
-            await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_logon_timeout)
-        except TimeoutError:
-            if self.conn.logon_error is None:
-                self.logger.debug("Server sent no Save Session Info PDU, the logon never completed")
-                raise Exception("STATUS_LOGON_FAILURE") from None
-        if self.conn.logon_error is not None:
-            raise Exception(f"Logon refused by the server: {self.conn.logon_error.name}")
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
