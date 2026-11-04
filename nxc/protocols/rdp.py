@@ -127,7 +127,7 @@ class rdp(connection):
         their NTLM challenge still names the host for enum_host_info(). That call returns False when the host doesn't answer.
         """
         if credentials is None:
-            self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
+            self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True, autologon=False)  # old servers only offer ciphers OpenSSL rejects at its default security level; no autologon with the dummy credentials
             self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
             for proto in reversed(self.protoflags):
                 try:
