@@ -44,6 +44,7 @@ class rdp(connection):
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
         self.selected_proto = None
+        self.login_proto = None
         self.iosettings = RDPIOSettings()
         self.iosettings.clipboard_use_pyperclip = False
         width, height = args.res.upper().split("X")
@@ -149,13 +150,13 @@ class rdp(connection):
 
             if self.selected_proto is None:
                 self.logger.debug("Server rejected every protocol we offered")
-            else:
-                self.iosettings.supported_protocols = self.selected_proto
+            elif self.selected_proto in (SUPP_PROTOCOLS.RDP, SUPP_PROTOCOLS.SSL):
+                self.login_proto = self.selected_proto
             return True
 
         iosettings = self.iosettings.clone_for_connection()
-        # the fingerprint, the NLA probe and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type
-        iosettings.supported_protocols = supported_protocols
+        # the fingerprint, the NLA probe and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type, unless the server has no CredSSP and only takes the protocol the fingerprint found
+        iosettings.supported_protocols = self.login_proto if supported_protocols is None else supported_protocols
         self.conn = RDPConnection(iosettings=iosettings, target=self.target, credentials=credentials)
         _, err = self.runner.run(asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout))
         if err is not None:
