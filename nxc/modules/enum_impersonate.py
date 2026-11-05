@@ -23,27 +23,26 @@ class NXCModule:
         if impersonate_users:
             self.context.log.success("Users with impersonation rights:")
             for user in impersonate_users:
-                self.context.log.display(f"  - {user}")
+                self.context.log.display(f"  - {user['grantee']} can impersonate: {user['target']}")
         else:
             self.context.log.fail("No users with impersonation rights found.")
 
     def get_impersonate_users(self) -> list:
         """
-        Fetches a list of users with impersonation rights.
+        Fetches the IMPERSONATE grants on logins that the current user can see (all of them as sysadmin).
 
         Returns
         -------
-        list: List of user names.
+        list: List of rows with the grantee and the target login.
         """
         query = """
-        SELECT DISTINCT b.name
-        FROM sys.server_permissions a
-        INNER JOIN sys.server_principals b
-        ON a.grantor_principal_id = b.principal_id
-        WHERE a.permission_name LIKE 'IMPERSONATE%'
+        SELECT ge.name AS grantee, tg.name AS target
+        FROM sys.server_permissions p
+        INNER JOIN sys.server_principals ge ON ge.principal_id = p.grantee_principal_id
+        INNER JOIN sys.server_principals tg ON tg.principal_id = p.major_id
+        WHERE p.class_desc = 'SERVER_PRINCIPAL' AND p.permission_name = 'IMPERSONATE' AND p.state_desc IN ('GRANT', 'GRANT_WITH_GRANT_OPTION')
         """
-        res = self.mssql_conn.sql_query(query)
-        return [user["name"] for user in res] if res else []
+        return self.mssql_conn.sql_query(query) or []
 
     def options(self, context, module_options):
         pass
