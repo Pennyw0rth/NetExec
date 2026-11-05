@@ -36,11 +36,11 @@ class NXCModule:
         list: List of rows with the grantee and the target login.
         """
         query = """
-        SELECT ge.name AS grantee, tg.name AS target
+        SELECT ge.name AS grantee, ISNULL(tg.name, 'any login') AS target
         FROM sys.server_permissions p
         INNER JOIN sys.server_principals ge ON ge.principal_id = p.grantee_principal_id
-        INNER JOIN sys.server_principals tg ON tg.principal_id = p.major_id
-        WHERE p.class_desc = 'SERVER_PRINCIPAL' AND p.permission_name = 'IMPERSONATE' AND p.state_desc IN ('GRANT', 'GRANT_WITH_GRANT_OPTION')
+        LEFT JOIN sys.server_principals tg ON tg.principal_id = p.major_id AND p.class_desc = 'SERVER_PRINCIPAL'
+        WHERE p.permission_name IN ('IMPERSONATE', 'IMPERSONATE ANY LOGIN') AND p.state_desc IN ('GRANT', 'GRANT_WITH_GRANT_OPTION')
         """
         return self.mssql_conn.sql_query(query) or []
 

@@ -44,7 +44,7 @@ class NXCModule:
         self.action = None
 
         if "ACTION" in module_options:
-            self.action = module_options["ACTION"]
+            self.action = module_options["ACTION"].lower()
 
     def on_login(self, context, connection):
         self.context = context
