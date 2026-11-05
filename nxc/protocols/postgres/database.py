@@ -1,6 +1,6 @@
 import configparser
 
-from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
+from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import declarative_base
 

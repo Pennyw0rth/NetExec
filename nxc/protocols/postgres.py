@@ -37,7 +37,6 @@ class postgres(connection):
                 else:
                     self.call_cmd_args()
 
-
     def login_default_creds(self):
 
         self.logger.debug(f"Trying {len(DEFAULT_CREDS)} built-in default credential pair(s)")
@@ -49,7 +48,6 @@ class postgres(connection):
                     return True
         return owned
 
-
     def create_conn_obj(self):
         try:
             s = socket.create_connection((self.host, self.port), timeout=self.args.postgres_timeout)
@@ -58,8 +56,6 @@ class postgres(connection):
             if response in (b"S", b"N"):
                 self.postgres = True
                 self.logger.display("PostgreSQL")
-            else:
-                pass
             s.close()
             return True
         except OSError:
@@ -83,7 +79,6 @@ class postgres(connection):
             cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
             row = cur.fetchone()
             self.admin_privs = bool(row[0]) if row else False
-            #self.conn.close()
         except OperationalError as e:
             self.logger.fail(f"{username}:{process_secret(password)} {e}")
             return False
@@ -115,7 +110,7 @@ class postgres(connection):
         try:
             for remote_path, local_path in self.args.get_file:
                 with self.conn.cursor() as curr:
-                    curr.execute("SELECT pg_read_binary_file(%s)",(remote_path,))
+                    curr.execute("SELECT pg_read_binary_file(%s)", (remote_path,))
                     data = curr.fetchone()[0]
                     with open(local_path, "wb") as f:
                         f.write(data)
@@ -150,6 +145,3 @@ class postgres(connection):
                 self.logger.success(f"[+] Uploaded: {local_path} -> {remote_path}")
         except Exception as e:
             self.logger.fail(f"Error: {e}")
-
-
-

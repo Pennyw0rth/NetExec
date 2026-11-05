@@ -15,12 +15,7 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """
-        pass pass pass
-        """
-        
-
-
+        """No options available"""
 
     def on_login(self, context, connection):
         """Runs once credentials have been validated by postgres.plaintext_login()."""
@@ -39,7 +34,7 @@ class NXCModule:
 
         query = """SELECT rolname, rolpassword
                     FROM pg_catalog.pg_authid
-                    WHERE rolcanlogin = true 
+                    WHERE rolcanlogin = true
                     AND rolpassword IS NOT NULL;
 """
 

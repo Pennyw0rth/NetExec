@@ -15,9 +15,7 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """
-        NO-TEMPLATES  Hide template databases (template0/template1) from the output (default: False)
-        """
+        """NO-TEMPLATES  Hide template databases (template0/template1) from the output (default: False)"""
         self.hide_templates = False
         if "NO-TEMPLATES" in module_options:
             self.hide_templates = module_options["NO-TEMPLATES"].lower() in ("true", "1", "yes")

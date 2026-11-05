@@ -15,12 +15,7 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """
-        pass pass pass
-        """
-        
-
-
+        """No options available"""
 
     def on_login(self, context, connection):
         """Runs once credentials have been validated by postgres.plaintext_login()."""
