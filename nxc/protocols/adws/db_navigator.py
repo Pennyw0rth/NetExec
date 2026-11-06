@@ -55,10 +55,7 @@ class navigator(DatabaseNavigator):
 
     def display_creds(self, creds):
         data = [["CredID", "CredType", "Domain", "UserName", "Password"]]
-
-        for cred in creds:
-            data.append([cred[0], cred[4], cred[1], cred[2], cred[3]])
-
+        data.extend([cred[0], cred[4], cred[1], cred[2], cred[3]] for cred in creds)
         print_table(data, title="Credentials")
 
     def do_creds(self, line):
@@ -92,8 +89,7 @@ class navigator(DatabaseNavigator):
         else:
             creds = self.db.get_credentials(filter_term=filter_term)
             data = [["CredID", "CredType", "Domain", "UserName", "Password"]]
-            for cred in creds:
-                data.append([cred[0], cred[4], cred[1], cred[2], cred[3]])
+            data.extend([cred[0], cred[4], cred[1], cred[2], cred[3]] for cred in creds)
             print_table(data, title="Credential(s)")
 
     def help_creds(self):

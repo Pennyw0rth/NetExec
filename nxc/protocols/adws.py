@@ -155,7 +155,7 @@ class adws(connection):
             return False
 
     # -----------------------------------------------------------------------
-    # Enumeration methods - auto-dispatched by call_cmd_args via proto_args
+    # Enumeration methods — auto-dispatched by call_cmd_args via proto_args
     # -----------------------------------------------------------------------
 
     def _adws_enum(self, query, attributes, label="objects"):

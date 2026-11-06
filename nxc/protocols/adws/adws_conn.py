@@ -18,13 +18,11 @@ import socket
 import struct
 import time
 from base64 import b64decode
-from enum import IntEnum, IntFlag
 from html import unescape
 from html.parser import HTMLParser
 from io import BytesIO
-from typing import Optional
 from uuid import UUID, uuid4
-from xml.etree import ElementTree
+from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape, quoteattr
 
 import impacket.ntlm
@@ -39,13 +37,14 @@ from impacket.krb5.ccache import CCache
 from impacket.krb5.crypto import Key, _enctype_table
 from impacket.krb5.gssapi import (
     GSSAPI, GSS_C_CONF_FLAG, GSS_C_INTEG_FLAG, GSS_C_MUTUAL_FLAG,
-    GSS_C_REPLAY_FLAG, GSS_C_SEQUENCE_FLAG, KRB5_AP_REQ, CheckSumField,
+    GSS_C_REPLAY_FLAG, GSS_C_SEQUENCE_FLAG, CheckSumField,
 )
 from impacket.krb5.kerberosv5 import getKerberosTGS
 from impacket.krb5.types import KerberosTime, Principal, Ticket
 from impacket.ldap.ldaptypes import LDAP_SID
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type.univ import noValue
+import contextlib
 
 log = logging.getLogger(__name__)
 
@@ -157,7 +156,7 @@ class NBFSEDecimal:
         value = str(self.high * 2**64 + self.low)
         if self.scale > 0:
             value = value[:-self.scale] + "." + value[-self.scale:]
-        return ("-%s" % value) if self.sign else value
+        return (f"-{value}") if self.sign else value
 
     @classmethod
     def parse(cls, fp):
@@ -260,11 +259,11 @@ NBFSE_DICT = {
 # fill odd-indexed placeholders
 for _i in range(0x01, 0xFFF, 2):
     if _i not in NBFSE_DICT:
-        NBFSE_DICT[_i] = "[[VALUE_0x%02x]]" % _i
+        NBFSE_DICT[_i] = f"[[VALUE_0x{_i:02x}]]"
 # fill remaining even gaps for completeness
 for _i in range(0x00, 0x3D0, 2):
     if _i not in NBFSE_DICT:
-        NBFSE_DICT[_i] = "[[VALUE_0x%02x]]" % _i
+        NBFSE_DICT[_i] = f"[[VALUE_0x{_i:02x}]]"
 
 NBFSE_INVERTED = {v: k for k, v in NBFSE_DICT.items()}
 
@@ -319,14 +318,18 @@ class _Record:
 class _Element(_Record):
     pass
 
+
 class _EndElement(_Element):
     type = 0x01
+
     @classmethod
     def parse(cls, fp):
         return cls()
 
+
 class _Attribute(_Record):
     pass
+
 
 class _Text(_Record):
     pass
@@ -336,145 +339,193 @@ class _Text(_Record):
 
 class ZeroText(_Text):
     type = 0x80
+
     def __str__(self): return "0"
     @classmethod
     def parse(cls, fp): return cls()
 
+
 class OneText(_Text):
     type = 0x82
+
     def __str__(self): return "1"
     @classmethod
     def parse(cls, fp): return cls()
 
+
 class FalseText(_Text):
     type = 0x84
+
     def __str__(self): return "false"
     @classmethod
     def parse(cls, fp): return cls()
 
+
 class TrueText(_Text):
     type = 0x86
+
     def __str__(self): return "true"
     @classmethod
     def parse(cls, fp): return cls()
 
+
 class Int8Text(_Text):
     type = 0x88
+
     def __init__(self, v=0): self.value = v
     def to_bytes(self): return super().to_bytes() + struct.pack("<b", self.value)
     def __str__(self): return str(self.value)
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<b", fp.read(1))[0])
 
+
 class Int16Text(Int8Text):
     type = 0x8A
+
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<h", self.value)
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<h", fp.read(2))[0])
 
+
 class Int32Text(Int8Text):
     type = 0x8C
+
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<i", self.value)
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<i", fp.read(4))[0])
 
+
 class Int64Text(Int8Text):
     type = 0x8E
+
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<q", self.value)
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<q", fp.read(8))[0])
 
+
 class UInt64Text(Int8Text):
     type = 0xB2
+
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<Q", self.value)
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<Q", fp.read(8))[0])
 
+
 class BoolText(_Text):
     type = 0xB4
+
     def __init__(self, v=False): self.value = v
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<B", 1 if self.value else 0)
     def __str__(self): return str(self.value)
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<B", fp.read(1))[0] == 1)
 
+
 class FloatText(_Text):
     type = 0x90
+
     def __init__(self, v=0.0): self.value = v
     def to_bytes(self): return super().to_bytes() + struct.pack("<f", self.value)
+
     def __str__(self):
         try:
-            return ("%.0f" % self.value) if self.value == int(self.value) else str(self.value)
-        except:
+            return (f"{self.value:.0f}") if self.value == int(self.value) else str(self.value)
+        except Exception:
             return str(self.value).upper()
+
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<f", fp.read(4))[0])
 
+
 class DoubleText(FloatText):
     type = 0x92
+
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<d", self.value)
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<d", fp.read(8))[0])
 
+
 class DecimalText(_Text):
     type = 0x94
+
     def __init__(self, v=None): self.value = v
     def __str__(self): return str(self.value)
     def to_bytes(self): return super().to_bytes() + self.value.to_bytes()
     @classmethod
     def parse(cls, fp): return cls(NBFSEDecimal.parse(fp))
 
+
 class DatetimeText(_Text):
     type = 0x96
-    def __init__(self, v=0, tz=0): self.value = v; self.tz = tz
+
+    def __init__(self, v=0, tz=0):
+        self.value = v
+        self.tz = tz
+
     def __str__(self):
         dt = datetime.datetime(1, 1, 1) + datetime.timedelta(microseconds=self.value / 10)
         return dt.isoformat()
+
     def to_bytes(self):
         return super().to_bytes() + struct.pack("<Q", (self.tz & 3) | (self.value & 0x1FFFFFFFFFFFFFFF) << 2)
+
     @classmethod
     def parse(cls, fp):
         data = struct.unpack("<Q", fp.read(8))[0]
         return cls(data, data & 3)
 
+
 class Chars8Text(_Text):
     type = 0x98
+
     def __init__(self, v=""): self.value = v
     def __str__(self): return self.value
+
     def to_bytes(self):
         data = self.value.encode("utf-8")
         return struct.pack("<B", self.type) + struct.pack("<B", len(data)) + data
+
     @classmethod
     def parse(cls, fp):
         ln = struct.unpack("<B", fp.read(1))[0]
         return cls(fp.read(ln).decode("utf-8"))
 
+
 class Chars16Text(_Text):
     type = 0x9A
+
     def __init__(self, v=""): self.value = v
     def __str__(self): return self.value
+
     def to_bytes(self):
         data = self.value.encode("utf-8")
         return struct.pack("<B", self.type) + struct.pack("<H", len(data)) + data
+
     @classmethod
     def parse(cls, fp):
         ln = struct.unpack("<H", fp.read(2))[0]
         return cls(fp.read(ln).decode("utf-8"))
 
+
 class Chars32Text(_Text):
     type = 0x9C
+
     def __init__(self, v=""): self.value = v
     def __str__(self): return self.value
+
     def to_bytes(self):
         data = self.value.encode("utf-8")
         return struct.pack("<B", self.type) + struct.pack("<I", len(data)) + data
+
     @classmethod
     def parse(cls, fp):
         ln = struct.unpack("<I", fp.read(4))[0]
         return cls(fp.read(ln).decode("utf-8"))
 
+
 class Bytes8Text(_Text):
     type = 0x9E
+
     def __init__(self, v=b""): self.value = v
     def __str__(self): return base64.b64encode(self.value).decode()
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<B", len(self.value)) + self.value
@@ -483,8 +534,10 @@ class Bytes8Text(_Text):
         ln = struct.unpack("<B", fp.read(1))[0]
         return cls(fp.read(ln))
 
+
 class Bytes16Text(_Text):
     type = 0xA0
+
     def __init__(self, v=b""): self.value = v
     def __str__(self): return base64.b64encode(self.value).decode()
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<H", len(self.value)) + self.value
@@ -493,8 +546,10 @@ class Bytes16Text(_Text):
         ln = struct.unpack("<H", fp.read(2))[0]
         return cls(fp.read(ln))
 
+
 class Bytes32Text(_Text):
     type = 0xA2
+
     def __init__(self, v=b""): self.value = v
     def __str__(self): return base64.b64encode(self.value).decode()
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<I", len(self.value)) + self.value
@@ -503,97 +558,127 @@ class Bytes32Text(_Text):
         ln = struct.unpack("<I", fp.read(4))[0]
         return cls(fp.read(ln))
 
+
 class EmptyText(_Text):
     type = 0xA8
+
     def __str__(self): return ""
     @classmethod
     def parse(cls, fp): return cls()
 
+
 class DictText(_Text):
     type = 0xAA
+
     def __init__(self, idx=0): self.index = idx
     def to_bytes(self): return super().to_bytes() + MultiByteInt31(self.index).to_bytes()
     def __str__(self): return NBFSE_DICT.get(self.index, "")
     @classmethod
     def parse(cls, fp): return cls(MultiByteInt31.parse(fp).value)
 
+
 class UniqueIdText(_Text):
     type = 0xAC
+
     def __init__(self, uuid_val=None):
         if isinstance(uuid_val, (list, tuple)):
             self.uuid = uuid_val
         elif uuid_val:
             u = uuid_val.replace("urn:uuid:", "").split("-")
-            tmp = u[0:3] + [u[3][0:2], u[3][2:], u[4][0:2], u[4][2:4], u[4][4:6], u[4][6:8], u[4][8:10], u[4][10:]]
+            tmp = [*u[0:3], u[3][0:2], u[3][2:], u[4][0:2], u[4][2:4], u[4][4:6], u[4][6:8], u[4][8:10], u[4][10:]]
             self.uuid = [int(s, 16) for s in tmp]
         else:
-            self.uuid = [0]*11
+            self.uuid = [0] * 11
+
     def to_bytes(self): return super().to_bytes() + struct.pack("<IHHBBBBBBBB", *self.uuid)
-    def __str__(self): return "urn:uuid:%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x" % tuple(self.uuid)
+    def __str__(self): return "urn:uuid:{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}".format(*tuple(self.uuid))
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<IHHBBBBBBBB", fp.read(16)))
 
+
 class UuidText(UniqueIdText):
     type = 0xB0
-    def __str__(self): return "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x" % tuple(self.uuid)
+
+    def __str__(self): return "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}".format(*tuple(self.uuid))
+
 
 class TimeSpanText(_Text):
     type = 0xAE
+
     def __init__(self, v=0): self.value = v
     def to_bytes(self): return super().to_bytes() + struct.pack("<q", self.value)
     def __str__(self): return str(datetime.timedelta(microseconds=self.value / 10))
     @classmethod
     def parse(cls, fp): return cls(struct.unpack("<q", fp.read(8))[0])
 
+
 class QNameDictText(_Text):
     type = 0xBC
-    def __init__(self, prefix="a", idx=0): self.prefix = prefix; self.index = idx
+
+    def __init__(self, prefix="a", idx=0):
+        self.prefix = prefix
+        self.index = idx
+
     def to_bytes(self): return struct.pack("<B", self.type) + struct.pack("<B", ord(self.prefix) - ord("a")) + MultiByteInt31(self.index).to_bytes()
-    def __str__(self): return "%s:%s" % (self.prefix, NBFSE_DICT.get(self.index, ""))
+    def __str__(self): return "{}:{}".format(self.prefix, NBFSE_DICT.get(self.index, ""))
     @classmethod
     def parse(cls, fp):
         p = chr(struct.unpack("<B", fp.read(1))[0] + ord("a"))
         return cls(p, MultiByteInt31.parse(fp).value)
 
+
 class UnicodeChars8Text(_Text):
     type = 0xB6
+
     def __init__(self, v=""): self.value = v
+
     def to_bytes(self):
         data = self.value.encode("utf-16")[2:]
         return struct.pack("<B", self.type) + struct.pack("<B", len(data)) + data
+
     def __str__(self): return self.value
     @classmethod
     def parse(cls, fp):
         ln = struct.unpack("<B", fp.read(1))[0]
         return cls(fp.read(ln).decode("utf-16"))
 
+
 class UnicodeChars16Text(UnicodeChars8Text):
     type = 0xB8
+
     def to_bytes(self):
         data = self.value.encode("utf-16")[2:]
         return struct.pack("<B", self.type) + struct.pack("<H", len(data)) + data
+
     @classmethod
     def parse(cls, fp):
         ln = struct.unpack("<H", fp.read(2))[0]
         return cls(fp.read(ln).decode("utf-16"))
 
+
 class UnicodeChars32Text(UnicodeChars8Text):
     type = 0xBA
+
     def to_bytes(self):
         data = self.value.encode("utf-16")[2:]
         return struct.pack("<B", self.type) + struct.pack("<I", len(data)) + data
+
     @classmethod
     def parse(cls, fp):
         ln = struct.unpack("<I", fp.read(4))[0]
         return cls(fp.read(ln).decode("utf-16"))
 
+
 class StartListText(_Text):
     type = 0xA4
+
     @classmethod
     def parse(cls, fp): return cls()
 
+
 class EndListText(_Text):
     type = 0xA6
+
     @classmethod
     def parse(cls, fp): return cls()
 
@@ -602,80 +687,118 @@ class EndListText(_Text):
 
 class ShortElement(_Element):
     type = 0x40
+
     def __init__(self, name=""):
-        self.childs = []; self.name = name; self.attributes = []
+        self.childs = []
+        self.name = name
+        self.attributes = []
+
     def to_bytes(self):
         out = super().to_bytes() + Utf8String(self.name).to_bytes()
-        for a in self.attributes: out += a.to_bytes()
+        for a in self.attributes:
+            out += a.to_bytes()
         return out
+
     def __str__(self):
         a = " ".join(str(x) for x in self.attributes)
-        return "<%s%s>" % (self.name, (" " + a) if a else "")
+        return "<{}{}>".format(self.name, (" " + a) if a else "")
+
     @classmethod
     def parse(cls, fp): return cls(Utf8String.parse(fp).value)
 
+
 class ElementRec(ShortElement):
     type = 0x41
+
     def __init__(self, prefix="", name=""):
-        super().__init__(name); self.prefix = prefix
+        super().__init__(name)
+        self.prefix = prefix
+
     def to_bytes(self):
         data = super().to_bytes()
         return data[0:1] + Utf8String(self.prefix).to_bytes() + data[1:]
+
     def __str__(self):
         a = " ".join(str(x) for x in self.attributes)
-        return "<%s:%s%s>" % (self.prefix, self.name, (" " + a) if a else "")
+        return "<{}:{}{}>".format(self.prefix, self.name, (" " + a) if a else "")
+
     @classmethod
     def parse(cls, fp):
         return cls(Utf8String.parse(fp).value, Utf8String.parse(fp).value)
 
+
 class ShortDictElement(_Element):
     type = 0x42
+
     def __init__(self, idx=0):
-        self.childs = []; self.index = idx; self.attributes = []
+        self.childs = []
+        self.index = idx
+        self.attributes = []
         self.name = NBFSE_DICT.get(idx, "")
+
     def to_bytes(self):
         out = super().to_bytes() + MultiByteInt31(self.index).to_bytes()
-        for a in self.attributes: out += a.to_bytes()
+        for a in self.attributes:
+            out += a.to_bytes()
         return out
+
     def __str__(self):
         a = " ".join(str(x) for x in self.attributes)
-        return "<%s%s>" % (self.name, (" " + a) if a else "")
+        return "<{}{}>".format(self.name, (" " + a) if a else "")
+
     @classmethod
     def parse(cls, fp): return cls(MultiByteInt31.parse(fp).value)
 
+
 class DictElement(_Element):
     type = 0x43
+
     def __init__(self, prefix="", idx=0):
-        self.childs = []; self.prefix = prefix; self.index = idx; self.attributes = []
+        self.childs = []
+        self.prefix = prefix
+        self.index = idx
+        self.attributes = []
         self.name = NBFSE_DICT.get(idx, "")
+
     def to_bytes(self):
         out = super().to_bytes() + Utf8String(self.prefix).to_bytes() + MultiByteInt31(self.index).to_bytes()
-        for a in self.attributes: out += a.to_bytes()
+        for a in self.attributes:
+            out += a.to_bytes()
         return out
+
     def __str__(self):
         a = " ".join(str(x) for x in self.attributes)
-        return "<%s:%s%s>" % (self.prefix, self.name, (" " + a) if a else "")
+        return "<{}:{}{}>".format(self.prefix, self.name, (" " + a) if a else "")
+
     @classmethod
     def parse(cls, fp):
         return cls(Utf8String.parse(fp).value, MultiByteInt31.parse(fp).value)
 
+
 class _PrefixElement(ElementRec):
     def __init__(self, name=""):
         super().__init__(self.char, name)
+
     def to_bytes(self):
         out = struct.pack("<B", self.type) + Utf8String(self.name).to_bytes()
-        for a in self.attributes: out += a.to_bytes()
+        for a in self.attributes:
+            out += a.to_bytes()
         return out
+
     @classmethod
     def parse(cls, fp): return cls(Utf8String.parse(fp).value)
+
 
 class _PrefixDictElement(DictElement):
     def __init__(self, idx=0):
         super().__init__(self.char, idx)
+
     def to_bytes(self):
         out = struct.pack("<B", self.type) + MultiByteInt31(self.index).to_bytes()
-        for a in self.attributes: out += a.to_bytes()
+        for a in self.attributes:
+            out += a.to_bytes()
         return out
+
     @classmethod
     def parse(cls, fp): return cls(MultiByteInt31.parse(fp).value)
 
@@ -684,79 +807,117 @@ class _PrefixDictElement(DictElement):
 
 class ShortAttr(_Attribute):
     type = 0x04
-    def __init__(self, name="", value=None): self.name = name; self.value = value
+
+    def __init__(self, name="", value=None):
+        self.name = name
+        self.value = value
+
     def to_bytes(self): return super().to_bytes() + Utf8String(self.name).to_bytes() + self.value.to_bytes()
-    def __str__(self): return "%s=%s" % (self.name, quoteattr(str(self.value)))
+    def __str__(self): return f"{self.name}={quoteattr(str(self.value))}"
     @classmethod
     def parse(cls, fp):
         name = Utf8String.parse(fp).value
         t = struct.unpack("<B", fp.read(1))[0]
         return cls(name, _Record._registry[t].parse(fp))
 
+
 class AttrRec(_Attribute):
     type = 0x05
-    def __init__(self, prefix="", name="", value=None): self.prefix = prefix; self.name = name; self.value = value
+
+    def __init__(self, prefix="", name="", value=None):
+        self.prefix = prefix
+        self.name = name
+        self.value = value
+
     def to_bytes(self): return super().to_bytes() + Utf8String(self.prefix).to_bytes() + Utf8String(self.name).to_bytes() + self.value.to_bytes()
-    def __str__(self): return "%s:%s=%s" % (self.prefix, self.name, quoteattr(str(self.value)))
+    def __str__(self): return f"{self.prefix}:{self.name}={quoteattr(str(self.value))}"
     @classmethod
     def parse(cls, fp):
-        p = Utf8String.parse(fp).value; n = Utf8String.parse(fp).value
+        p = Utf8String.parse(fp).value
+        n = Utf8String.parse(fp).value
         t = struct.unpack("<B", fp.read(1))[0]
         return cls(p, n, _Record._registry[t].parse(fp))
 
+
 class ShortDictAttr(_Attribute):
     type = 0x06
-    def __init__(self, idx=0, value=None): self.index = idx; self.value = value
+
+    def __init__(self, idx=0, value=None):
+        self.index = idx
+        self.value = value
+
     def to_bytes(self): return super().to_bytes() + MultiByteInt31(self.index).to_bytes() + self.value.to_bytes()
-    def __str__(self): return "%s=%s" % (NBFSE_DICT.get(self.index, ""), quoteattr(str(self.value)))
+    def __str__(self): return "{}={}".format(NBFSE_DICT.get(self.index, ""), quoteattr(str(self.value)))
     @classmethod
     def parse(cls, fp):
         idx = MultiByteInt31.parse(fp).value
         t = struct.unpack("<B", fp.read(1))[0]
         return cls(idx, _Record._registry[t].parse(fp))
 
+
 class DictAttr(_Attribute):
     type = 0x07
-    def __init__(self, prefix="", idx=0, value=None): self.prefix = prefix; self.index = idx; self.value = value
+
+    def __init__(self, prefix="", idx=0, value=None):
+        self.prefix = prefix
+        self.index = idx
+        self.value = value
+
     def to_bytes(self): return super().to_bytes() + Utf8String(self.prefix).to_bytes() + MultiByteInt31(self.index).to_bytes() + self.value.to_bytes()
-    def __str__(self): return "%s:%s=%s" % (self.prefix, NBFSE_DICT.get(self.index, ""), quoteattr(str(self.value)))
+    def __str__(self): return "{}:{}={}".format(self.prefix, NBFSE_DICT.get(self.index, ""), quoteattr(str(self.value)))
     @classmethod
     def parse(cls, fp):
-        p = Utf8String.parse(fp).value; idx = MultiByteInt31.parse(fp).value
+        p = Utf8String.parse(fp).value
+        idx = MultiByteInt31.parse(fp).value
         t = struct.unpack("<B", fp.read(1))[0]
         return cls(p, idx, _Record._registry[t].parse(fp))
 
+
 class ShortXmlns(_Attribute):
     type = 0x08
+
     def __init__(self, value=""): self.value = value
     def to_bytes(self): return struct.pack("<B", self.type) + Utf8String(self.value).to_bytes()
-    def __str__(self): return "xmlns=%s" % quoteattr(self.value)
+    def __str__(self): return f"xmlns={quoteattr(self.value)}"
     @classmethod
     def parse(cls, fp): return cls(Utf8String.parse(fp).value)
 
+
 class XmlnsAttr(_Attribute):
     type = 0x09
-    def __init__(self, name="", value=""): self.name = name; self.value = value
+
+    def __init__(self, name="", value=""):
+        self.name = name
+        self.value = value
+
     def to_bytes(self): return struct.pack("<B", self.type) + Utf8String(self.name).to_bytes() + Utf8String(self.value).to_bytes()
-    def __str__(self): return "xmlns:%s=%s" % (self.name, quoteattr(self.value))
+    def __str__(self): return f"xmlns:{self.name}={quoteattr(self.value)}"
     @classmethod
     def parse(cls, fp): return cls(Utf8String.parse(fp).value, Utf8String.parse(fp).value)
 
+
 class ShortDictXmlns(_Attribute):
     type = 0x0A
+
     def __init__(self, idx=0): self.index = idx
-    def __str__(self): return "xmlns=%s" % quoteattr(NBFSE_DICT.get(self.index, ""))
+    def __str__(self): return "xmlns={}".format(quoteattr(NBFSE_DICT.get(self.index, "")))
     def to_bytes(self): return struct.pack("<B", self.type) + MultiByteInt31(self.index).to_bytes()
     @classmethod
     def parse(cls, fp): return cls(MultiByteInt31.parse(fp).value)
 
+
 class DictXmlns(_Attribute):
     type = 0x0B
-    def __init__(self, prefix="", idx=0): self.prefix = prefix; self.index = idx
-    def __str__(self): return "xmlns:%s=%s" % (self.prefix, quoteattr(NBFSE_DICT.get(self.index, "")))
+
+    def __init__(self, prefix="", idx=0):
+        self.prefix = prefix
+        self.index = idx
+
+    def __str__(self): return "xmlns:{}={}".format(self.prefix, quoteattr(NBFSE_DICT.get(self.index, "")))
     def to_bytes(self): return struct.pack("<B", self.type) + Utf8String(self.prefix).to_bytes() + MultiByteInt31(self.index).to_bytes()
     @classmethod
     def parse(cls, fp): return cls(Utf8String.parse(fp).value, MultiByteInt31.parse(fp).value)
+
 
 class _PrefixAttr(AttrRec):
     def __init__(self, name="", value=None): super().__init__(self.char, name, value)
@@ -766,6 +927,7 @@ class _PrefixAttr(AttrRec):
         n = Utf8String.parse(fp).value
         t = struct.unpack("<B", fp.read(1))[0]
         return cls(n, _Record._registry[t].parse(fp))
+
 
 class _PrefixDictAttr(DictAttr):
     def __init__(self, idx=0, value=None): super().__init__(self.char, idx, value)
@@ -797,22 +959,23 @@ _Record.register(
 # dynamically generate prefix element/attribute classes for a-z
 for _c in range(0x44, 0x5E):
     _ch = chr(_c - 0x44 + ord("a"))
-    _Record.register(type("PDE_%s" % _ch, (_PrefixDictElement,), {"type": _c, "char": _ch}))
+    _Record.register(type(f"PDE_{_ch}", (_PrefixDictElement,), {"type": _c, "char": _ch}))
 for _c in range(0x5E, 0x78):
     _ch = chr(_c - 0x5E + ord("a"))
-    _Record.register(type("PE_%s" % _ch, (_PrefixElement,), {"type": _c, "char": _ch}))
+    _Record.register(type(f"PE_{_ch}", (_PrefixElement,), {"type": _c, "char": _ch}))
 for _c in range(0x0C, 0x26):
     _ch = chr(_c - 0x0C + ord("a"))
-    _Record.register(type("PDA_%s" % _ch, (_PrefixDictAttr,), {"type": _c, "char": _ch}))
+    _Record.register(type(f"PDA_{_ch}", (_PrefixDictAttr,), {"type": _c, "char": _ch}))
 for _c in range(0x26, 0x40):
     _ch = chr(_c - 0x26 + ord("a"))
-    _Record.register(type("PA_%s" % _ch, (_PrefixAttr,), {"type": _c, "char": _ch}))
+    _Record.register(type(f"PA_{_ch}", (_PrefixAttr,), {"type": _c, "char": _ch}))
 
 
 # --- serialization helpers ---
 
 def _escape_xml_text(value):
     return xml_escape(value, {'"': "&quot;"})
+
 
 def _dump_records(records):
     out = b""
@@ -831,6 +994,7 @@ def _dump_records(records):
             r.type = msg_type  # restore
     return out
 
+
 def _print_records(records):
     if not records:
         return ""
@@ -843,9 +1007,9 @@ def _print_records(records):
             output += _print_records(r.childs)
         if isinstance(r, _Element) and not isinstance(r, _EndElement):
             if hasattr(r, "prefix"):
-                output += "</%s:%s>" % (r.prefix, r.name)
+                output += f"</{r.prefix}:{r.name}>"
             else:
-                output += "</%s>" % r.name
+                output += f"</{r.name}>"
     return output
 
 
@@ -861,6 +1025,7 @@ _b64_re = re.compile(r"^[a-zA-Z0-9/+]*={0,2}$")
 _float_re = re.compile(r"^-?(INF)|(NaN)|(\d+(\.\d+)?)$")
 
 _all_classes = {c.__name__: c for c in _Record._registry.values()}
+
 
 class _XMLParser(HTMLParser):
     def reset(self):
@@ -913,7 +1078,7 @@ class _XMLParser(HTMLParser):
             gtpos = rawdata.find(">", i + 1)
             if gtpos < 0:
                 return -1
-            self.handle_endtag(rawdata[i+2:gtpos].strip())
+            self.handle_endtag(rawdata[i + 2:gtpos].strip())
             return gtpos + 1
         self.handle_endtag(match.group(1))
         self.clear_cdata_mode()
@@ -924,11 +1089,11 @@ class _XMLParser(HTMLParser):
             prefix, name = tag.split(":", 1)
             if len(prefix) == 1:
                 if name in NBFSE_INVERTED:
-                    cls_name = "PDE_%s" % prefix
+                    cls_name = f"PDE_{prefix}"
                     for c in _Record._registry.values():
                         if c.__name__ == cls_name:
                             return c(NBFSE_INVERTED[name])
-                cls_name = "PE_%s" % prefix
+                cls_name = f"PE_{prefix}"
                 for c in _Record._registry.values():
                     if c.__name__ == cls_name:
                         return c(name)
@@ -944,46 +1109,64 @@ class _XMLParser(HTMLParser):
 
     def _parse_data(self, data):
         data = data.strip() if data else data
-        if data == "0": return ZeroText()
-        if data == "1": return OneText()
-        if data.lower() == "false": return FalseText()
-        if data.lower() == "true": return TrueText()
+        if data == "0":
+            return ZeroText()
+        if data == "1":
+            return OneText()
+        if data.lower() == "false":
+            return FalseText()
+        if data.lower() == "true":
+            return TrueText()
         if len(data) > 3 and data[1] == ":" and data[2:] in NBFSE_INVERTED:
             return QNameDictText(data[0], NBFSE_INVERTED[data[2:]])
         m = _uniqueid_re.match(data)
-        if m: return UniqueIdText(m.group(1))
+        if m:
+            return UniqueIdText(m.group(1))
         m = _uuid_re.match(data)
-        if m: return UuidText(m.group(1))
+        if m:
+            return UuidText(m.group(1))
         if _int_re.match(data):
             val = int(data)
-            if -(2**7) <= val <= 2**7 - 1: return Int8Text(val)
-            if -(2**15) <= val <= 2**15 - 1: return Int16Text(val)
-            if -(2**31) <= val <= 2**31 - 1: return Int32Text(val)
-            if -(2**63) <= val <= 2**63 - 1: return Int64Text(val)
+            if -(2**7) <= val <= 2**7 - 1:
+                return Int8Text(val)
+            if -(2**15) <= val <= 2**15 - 1:
+                return Int16Text(val)
+            if -(2**31) <= val <= 2**31 - 1:
+                return Int32Text(val)
+            if -(2**63) <= val <= 2**63 - 1:
+                return Int64Text(val)
             ln = len(data)
-            if ln < 256: return Chars8Text(data)
-            if ln < 65536: return Chars16Text(data)
+            if ln < 256:
+                return Chars8Text(data)
+            if ln < 65536:
+                return Chars16Text(data)
             return Chars32Text(data)
-        if data == "": return EmptyText()
+        if data == "":
+            return EmptyText()
         b64 = False
         try:
             if _b64_re.match(data):
                 base64.b64decode(data)
                 b64 = True
-        except: pass
+        except Exception:
+            pass
         if b64:
             raw = base64.b64decode(data)
             ln = len(raw)
-            if ln < 256: return Bytes8Text(raw)
-            if ln < 65536: return Bytes16Text(raw)
+            if ln < 256:
+                return Bytes8Text(raw)
+            if ln < 65536:
+                return Bytes16Text(raw)
             return Bytes32Text(raw)
         if _float_re.match(data):
             return DoubleText(float(data))
         if data in NBFSE_INVERTED:
             return DictText(NBFSE_INVERTED[data])
         ln = len(data)
-        if ln < 256: return Chars8Text(data)
-        if ln < 65536: return Chars16Text(data)
+        if ln < 256:
+            return Chars8Text(data)
+        if ln < 65536:
+            return Chars16Text(data)
         return Chars32Text(data)
 
     def _parse_attr(self, name, value):
@@ -996,11 +1179,11 @@ class _XMLParser(HTMLParser):
             elif len(prefix) == 1:
                 val = self._parse_data(value)
                 if aname in NBFSE_INVERTED:
-                    cls_name = "PDA_%s" % prefix
+                    cls_name = f"PDA_{prefix}"
                     for c in _Record._registry.values():
                         if c.__name__ == cls_name:
                             return c(NBFSE_INVERTED[aname], val)
-                cls_name = "PA_%s" % prefix
+                cls_name = f"PA_{prefix}"
                 for c in _Record._registry.values():
                     if c.__name__ == cls_name:
                         return c(aname, val)
@@ -1053,7 +1236,7 @@ class _XMLParser(HTMLParser):
         self.handle_data(chr(int(name[1:], 16) if name[0] == "x" else int(name, 10)))
 
     def handle_entityref(self, name):
-        self.handle_data(unescape("&%s;" % name))
+        self.handle_data(unescape(f"&{name};"))
 
 
 def _xml_to_records(xml_str):
@@ -1086,11 +1269,13 @@ class _NNSHandshake(impacket.structure.Structure):
         ("payload", ":"),
     )
 
+
 class _NNSData(impacket.structure.Structure):
     structure = (
         ("payload_size", "<L-payload"),
         ("payload", ":"),
     )
+
 
 _NNS_IN_PROGRESS = 0x16
 _NNS_ERROR = 0x15
@@ -1098,11 +1283,13 @@ _NNS_DONE = 0x14
 
 
 def _decode_der_length(data, offset=0):
-    first = data[offset]; offset += 1
+    first = data[offset]
+    offset += 1
     if first < 0x80:
         return first, offset
     ll = first & 0x7F
     return int.from_bytes(data[offset:offset + ll], "big"), offset + ll
+
 
 def _unwrap_gss_mech(data):
     if not data.startswith(b"\x60"):
@@ -1154,8 +1341,8 @@ class NNS:
         if msg["message_id"] != _NNS_ERROR:
             return
         code = int.from_bytes(msg["payload"], "big")
-        et, em = ERROR_MESSAGES.get(code, ("0x%08x" % code, "Unknown"))
-        raise SystemExit("[-] %s Auth Failed: %s %s" % (auth_name, et, em))
+        et, em = ERROR_MESSAGES.get(code, (f"0x{code:08x}", "Unknown"))
+        raise SystemExit(f"[-] {auth_name} Auth Failed: {et} {em}")
 
     def auth(self):
         if self._auth_protocol == "kerberos":
@@ -1175,7 +1362,8 @@ class NNS:
         token_init["MechToken"] = nego.getData()
         hs = _NNSHandshake()
         hs["message_id"] = _NNS_IN_PROGRESS
-        hs["major_version"] = 1; hs["minor_version"] = 0
+        hs["major_version"] = 1
+        hs["minor_version"] = 0
         hs["payload"] = token_init.getData()
         self._sock.sendall(hs.getData())
 
@@ -1212,23 +1400,27 @@ class NNS:
         resp["ResponseToken"] = auth_resp.getData()
         hs2 = _NNSHandshake()
         hs2["message_id"] = _NNS_IN_PROGRESS
-        hs2["major_version"] = 1; hs2["minor_version"] = 0
+        hs2["major_version"] = 1
+        hs2["minor_version"] = 0
         hs2["payload"] = resp.getData()
         self._sock.sendall(hs2.getData())
 
         done = self._recv_handshake()
         self._check_error("NTLM", done)
         if done["message_id"] != _NNS_DONE:
-            raise ConnectionError("NTLM handshake failed: 0x%x" % done["message_id"])
+            raise ConnectionError("NTLM handshake failed: 0x{:x}".format(done["message_id"]))
 
     def _auth_krb(self):
-        target = "LDAP/%s" % self._fqdn
+        target = f"LDAP/{self._fqdn}"
         domain, username, tgt, tgs = CCache.parseFile(
             domain=self._domain, username=self._username, target=target)
-        self._domain = domain; self._username = username
+        self._domain = domain
+        self._username = username
 
         if tgs:
-            tgs_bytes = tgs["KDC_REP"]; cipher = tgs["cipher"]; session_key = tgs["sessionKey"]
+            tgs_bytes = tgs["KDC_REP"]
+            cipher = tgs["cipher"]
+            session_key = tgs["sessionKey"]
         elif tgt:
             spn = Principal(target, type=krb5_constants.PrincipalNameType.NT_SRV_INST.value)
             tgs_bytes, cipher, _, session_key = getKerberosTGS(
@@ -1240,7 +1432,8 @@ class NNS:
 
         tgs_rep = decoder.decode(tgs_bytes, asn1Spec=TGS_REP())[0]
         self._domain = str(tgs_rep["crealm"])
-        ticket = Ticket(); ticket.from_asn1(tgs_rep["ticket"])
+        ticket = Ticket()
+        ticket.from_asn1(tgs_rep["ticket"])
         user_p = Principal(self._username, type=krb5_constants.PrincipalNameType.NT_PRINCIPAL.value)
 
         ap_req = AP_REQ()
@@ -1250,13 +1443,16 @@ class NNS:
         seq_set(ap_req, "ticket", ticket.to_asn1)
 
         auth = Authenticator()
-        auth["authenticator-vno"] = 5; auth["crealm"] = self._domain
+        auth["authenticator-vno"] = 5
+        auth["crealm"] = self._domain
         seq_set(auth, "cname", user_p.components_to_asn1)
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         auth["cusec"] = now.microsecond
         auth["ctime"] = KerberosTime.to_asn1(now)
-        auth["cksum"] = noValue; auth["cksum"]["cksumtype"] = 0x8003
-        cksum = CheckSumField(); cksum["Lgth"] = 16
+        auth["cksum"] = noValue
+        auth["cksum"]["cksumtype"] = 0x8003
+        cksum = CheckSumField()
+        cksum["Lgth"] = 16
         cksum["Flags"] = GSS_C_CONF_FLAG | GSS_C_INTEG_FLAG | GSS_C_MUTUAL_FLAG | GSS_C_REPLAY_FLAG | GSS_C_SEQUENCE_FLAG
         auth["cksum"]["checksum"] = cksum.getData()
         auth["seq-number"] = 0
@@ -1280,14 +1476,16 @@ class NNS:
         )
 
         hs = _NNSHandshake()
-        hs["message_id"] = _NNS_IN_PROGRESS; hs["major_version"] = 1; hs["minor_version"] = 0
+        hs["message_id"] = _NNS_IN_PROGRESS
+        hs["major_version"] = 1
+        hs["minor_version"] = 0
         hs["payload"] = nti.getData()
         self._sock.sendall(hs.getData())
 
         done = self._recv_handshake()
         self._check_error("Kerberos", done)
         if done["message_id"] != _NNS_DONE:
-            raise ConnectionError("Kerberos handshake failed: 0x%x" % done["message_id"])
+            raise ConnectionError("Kerberos handshake failed: 0x{:x}".format(done["message_id"]))
 
         ntr = impacket.spnego.SPNEGO_NegTokenResp(done["payload"])
         if "ResponseToken" in ntr.fields:
@@ -1329,10 +1527,12 @@ class NNS:
         sz, ll = MultiByteInt31.decode7bit(first[1:])
         if sz < 0xFC30:
             return first
-        pkt = first; sz -= len(first[ll:])
+        pkt = first
+        sz -= len(first[ll:])
         while sz > 0:
             frag = self._recv_one()
-            pkt += frag; sz -= len(frag)
+            pkt += frag
+            sz -= len(frag)
         return pkt
 
     def _recv_one(self):
@@ -1342,7 +1542,8 @@ class NNS:
             ct = self._kerberos_unwrap(payload)
             self._server_sequence += 1
             return ct
-        sig = payload[:16]; ct = payload[16:]
+        payload[:16]
+        ct = payload[16:]
         server = bool(self._flags & impacket.ntlm.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY)
         clear, _ = impacket.ntlm.SEAL(
             self._flags,
@@ -1384,7 +1585,7 @@ class NMFConnection:
         self._recv_buffer = b""
 
     def connect(self, resource):
-        via = "net.tcp://%s:%d/ActiveDirectoryWebServices/%s" % (self._fqdn, ADWS_PORT, resource)
+        via = f"net.tcp://{self._fqdn}:{ADWS_PORT}/ActiveDirectoryWebServices/{resource}"
         via_b = via.encode("utf-8")
         preamble = bytes([0x00, 1, 0])  # version
         preamble += bytes([0x01, self._mode])  # mode
@@ -1412,7 +1613,7 @@ class NMFConnection:
     def recv(self):
         data = self._recv_record()
         if data[0] != 0x06:
-            raise ConnectionError("expected sized envelope, got 0x%02x" % data[0])
+            raise ConnectionError(f"expected sized envelope, got 0x{data[0]:02x}")
         sz, ll = MultiByteInt31.decode7bit(data[1:])
         payload = data[1 + ll:1 + ll + sz]
         return self._encoder.decode(payload)
@@ -1455,12 +1656,13 @@ class NMFConnection:
         if rec[0] != expected_type:
             if rec[0] == 0x08:
                 sz, ll = MultiByteInt31.decode7bit(rec[1:])
-                raise ConnectionError("NMF fault: %s" % rec[1+ll:1+ll+sz].decode("utf-8", errors="ignore"))
-            raise ConnectionError("expected 0x%02x, got 0x%02x" % (expected_type, rec[0]))
+                raise ConnectionError("NMF fault: {}".format(rec[1 + ll:1 + ll + sz].decode("utf-8", errors="ignore")))
+            raise ConnectionError(f"expected 0x{expected_type:02x}, got 0x{rec[0]:02x}")
 
     @staticmethod
     def _try_decode_size(data):
-        value = 0; shift = 0
+        value = 0
+        shift = 0
         for i, b in enumerate(data[:5], start=1):
             value |= (b & 0x7F) << shift
             if not (b & 0x80):
@@ -1496,10 +1698,12 @@ SOAP_RENEW = '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmln
 class ADWSError(Exception):
     pass
 
+
 class _ADWSReferral(ADWSError):
     def __init__(self, target_dc):
         self.target_dc = target_dc
         super().__init__(f"LDAP referral to {target_dc}")
+
 
 class ADWSConnection:
     def __init__(self, target, domain, port=ADWS_PORT, timeout=10):
@@ -1529,7 +1733,7 @@ class ADWSConnection:
 
     @property
     def base_dn(self):
-        return self._base_dn or ",".join("DC=%s" % p for p in self._domain.split("."))
+        return self._base_dn or ",".join(f"DC={p}" for p in self._domain.split("."))
 
     @base_dn.setter
     def base_dn(self, value):
@@ -1545,7 +1749,7 @@ class ADWSConnection:
                   auth_protocol="kerberos" if self._use_kerberos else "ntlm",
                   kdc_host=self._kdc_host)
         nmf = NMFConnection(nns, fqdn=self._fqdn)
-        nmf.connect("Windows/%s" % resource)
+        nmf.connect(f"Windows/{resource}")
         return nmf
 
     def login(self, username, password="", nt_hash="", use_kerberos=False,
@@ -1559,9 +1763,8 @@ class ADWSConnection:
 
     def disconnect(self):
         if self._nmf:
-            try:
+            with contextlib.suppress(BaseException):
                 getattr(self._nmf, "_sock", type("", (), {"close": lambda s: None})()).close()
-            except: pass
             self._nmf = None
 
     def _request(self, soap_xml, op=""):
@@ -1575,17 +1778,19 @@ class ADWSConnection:
             except _ADWSReferral:
                 raise
             except ADWSError as e:
-                if not any(c in str(e) for c in _TRANSIENT_FAULTS): raise
+                if not any(c in str(e) for c in _TRANSIENT_FAULTS):
+                    raise
                 fail = e
             except OSError as e:
                 fail = e
-            if retry == _REQUEST_RETRIES: raise fail
+            if retry == _REQUEST_RETRIES:
+                raise fail
             time.sleep(_RETRY_BASE_DELAY * (retry + 1))
         raise RuntimeError("unreachable")
 
     def _handle_response(self, xml_str):
         xml_str = _BARE_AMPERSAND_RE.sub("&amp;", xml_str)
-        et = ElementTree.fromstring(xml_str)
+        et = ET.fromstring(xml_str)
         fault = et.find(".//soapenv:Fault", namespaces=NAMESPACES)
         if fault is None:
             return et
@@ -1611,7 +1816,7 @@ class ADWSConnection:
         raise ADWSError(msg)
 
     def _format_selection(self, attrs):
-        return "".join("<ad:SelectionProperty>addata:%s</ad:SelectionProperty>" % a for a in attrs) if attrs else ""
+        return "".join(f"<ad:SelectionProperty>addata:{a}</ad:SelectionProperty>" for a in attrs) if attrs else ""
 
     def _follow_referral(self, target_dc):
         log.warning(f"Following LDAP referral to {target_dc}")
@@ -1677,8 +1882,10 @@ class ADWSConnection:
             if syntax == "SidString":
                 decoded = []
                 for v in values:
-                    try: decoded.append(LDAP_SID(data=b64decode(v)).formatCanonical())
-                    except: decoded.append(v)
+                    try:
+                        decoded.append(LDAP_SID(data=b64decode(v)).formatCanonical())
+                    except Exception:
+                        decoded.append(v)
                 obj[tag] = decoded if len(decoded) > 1 else decoded[0]
                 continue
             if tag == "objectGUID":

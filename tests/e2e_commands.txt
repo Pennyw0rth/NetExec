@@ -393,3 +393,17 @@ netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
 netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
+##### ADWS
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --users
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --computers
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --groups
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --dc-list
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --get-sid
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --admin-count
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --trusted-for-delegation
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --find-delegation
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --password-not-required
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --active-users
+netexec adws TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD -d LOGIN_DOMAIN --query "(objectClass=user)" "sAMAccountName,description"
+netexec adws TARGET_HOST -u LOGIN_USERNAME -H LOGIN_HASH -d LOGIN_DOMAIN --users
