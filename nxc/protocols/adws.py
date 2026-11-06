@@ -1,3 +1,11 @@
+"""
+Original Research by Logan Goins @logangoins
+https://github.com/logangoins/SOAPy
+
+Blog:
+https://www.ibm.com/think/x-force/stealthy-enumeration-of-active-directory-environments-through-adws
+"""
+
 import socket
 from errno import EHOSTUNREACH, ETIMEDOUT, ENETUNREACH
 
