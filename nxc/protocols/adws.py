@@ -2,8 +2,10 @@
 Original Research by Logan Goins @logangoins
 https://github.com/logangoins/SOAPy
 
-Blog:
+Blogs:
 https://www.ibm.com/think/x-force/stealthy-enumeration-of-active-directory-environments-through-adws
+
+https://specterops.io/blog/2025/07/25/make-sure-to-use-soapy-an-operators-guide-to-stealthy-ad-collection-using-adws
 """
 
 import socket
