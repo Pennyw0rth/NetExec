@@ -89,7 +89,7 @@ class NXCModule:
             self.dce = self.authenticate(context, connection, protocol="ncacn_np", anonymous=False)
         except Exception as e:
             # Handle specific errors like password expiration or must be change
-            if "STATUS_PASSWORD_MUST_CHANGE" in str(e) or "STATUS_PASSWORD_EXPIRED" in str(e) or "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT" in str(e):
+            if "STATUS_PASSWORD_MUST_CHANGE" in str(e) or "STATUS_PASSWORD_EXPIRED" in str(e) or "STATUS_NOLOGON_WORKSTATION_TRUST_ACCOUNT" in str(e) or "STATUS_USER_SESSION_DELETED" in str(e):
                 context.log.warning("Password must be changed. Trying with null session.")
                 self.dce = self.authenticate(context, connection, protocol="ncacn_ip_tcp", anonymous=True)
             elif "STATUS_LOGON_FAILURE" in str(e):
