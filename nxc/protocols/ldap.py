@@ -773,13 +773,14 @@ class ldap(connection):
                 # We default attributes to blank strings if they don't exist in the dict
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', ''):<60}")
                 users.append(user.get("sAMAccountName", ""))
+
             if self.args.users_export:
-                self.logger.display(f"Writing {len(resp_parsed):d} local users to {self.args.users_export}")
-                with open(self.args.users_export, "w+") as file:
-                    file.writelines(f"{user}\n" for user in users)
+                self.logger.fail("--users-export is deprecated, use --users --export FILE instead")
+            self.export_lines(users, self.args.export or self.args.users_export, "users")
 
     def users_export(self):
-        self.users()
+        if self.args.active_users is None:
+            self.users()
 
     def groups(self):
         # Group specific member search
@@ -1048,6 +1049,16 @@ class ldap(connection):
                 self.logger.display(f"Skipping non-Active Directory trust '{trust_name}' with type: {trust_type_text} and direction: {direction_text}")
         self.logger.info("Domain Controller enumeration complete.")
 
+    def export_lines(self, lines, path, object_name="entries"):
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                file.writelines(f"{line}\n" for line in lines)
+            self.logger.success(f"Exported {len(lines)} {object_name} to {path}")
+        except OSError as e:
+            self.logger.fail(f"Export failed: {e}")
+
     def active_users(self):
         if len(self.args.active_users) > 0:
             self.logger.debug(f"Dumping users: {', '.join(self.args.active_users)}")
@@ -1073,6 +1084,10 @@ class ldap(connection):
                 if pwd_last_set:
                     pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
                 self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}{user.get('badPwdCount', ''):<9}{user.get('description', '')}")
+
+            if self.args.users_export and not self.args.export:
+                self.logger.fail("--users-export does not apply to --active-users, use --active-users --export FILE instead")
+            self.export_lines([user.get("sAMAccountName", "") for user in active_users], self.args.export, "active users")
 
     def asreproast(self):
         # Building the search filter
