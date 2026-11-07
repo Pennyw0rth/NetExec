@@ -12,6 +12,12 @@
 - Do not prefix function or method names with underscores; preserve required Python special methods such as `__init__`.
 - Do not assume the host runs Linux; keep code and paths cross-platform unless the task explicitly targets one operating system.
 
+# NetExec protocol structure
+
+- Protocol implementations must follow the lifecycle defined by `proto_flow()` in `nxc/connection.py`.
+- Keep connection setup in `create_conn_obj()`, target enumeration in `enum_host_info()`, host information output in `print_host_info()`, authentication in the login methods, and cleanup in `disconnect()`.
+- Keep protocol-specific behavior in the appropriate lifecycle methods and let `proto_flow()` control their order and dispatch command arguments and modules.
+
 # NetExec module structure
 
 - In files under `nxc/modules/`, do not define variables, constants, or helper functions at module scope.
