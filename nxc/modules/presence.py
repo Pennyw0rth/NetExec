@@ -38,7 +38,7 @@ class NXCModule:
         alt_creds = [self.altuser, self.altpass, self.altdomain]
         if any(alt_creds) and not all(alt_creds):
             context.log.fail("ALTUSER, ALTPASS, and ALTDOMAIN must be specified together")
-            raise ValueError("Incomplete alternative credentials")
+            return False
 
     def on_admin_login(self, context, connection):
         try:
@@ -46,7 +46,7 @@ class NXCModule:
                 context.log.info(f"Using alternative domain credentials: {self.altdomain}\\{self.altuser}")
                 dc_ip = self.altdc if self.altdc else self.get_dc_ip_from_domain(context, self.altdomain)
 
-                #NXCRPCConnection
+                # NXCRPCConnection
                 alt_connection = SimpleNamespace(
                     username=self.altuser,
                     password=self.altpass,
