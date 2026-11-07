@@ -27,6 +27,9 @@ urllib3.disable_warnings()
 
 
 class winrm(connection):
+    # plaintext_login() and hash_login() set the process-wide NETBIOS_COMPUTER_NAME that spnego reads during NTLM
+    serialize_login = True
+
     def __init__(self, args, db, host):
         self.domain = ""
         self.targedDomain = ""
