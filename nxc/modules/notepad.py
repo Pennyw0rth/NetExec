@@ -39,7 +39,7 @@ class NXCModule:
         self.FILE_PATH_REGEX = r"^[A-Za-z]:\\(?:[^<>:\"/\\|?*]+\\)*[^<>:\"/\\|?*]+\.[\w]{1,5}$"
 
     def options(self, context, module_options):
-        """KILL                // Kill for notepad.exe process. Default False."""
+        """KILL          Kill for notepad.exe process. Default: False"""
         if "KILL" not in module_options:
             self.kill = False
         else:
