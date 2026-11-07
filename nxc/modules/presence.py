@@ -1,5 +1,4 @@
 import re
-import socket
 from types import SimpleNamespace
 from impacket.dcerpc.v5 import samr, tsch
 from impacket.dcerpc.v5 import tsts as TSTS
@@ -43,8 +42,6 @@ class NXCModule:
         try:
             if self.altuser and self.altpass and self.altdomain:
                 context.log.info(f"Using alternative domain credentials: {self.altdomain}\\{self.altuser}")
-
-                # NXCRPCConnection
                 alt_connection = SimpleNamespace(
                     username=self.altuser,
                     password=self.altpass,
