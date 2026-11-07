@@ -33,7 +33,6 @@ class NXCModule:
         self.altuser = module_options.get("ALTUSER")
         self.altpass = module_options.get("ALTPASS")
         self.altdomain = module_options.get("ALTDOMAIN")
-        self.altdc = module_options.get("ALTDC")
 
         alt_creds = [self.altuser, self.altpass, self.altdomain]
         if any(alt_creds) and not all(alt_creds):
@@ -44,7 +43,6 @@ class NXCModule:
         try:
             if self.altuser and self.altpass and self.altdomain:
                 context.log.info(f"Using alternative domain credentials: {self.altdomain}\\{self.altuser}")
-                dc_ip = self.altdc if self.altdc else self.get_dc_ip_from_domain(context, self.altdomain)
 
                 # NXCRPCConnection
                 alt_connection = SimpleNamespace(
@@ -55,10 +53,10 @@ class NXCModule:
                     nthash="",
                     aesKey=None,
                     kerberos=False,
-                    kdcHost=dc_ip,
+                    kdcHost=connection.kdcHost,
                     conn=None,
-                    host=dc_ip,
-                    remoteName=dc_ip,
+                    host=connection.kdcHost,
+                    remoteName=connection.kdcHost,
                     port=445,
                 )
                 admin_users = self.enumerate_admin_users(context, alt_connection)
@@ -79,15 +77,6 @@ class NXCModule:
         except Exception as e:
             context.log.fail(str(e))
             context.log.debug(traceback.format_exc())
-    #resolve a dc ip from the domain fqdn. use altdc to override if this fails
-    def get_dc_ip_from_domain(self, context, domain):
-        try:
-            dc_ip = socket.gethostbyname(domain)
-            context.log.debug(f"Resolved {domain} to {dc_ip}")
-            return dc_ip
-        except Exception as e:
-            context.log.fail(f"Could not resolve a DC IP for {domain}: {e}. Specify one manually with -o ALTDC=<ip>")
-            raise
 
     def get_dce_rpc(self, named_pipe, dce_binding, connection, target_ip=None, auth_level=None):
         return NXCRPCConnection(connection).connect(
