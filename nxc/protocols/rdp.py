@@ -47,11 +47,13 @@ class rdp(connection):
             SUPP_PROTOCOLS.RDP,
         ]
         self.protoflags = [
-            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
+            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
+        self.selected_proto = None
+        self.login_proto = None
         width, height = args.res.upper().split("X")
         height = int(height)
         width = int(width)
@@ -111,8 +113,11 @@ class rdp(connection):
 
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
-        if self.domain is None:
-            self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+        if self.server_os is None:
+            if self.selected_proto == SUPP_PROTOCOLS.RDP:
+                self.logger.display(f"Standard RDP Security only, no server info available ({nla})")
+            else:
+                self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
             try:
@@ -124,8 +129,9 @@ class rdp(connection):
         iosettings = self.iosettings.clone_for_connection()
         # Explicit protocols are used by discovery and screenshot fallbacks.
         # Authenticated connections leave this unset so aardwolf selects the
-        # X224 flags appropriate for the credential type.
-        iosettings.supported_protocols = supported_protocols
+        # X224 flags appropriate for the credential type, unless the server
+        # has no CredSSP and only takes the protocol create_conn_obj() found.
+        iosettings.supported_protocols = self.login_proto if supported_protocols is None else supported_protocols
         return RDPConnection(
             iosettings=iosettings,
             target=copy.deepcopy(self.target),
@@ -133,7 +139,7 @@ class rdp(connection):
         )
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
+        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True, autologon=False)  # old servers only offer ciphers OpenSSL rejects at its default security level; no autologon with the dummy credentials
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
         asyncio.run(self.check_nla())
@@ -161,11 +167,22 @@ class rdp(connection):
                         self.remoteName = sanitize_dns(info_domain.get("dnscomputername"), self.logger) if self.kerberos else self.host
                         self.server_os = self.guess_os(info_domain)
                         self.logger.extra["hostname"] = self.hostname
+                    self.selected_proto = proto
                     break
+            else:
+                self.selected_proto = proto   # accepted: without CredSSP the dummy credentials cannot fail here
+                break
+
+        if self.selected_proto is None:
+            self.logger.debug("Server rejected every protocol we offered")
+        elif self.selected_proto in (SUPP_PROTOCOLS.RDP, SUPP_PROTOCOLS.SSL):
+            self.login_proto = self.selected_proto
 
         if self.args.domain:
             self.domain = self.args.domain
         if self.args.local_auth:
+            self.domain = self.hostname
+        if self.domain is None:
             self.domain = self.hostname
 
         if not self.kdcHost and self.domain:
@@ -221,7 +238,8 @@ class rdp(connection):
         without establishing a full RDP session. This verifies credentials
         without creating a disconnected session on single-session hosts.
         """
-        _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout)
+        # Without CredSSP, connect() also waits up to autologon_timeout for the server to confirm the logon
+        _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout + (self.conn.autologon_timeout if self.login_proto is not None else 0))
         if err is not None:
             raise err
         self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
