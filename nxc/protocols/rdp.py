@@ -591,9 +591,7 @@ Add-Type -AssemblyName System.Windows.Forms
         await self._send_win_r()
         await self.conn.set_current_clipboard_text(command)
         # server must acknowledge our clipboard data before we trigger the read
-        response = await self._wait_for_event(
-            {"CLIPBOARD_FORMAT_LIST_RESPONSE"}, self.args.clipboard_delay
-        )
+        response = await self._wait_for_event({"CLIPBOARD_FORMAT_LIST_RESPONSE"}, self.args.clipboard_delay)
         if not response.accepted:
             raise RuntimeError("Remote session rejected the clipboard command data")
         # type a one-liner that reads and executes the clipboard we just set
@@ -745,9 +743,7 @@ Add-Type -AssemblyName System.Windows.Forms
         connected = False
         for proto in self.protoflags_nla:
             try:
-                self.conn = self._create_rdp_connection(
-                    self.auth, supported_protocols=proto
-                )
+                self.conn = self._create_rdp_connection(self.auth, supported_protocols=proto)
                 await self.connect_rdp()
             except Exception as e:
                 self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
