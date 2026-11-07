@@ -1,4 +1,5 @@
 import re
+from types import SimpleNamespace
 from impacket.dcerpc.v5 import samr, tsch
 from impacket.dcerpc.v5 import tsts as TSTS
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
@@ -20,11 +21,46 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """There are no module options."""
+        """
+        ALTUSER     Alternative domain user to enumerate admin groups with
+        ALTPASS     Password for ALTUSER
+        ALTDOMAIN   Domain FQDN of the alternative credentials
+        ALTDC       DC IP
+
+        When alternative credentials are supplied, Domain and Enterprise Admins are enumerated over SAMR against the DC using those credentials, rather than the local administrator session (which cannot enumerate these groups).
+        """
+        self.altuser = module_options.get("ALTUSER")
+        self.altpass = module_options.get("ALTPASS")
+        self.altdomain = module_options.get("ALTDOMAIN")
+        self.altdc = module_options.get("ALTDC")
+
+        alt_creds = [self.altuser, self.altpass, self.altdomain]
+        if any(alt_creds) and not all(alt_creds):
+            context.log.fail("ALTUSER, ALTPASS, and ALTDOMAIN must be specified together")
+            return False
 
     def on_admin_login(self, context, connection):
         try:
-            admin_users = self.enumerate_admin_users(context, connection)
+            if self.altuser and self.altpass and self.altdomain:
+                context.log.info(f"Using alternative domain credentials: {self.altdomain}\\{self.altuser}")
+                alt_connection = SimpleNamespace(
+                    username=self.altuser,
+                    password=self.altpass,
+                    domain=self.altdomain,
+                    lmhash="",
+                    nthash="",
+                    aesKey=None,
+                    kerberos=False,
+                    kdcHost=self.altdc,
+                    conn=None,
+                    host=self.altdc,
+                    remoteName=self.altdc,
+                    port=445,
+                )
+                admin_users = self.enumerate_admin_users(context, alt_connection)
+            else:
+                admin_users = self.enumerate_admin_users(context, connection)
+
             if not admin_users:
                 context.log.fail("No admin users found.")
                 return
@@ -148,12 +184,18 @@ class NXCModule:
         context.log.debug(f"Enumerated {len(processes)} processes on {connection.host}")
 
         for process in processes:
-            context.log.debug(f"ImageName: {process['ImageName']}, UniqueProcessId: {process['SessionId']}, pSid: {process['pSid']}")
+            info = process.getProcessInfo()
+            image_name = info["ImageName"].getValue()
+            pid = info["UniqueProcessId"]
+            session_id = info["SessionId"]
+            psid = process.getSid()
+            context.log.debug(f"ImageName: {image_name}, UniqueProcessId: {pid}, SessionId: {session_id}, pSid: {psid}")
+
             # Check if process SID matches any admin user SID
             for user in admin_users:
-                if process["pSid"] == user["sid"]:
+                if psid == user["sid"]:
                     user["in_tasks"] = True
-                    context.log.info(f"Matched process {process['ImageName']} with user {user['username']}")
+                    context.log.info(f"Matched process {image_name} with user {user['username']}")
 
     def check_scheduled_tasks(self, context, connection, admin_users):
         """Checks scheduled tasks over rpc."""
