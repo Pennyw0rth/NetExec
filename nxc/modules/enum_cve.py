@@ -17,7 +17,7 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def __init__(self, context=None, module_options=None):
-        context = context
+        self.context = context
         self.module_options = module_options
         self.cve = "all"
         self.exploitation_details = False
@@ -37,13 +37,16 @@ class NXCModule:
         - CVE-2026-54121 (Certighost)
         - CVE-2026-27912 (ResetNightmare)
         - CVE-2026-102217 (PetitPotam WebDAV coercion)
+        - KB5126646 (LDAP Signing Bypass, no CVE assigned)
 
-        CVE             Filter for specific CVE number (default: All)
+        CVE             Filter for a specific CVE/KB identifier from the list above (default: All)
         EXPLOITATION    Also provide sources for exploitation details (default: False)
         """
-        self.listener = None
         if "CVE" in module_options:
             self.cve = module_options["CVE"].lower()
+            if self.cve != "all" and self.cve not in [cve.lower() for cve in self.CVE_PATCHES]:
+                context.log.fail(f"Unknown CVE '{module_options['CVE']}', supported identifiers: {', '.join(self.CVE_PATCHES)}")
+                return False
         if "EXPLOITATION" in module_options:
             self.exploitation_details = module_options["EXPLOITATION"].lower() in ["true", "1", "yes"]
 
@@ -52,8 +55,6 @@ class NXCModule:
         min_patched_ubr = msrc.get(key)
         if min_patched_ubr is None:
             return None  # Unknown product
-        if ubr is None:
-            return None
         return ubr < min_patched_ubr
 
     def on_login(self, context, connection):
@@ -86,12 +87,22 @@ class NXCModule:
             return
 
         # Check each CVE
+        os_version = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}"
+        os_key = (connection.server_os_major, connection.server_os_minor, connection.server_os_build)
+        if not any(os_key in entry["patches"] for entry in self.CVE_PATCHES.values()):
+            context.log.fail(f"Build {os_version} is not listed in any check, cannot determine vulnerability status")
+            return
+
         for cve in self.CVE_PATCHES:
             if self.cve == "all" or self.cve.lower() == cve.lower():
                 if self.CVE_PATCHES[cve].get("dc_only") and not connection.is_host_dc():
                     context.log.info(f"Skipping {self.CVE_PATCHES[cve]['alias']} - only applicable to Domain Controllers")
                     continue
-                if self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"]):
+                vulnerable = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"])
+                if vulnerable is None:
+                    context.log.info(f"Cannot check {self.CVE_PATCHES[cve]['alias']}: no patched UBR known for build {os_version}")
+                    continue
+                if vulnerable:
                     if connection.conn.isSigningRequired() and "signing_message" in self.CVE_PATCHES[cve]:  # Special conditional message for some CVEs
                         context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['signing_message']}")
                     else:
@@ -99,7 +110,7 @@ class NXCModule:
                     if self.exploitation_details:
                         context.log.highlight(f"Exploitation details: {self.CVE_PATCHES[cve]['exploitation']}")
                 else:
-                    context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR {ubr} >= {self.CVE_PATCHES[cve]['patches'].get((connection.server_os_major, connection.server_os_minor, connection.server_os_build), 'unknown')})")
+                    context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR {ubr} >= {self.CVE_PATCHES[cve]['patches'][os_key]})")
 
     # patches: key = (major, minor, build), value = minimum patched UBR
     CVE_PATCHES = {
