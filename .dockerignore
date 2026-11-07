@@ -35,3 +35,4 @@ nxc/data/invoke-vnc/*.msbuild
 nxc/data/invoke-vnc/*.sln
 nxc/data/RID-Hijacking/modules
 nxc/data/RID-Hijacking/slides
+.git
