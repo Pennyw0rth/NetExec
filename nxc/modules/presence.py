@@ -25,13 +25,14 @@ class NXCModule:
         ALTUSER     Alternative domain user to enumerate admin groups with
         ALTPASS     Password for ALTUSER
         ALTDOMAIN   Domain FQDN of the alternative credentials
-        ALTDC       Optional DC IP, if the domain cannot be resolved via DNS
+        ALTDC       DC IP
 
         When alternative credentials are supplied, Domain and Enterprise Admins are enumerated over SAMR against the DC using those credentials, rather than the local administrator session (which cannot enumerate these groups).
         """
         self.altuser = module_options.get("ALTUSER")
         self.altpass = module_options.get("ALTPASS")
         self.altdomain = module_options.get("ALTDOMAIN")
+        self.altdc = module_options.get("ALTDC")
 
         alt_creds = [self.altuser, self.altpass, self.altdomain]
         if any(alt_creds) and not all(alt_creds):
@@ -50,10 +51,10 @@ class NXCModule:
                     nthash="",
                     aesKey=None,
                     kerberos=False,
-                    kdcHost=connection.kdcHost,
+                    kdcHost=self.altdc,
                     conn=None,
-                    host=connection.kdcHost,
-                    remoteName=connection.kdcHost,
+                    host=self.altdc,
+                    remoteName=self.altdc,
                     port=445,
                 )
                 admin_users = self.enumerate_admin_users(context, alt_connection)
