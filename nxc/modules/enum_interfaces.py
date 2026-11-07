@@ -31,6 +31,7 @@ class NXCModule:
         """Execute network interface enumeration on authenticated SMB connection"""
         self.context = context
 
+        remoteOps = None
         try:
             remoteOps = RemoteOperations(connection.conn, False)
             remoteOps.enableRegistry()
@@ -89,7 +90,9 @@ class NXCModule:
                     except DCERPCException as e:
                         context.log.info(f"Failed to retrieve the network interface info for {sub_key}: {e!s}")
 
-            with contextlib.suppress(Exception):
-                remoteOps.finish()
         except DCERPCException as e:
             context.log.error(f"Failed to connect to the target: {e!s}")
+        finally:
+            if remoteOps is not None:
+                with contextlib.suppress(Exception):
+                    remoteOps.finish()
