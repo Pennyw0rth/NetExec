@@ -595,9 +595,7 @@ Add-Type -AssemblyName System.Windows.Forms
             {"CLIPBOARD_FORMAT_LIST_RESPONSE"}, self.args.clipboard_delay
         )
         if not response.accepted:
-            raise RuntimeError(
-                "Remote session rejected the clipboard command data"
-            )
+            raise RuntimeError("Remote session rejected the clipboard command data")
         # type a one-liner that reads and executes the clipboard we just set
         # uses .NET WinForms API instead of Get-Clipboard (which requires PS5+)
         await self._send_keystrokes(
@@ -629,9 +627,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
     async def execute_shell(self, payload, get_output, shell_type):
         marker = uuid4().hex if get_output else None
-        command = self._build_execution_command(
-            payload, shell_type, marker, get_output
-        )
+        command = self._build_execution_command(payload, shell_type, marker, get_output)
         self.logger.debug(f"Executing {shell_type} command through {'an encoded PowerShell launcher' if get_output else 'interactive keyboard input'}")
 
         try:
@@ -661,9 +657,7 @@ Add-Type -AssemblyName System.Windows.Forms
                 try:
                     await self._submit_run_command(command)
                 except TimeoutError:
-                    self.logger.fail(
-                        "Remote session did not acknowledge the clipboard command data"
-                    )
+                    self.logger.fail("Remote session did not acknowledge the clipboard command data")
                     return None
             else:
                 await self._submit_typed_run_command(command)
