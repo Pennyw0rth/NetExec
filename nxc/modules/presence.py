@@ -169,10 +169,6 @@ class NXCModule:
                     (user["username"].lower() == "administrator" and f"{user['username'].lower()}.{user['domain']}" in dirs_found):
                 user["in_directory"] = True
                 context.log.info(f"Found user {user['username']} in directories")
-    #fixes KeyError: 'ImageName' in check_tasklist
-    def parse_process(self, process):
-        info = process.getProcessInfo()
-        return info["ImageName"].getValue(), info["UniqueProcessId"], info["SessionId"], process.getSid()
 
     def check_tasklist(self, context, connection, admin_users):
         """Checks tasklist over rpc."""
@@ -187,8 +183,13 @@ class NXCModule:
         context.log.debug(f"Enumerated {len(processes)} processes on {connection.host}")
 
         for process in processes:
-            image_name, pid, session_id, psid = self.parse_process(process)
+            info = process.getProcessInfo()
+            image_name = info["ImageName"].getValue()
+            pid = info["UniqueProcessId"]
+            session_id = info["SessionId"]
+            psid = process.getSid()
             context.log.debug(f"ImageName: {image_name}, UniqueProcessId: {pid}, SessionId: {session_id}, pSid: {psid}")
+
             # Check if process SID matches any admin user SID
             for user in admin_users:
                 if psid == user["sid"]:
