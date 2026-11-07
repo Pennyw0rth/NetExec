@@ -242,4 +242,20 @@ class NXCModule:
             "message": "PetitPotam (EFSRPC) can coerce to a WebDAV listener, the HTTP authentication can be relayed to LDAP/LDAPS",
             "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
         },
+        # https://support.microsoft.com/en-us/servicing/os/azure-marketplace/windows-server/2026/windows-server-images-for-october-2026
+        "KB5126646": {
+            "alias": "LDAP Signing Bypass",
+            "dc_only": True,
+            "patches": {
+                (6, 2, 9200): 26434,      # Windows Server 2012
+                (6, 3, 9600): 23470,      # Windows Server 2012 R2
+                (10, 0, 14393): 9612,     # Windows Server 2016
+                (10, 0, 17763): 9376,     # Windows Server 2019
+                (10, 0, 20348): 5756,     # Windows Server 2022
+                (10, 0, 25398): 2331,     # Windows Server 2022 23H2 (EOL)
+                (10, 0, 26100): 33648,    # Windows Server 2025
+            },
+            "message": "SMB-to-LDAP NTLM relay is possible even when LDAP signature is required",
+            "exploitation": "https://specterops.io/blog/2026/10/23/ldap-signing-bypass-ntlm-relay/",
+        },
     }
