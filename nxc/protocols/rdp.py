@@ -704,7 +704,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
         get_output = bool(not self.args.no_output)
 
-        if not self.username:  # see screenshot()
+        if not self.username:  # every login method sets it, so empty means no credentials were given and there is no desktop to capture
             self.logger.fail("-x/-X need credentials")
             return None
         if self.conn.disconnected_evt.is_set():  # valid credentials without the RDP right open no session: skip silently, like smb -x without admin rights
