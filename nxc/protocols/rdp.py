@@ -136,21 +136,19 @@ class rdp(connection):
     def create_conn_obj(self):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
+        return self.runner.run(self.check_nla())
 
-        self.runner.run(self.check_nla())
-
+    def enum_host_info(self):
         for proto in reversed(self.protoflags):
             try:
-                self.conn = self._create_rdp_connection(
-                    self.auth, supported_protocols=proto
-                )
+                self.conn = self._create_rdp_connection(self.auth, supported_protocols=proto)
                 self.runner.run(self.connect_rdp_with_cleanup())
             except OSError as e:
                 if "Errno 104" not in str(e):
-                    return False
+                    break
             except Exception as e:
                 if "TCPSocket" in str(e):
-                    return False
+                    break
                 if "Reason:" not in str(e):
                     try:
                         info_domain = self.conn.get_extra_info()
@@ -174,20 +172,10 @@ class rdp(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.target = RDPTarget(
-            ip=self.host,
-            hostname=self.hostname,
-            port=self.port,
-            domain=self.domain,
-            dc_ip=self.domain,
-            timeout=self.args.rdp_timeout,
-            unsafe_ssl=True,
-        )
+        self.target = RDPTarget(ip=self.host, hostname=self.hostname, port=self.port, domain=self.domain, dc_ip=self.domain, timeout=self.args.rdp_timeout, unsafe_ssl=True)
 
         # Reset so aardwolf negotiates on its own (restricted admin + HYBRID_EX), the loop above pinned it
         self.iosettings.supported_protocols = None
-
-        return True
 
     def guess_os(self, info_domain):
         build = info_domain.get("os_build")
@@ -198,28 +186,22 @@ class rdp(connection):
         return f"{info_domain.get('os_guess') or 'Unknown'} Build {build or 'Unknown'}"
 
     async def check_nla(self):
+        """Offer SSL only: a server that accepts it does not require NLA. Returns False when the host does not answer."""
         self.logger.debug(f"Checking NLA for {self.host}")
         probe_connection = None
         try:
-            self.conn = self._create_rdp_connection(
-                None, supported_protocols=SUPP_PROTOCOLS.SSL
-            )
-            packetizer = TPKTPacketizer()
-            client = UniClient(self.target, packetizer)
-            probe_connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
-            self.conn._connection = probe_connection
-            self.conn._x224net = X224Network(self.conn._connection)
-            _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
-            # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
-            if err is None or "SSL_NOT_ALLOWED_BY_SERVER" in str(err):
-                self.nla = False
-                return
-        except Exception:
-            pass
+            probe_connection = await asyncio.wait_for(UniClient(self.target, TPKTPacketizer()).connect(), timeout=self.args.rdp_timeout)
+            _, err = await asyncio.wait_for(X224Network(probe_connection).client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
+        except OSError as e:
+            self.logger.debug(f"No RDP answer from {self.host}:{self.port}: {e!r}")
+            return False
         finally:
-            # this probe socket is not owned by aardwolf, terminate() would not close it
             if probe_connection is not None:
                 await probe_connection.close()
+        # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
+        if err is None or "SSL_NOT_ALLOWED_BY_SERVER" in str(err):
+            self.nla = False
+        return True
 
     async def connect_rdp(self):
         """Connect to the RDP server. Does NOT clean up on exit."""
