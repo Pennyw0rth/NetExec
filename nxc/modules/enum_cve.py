@@ -81,7 +81,7 @@ class NXCModule:
         os_version = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}"
         os_key = (connection.server_os_major, connection.server_os_minor, connection.server_os_build)
         if not any(os_key in entry["patches"] for entry in self.CVE_PATCHES.values()):
-            context.log.fail(f"Build {os_version} is not listed in any check, cannot determine vulnerability status")
+            context.log.info(f"Build {os_version} is not listed in any check, cannot determine vulnerability status")
             return
 
         for cve in self.CVE_PATCHES:
