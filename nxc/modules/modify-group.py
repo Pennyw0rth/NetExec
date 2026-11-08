@@ -1,8 +1,8 @@
 import contextlib
 import sys
 from impacket.ldap.ldap import MODIFY_ADD, MODIFY_DELETE
-from impacket.dcerpc.v5 import samr, epm, transport
-from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.dcerpc.v5 import samr
+from nxc.helpers.rpc import NXCRPCConnection
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.misc import CATEGORY
 
@@ -49,7 +49,7 @@ class NXCModule:
         self.remove = module_options.get("REMOVE", "False").lower() == "true"
 
         if not (self.target_user and self.group):
-            self.context.log.fail("USER and GROUP parameters are required!")
+            context.log.fail("USER and GROUP parameters are required!")
             sys.exit(1)
 
     def on_login(self, context, connection):
@@ -61,36 +61,9 @@ class NXCModule:
         elif context.protocol == "ldap" and self.group:
             self._modify_group_ldap()
 
-    def _authenticate_dce(self, protocol="ncacn_np", interface=samr.MSRPC_UUID_SAMR):
-        """Authenticate to the target using DCE/RPC"""
-        try:
-            # Map to the endpoint on the target
-            string_binding = epm.hept_map(self.connection.host, interface, protocol=protocol)
-            rpctransport = transport.DCERPCTransportFactory(string_binding)
-            rpctransport.setRemoteHost(self.connection.host)
-            rpctransport.set_credentials(
-                self.connection.username,
-                self.connection.password,
-                self.connection.domain,
-                self.connection.lmhash,
-                self.connection.nthash,
-                aesKey=self.connection.aesKey,
-            )
-            self.context.log.info(f"Connecting as {self.connection.domain}\\{self.connection.username}")
-
-            # Connect to the DCE/RPC endpoint and bind to the service
-            dce = rpctransport.get_dce_rpc()
-            dce.connect()
-            self.context.log.info("Successfully connected to DCE/RPC")
-            dce.bind(interface)
-            self.context.log.info(f"Successfully bound to {interface}")
-            return dce
-        except DCERPCException as e:
-            self.context.log.fail(f"DCE/RPC Exception: {e!s}")
-
     def _modify_group_smb(self):
         """Modify group membership using SMB/SAMR protocol"""
-        dce = self._authenticate_dce()
+        dce = NXCRPCConnection(self.connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
         if not dce:
             return
 

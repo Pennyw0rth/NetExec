@@ -16,10 +16,6 @@ from nxc.paths import CONFIG_PATH, WORKSPACE_DIR
 from nxc.database import create_db_engine, open_config, get_workspace, get_db, write_configfile, create_workspace, set_workspace
 
 
-class UserExitedProto(Exception):
-    pass
-
-
 def print_table(data, title=None):
     print()
     table = AsciiTable(data)
@@ -42,6 +38,17 @@ def write_csv(filename, headers, entries):
         csv_file.writerow(headers)
         for entry in entries:
             csv_file.writerow(entry)
+
+
+def host_csv_headers(hosts_table, mode="simple"):
+    """Return the CSV header for a hosts export, taken from the protocol's own HostsTable.
+
+    "simple" keeps the first 8 columns, the historical width of the SMB export, "detailed" returns them all.
+    """
+    columns = tuple(col.name for col in hosts_table.columns)
+    if mode == "detailed":
+        return columns
+    return columns[:8]
 
 
 def write_list(filename, entries):
@@ -99,7 +106,16 @@ class DatabaseNavigator(cmd.Cmd):
         print_help(help_string)
 
     def do_back(self, line):
-        raise UserExitedProto
+        self.db.shutdown_db()
+        return True
+
+    def do_proto(self, line):
+        if not line:
+            self.main_menu.help_proto()
+
+        self.db.shutdown_db()
+        self.main_menu.do_proto(line)
+        return True
 
     def do_export(self, line):
         if not line:
@@ -164,39 +180,13 @@ class DatabaseNavigator(cmd.Cmd):
                 print("[-] invalid arguments, export hosts <simple|detailed|signing> <filename>")
                 return
 
-            csv_header_simple = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-            )
-            csv_header_detailed = (
-                "id",
-                "ip",
-                "hostname",
-                "domain",
-                "os",
-                "dc",
-                "smbv1",
-                "signing",
-                "spooler",
-                "zerologon",
-                "petitpotam",
-            )
             filename = line[2]
 
             if line[1].lower() == "simple":
-                hosts = self.db.get_hosts()
-                simple_hosts = [host[:8] for host in hosts]
-                write_csv(filename, csv_header_simple, simple_hosts)
-            # TODO: maybe add more detail like who is an admin on it, shares discovered, etc
+                csv_header = host_csv_headers(self.db.HostsTable, "simple")
+                write_csv(filename, csv_header, [host[: len(csv_header)] for host in self.db.get_hosts()])
             elif line[1].lower() == "detailed":
-                hosts = self.db.get_hosts()
-                write_csv(filename, csv_header_detailed, hosts)
+                write_csv(filename, host_csv_headers(self.db.HostsTable, "detailed"), self.db.get_hosts())
             elif line[1].lower() == "signing":
                 hosts = self.db.get_hosts("signing")
                 signing_hosts = [host[1] for host in hosts]
@@ -310,10 +300,18 @@ class DatabaseNavigator(cmd.Cmd):
                 return
             print("[+] DPAPI secrets exported")
         elif command == "keys":
+            if len(line) < 3:
+                print("[-] invalid arguments, export keys <all|id> <filename>")
+                return
+
             keys = self.db.get_keys() if line[1].lower() == "all" else self.db.get_keys(key_id=int(line[1]))
+            if not keys:
+                print("[-] No keys found in the database for the current protocol")
+                return
             writable_keys = [key[2] for key in keys]
             filename = line[2]
             write_list(filename, writable_keys)
+            print("[+] Keys exported")
         elif command == "wcc":
             if len(line) < 3:
                 print("[-] invalid arguments, export wcc <simple|detailed> <filename>")
@@ -459,17 +457,13 @@ class NXCDBMenu(cmd.Cmd):
             db_object = self.p_loader.load_protocol(self.protocols[proto]["dbpath"])
             self.config.set("nxc", "last_used_db", proto)
             write_configfile(self.config, self.config_path)
-            try:
-                proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
-                proto_menu.cmdloop()
-            except UserExitedProto:
-                pass
+            proto_menu = db_nav_object.navigator(self, db_object.database(self.conn), proto)
+            proto_menu.cmdloop()
 
     @staticmethod
     def help_proto():
         help_string = """
-        proto [smb|mssql|winrm]
-            *unimplemented protocols: ftp, rdp, ldap, ssh
+        proto [smb|mssql|winrm|ftp|rdp|ldap|ssh]
         Changes nxcdb to the specified protocol
         """
         print_help(help_string)

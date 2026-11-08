@@ -27,9 +27,10 @@
 
 from os.path import join as path_join
 from time import sleep
-from nxc.connection import dcom_FirewallChecker
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string
 from nxc.paths import TMP_PATH
+from nxc.protocols.smb.exec_output import get_output_file
 
 from impacket.dcerpc.v5.dcom.oaut import (
     IID_IDispatch,
@@ -108,7 +109,7 @@ class MMCEXEC:
             self.logger.info(f"Got Exception while connecting with DCOM: {e}")
             # Make it force break function
             self.__dcom.disconnect()
-        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout)
+        flag, self.__stringBinding = dcom_FirewallChecker(iInterface, self.__remoteHost, self.__timeout, self.logger)
         if not flag or not self.__stringBinding:
             error_msg = f'MMCEXEC: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the option "--dcom-timeout". If it\'s still failing maybe something is blocking the RPC connection, try another exec method'
 
@@ -250,41 +251,4 @@ class MMCEXEC:
             self.__outputBuffer = ""
             return
 
-        tries = 1
-        # Give the command a bit of time to execute before we try to read the output, 0.4 seconds was good in testing
-        sleep(0.4)
-        while True:
-            try:
-                self.logger.info(f"Attempting to read {self.__share}\\{self.__output}")
-                self.__smbconnection.getFile(self.__share, self.__output, self.output_callback)
-                break
-            except Exception as e:
-                if tries >= self.__tries:
-                    self.logger.fail("MMCEXEC: Could not retrieve output file, it may have been detected by AV. Please increase the number of tries with the option '--get-output-tries'. If it is still failing, try the 'wmi' protocol or another exec method")
-                    break
-                if "STATUS_BAD_NETWORK_NAME" in str(e):
-                    self.logger.fail(f"MMCEXEC: Getting the output file failed - target has blocked access to the share: {self.__share} (but the command may have executed!)")
-                    break
-                elif "STATUS_VIRUS_INFECTED" in str(e):
-                    self.logger.fail("Command did not run because a virus was detected")
-                    break
-                # When executing powershell and the command is still running, we get a sharing violation
-                # We can use that information to wait longer than if the file is not found (probably av or something)
-                if "STATUS_SHARING_VIOLATION" in str(e):
-                    self.logger.info(f"File {self.__share}\\{self.__output} is still in use with {self.__tries - tries} tries left, retrying...")
-                    tries += 1
-                    sleep(1)
-                elif "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
-                    self.logger.info(f"File {self.__share}\\{self.__output} not found with {self.__tries - tries} tries left, deducting 10 tries and retrying...")
-                    tries += 10
-                    sleep(1)
-                else:
-                    self.logger.debug(f"Exception when trying to read output file: {e!s}. {self.__tries - tries} tries left, retrying...")
-                    tries += 1
-                    sleep(1)
-
-        try:
-            self.logger.debug(f"Deleting file {self.__share}\\{self.__output}")
-            self.__smbconnection.deleteFile(self.__share, self.__output)
-        except Exception:
-            pass
+        get_output_file(self.__smbconnection, self.__share, self.__output, self.output_callback, self.__tries, self.logger, "MMCEXEC")

@@ -3,7 +3,7 @@ import threading
 import warnings
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, func, select, delete
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, UniqueConstraint, func, select, delete, and_, or_
 from sqlalchemy.dialects.sqlite import Insert  # used for upsert
 from sqlalchemy.exc import (
     SAWarning
@@ -428,6 +428,20 @@ class database(BaseDB):
 
         return self.db_execute(q).all()
 
+    def get_credentials_for_users(self, usernames: list[str], cred_type: str | None = None):
+        """Return credentials for a list of users from the database."""
+        if cred_type:
+            q = select(self.UsersTable).filter(
+                self.UsersTable.c.credtype == cred_type,
+                and_(or_(*[self.UsersTable.c.username.like(f"%{name.lower()}%") for name in usernames]))
+            )
+        else:
+            q = select(self.UsersTable).filter(
+                or_(*[self.UsersTable.c.username.like(f"%{name.lower()}%") for name in usernames])
+            )
+
+        return self.db_execute(q).all()
+
     def get_credential(self, cred_type, domain, username, password):
         q = select(self.UsersTable).filter(
             self.UsersTable.c.domain == domain,
@@ -465,18 +479,18 @@ class database(BaseDB):
             return [results]
         # if we're filtering by domain controllers
         elif filter_term == "dc":
-            q = q.filter(self.HostsTable.c.dc == True)  # noqa: E712
+            q = q.filter(self.HostsTable.c.dc == True)  # ruff: ignore[true-false-comparison]
             if domain:
                 q = q.filter(func.lower(self.HostsTable.c.domain) == func.lower(domain))
         elif filter_term == "signing":
             # generally we want hosts that are vulnerable, so signing disabled
-            q = q.filter(self.HostsTable.c.signing == False)  # noqa: E712
+            q = q.filter(self.HostsTable.c.signing == False)  # ruff: ignore[true-false-comparison]
         elif filter_term == "spooler":
-            q = q.filter(self.HostsTable.c.spooler == True)  # noqa: E712
+            q = q.filter(self.HostsTable.c.spooler == True)  # ruff: ignore[true-false-comparison]
         elif filter_term == "zerologon":
-            q = q.filter(self.HostsTable.c.zerologon == True)  # noqa: E712
+            q = q.filter(self.HostsTable.c.zerologon == True)  # ruff: ignore[true-false-comparison]
         elif filter_term == "petitpotam":
-            q = q.filter(self.HostsTable.c.petitpotam == True)  # noqa: E712
+            q = q.filter(self.HostsTable.c.petitpotam == True)  # ruff: ignore[true-false-comparison]
         elif filter_term is not None and filter_term.startswith("domain"):
             domain = filter_term.split()[1]
             like_term = func.lower(f"%{domain}%")
@@ -725,13 +739,13 @@ class database(BaseDB):
 
     def is_dpapi_secret_valid(self, dpapi_secret_id):
         """
-        Check if this group ID is valid.
+        Check if this DPAPI secret ID is valid.
         :dpapi_secret_id is a primary id
         """
         q = select(self.DpapiSecretsTable).filter(func.lower(self.DpapiSecretsTable.c.id) == dpapi_secret_id)
         results = self.db_execute(q).first()
         valid = results is not None
-        nxc_logger.debug(f"is_dpapi_secret_valid(groupID={dpapi_secret_id}) => {valid}")
+        nxc_logger.debug(f"is_dpapi_secret_valid(dpapi_secret_id={dpapi_secret_id}) => {valid}")
         return valid
 
     def add_dpapi_secrets(

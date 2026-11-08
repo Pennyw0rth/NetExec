@@ -167,7 +167,7 @@ class KerberosAttacks:
                 if e.errno == 113:
                     self.logger.fail(f"Unable to resolve KDC hostname: {e!s}")
                 else:
-                    self.logger.fail(f"Some other OSError occured: {e!s}")
+                    self.logger.fail(f"Some other OSError occurred: {e!s}")
                 return None
             except Exception as e:
                 self.logger.debug(f"TGT: {e!s}")

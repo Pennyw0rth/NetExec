@@ -14,15 +14,11 @@ from socket import AF_UNSPEC, SOCK_DGRAM, IPPROTO_IP, AI_CANONNAME, getaddrinfo
 
 from nxc.config import pwned_label
 from nxc.helpers.logger import highlight
-from nxc.loaders.moduleloader import ModuleLoader
+from nxc.helpers.path import sanitize_path_component
+from nxc.loaders.moduleloader import ModuleLoader, ModuleOptionsError
 from nxc.logger import nxc_logger, NXCAdapter
 from nxc.context import Context
 from nxc.paths import NXC_PATH
-from nxc.protocols.ldap.laps import laps_search
-from nxc.helpers.pfx import pfx_auth
-
-from impacket.dcerpc.v5 import transport
-from impacket.krb5.ccache import CCache
 
 sem = BoundedSemaphore(1)
 fail_lock = Lock()
@@ -100,37 +96,6 @@ def requires_admin(func):
     return wraps(func)(_decorator)
 
 
-def dcom_FirewallChecker(iInterface, remoteHost, timeout):
-    stringBindings = iInterface.get_cinstance().get_string_bindings()
-    for strBinding in stringBindings:
-        if strBinding["wTowerId"] == 7:
-            if strBinding["aNetworkAddr"].find("[") >= 0:
-                binding, _, bindingPort = strBinding["aNetworkAddr"].partition("[")
-                bindingPort = "[" + bindingPort
-            else:
-                binding = strBinding["aNetworkAddr"]
-                bindingPort = ""
-
-            if binding.upper().find(iInterface.get_target().upper()) >= 0:
-                stringBinding = "ncacn_ip_tcp:" + strBinding["aNetworkAddr"][:-1]
-                break
-            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition(".")[0]) >= 0:
-                stringBinding = f"ncacn_ip_tcp:{iInterface.get_target()}{bindingPort}"
-    if "stringBinding" not in locals():
-        return True, None
-    try:
-        rpctransport = transport.DCERPCTransportFactory(stringBinding)
-        rpctransport.setRemoteHost(remoteHost)
-        rpctransport.set_connect_timeout(timeout)
-        rpctransport.connect()
-        rpctransport.disconnect()
-    except Exception as e:
-        nxc_logger.debug(f"Exception while connecting to {stringBinding}: {e}")
-        return False, stringBinding
-    else:
-        return True, stringBinding
-
-
 class connection:
     def __init__(self, args, db, target):
         self.args = args
@@ -144,15 +109,19 @@ class connection:
         # Authentication info
         self.password = ""
         self.username = ""
+        self.certificate_auth = bool(self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert)
         self.kerberos = bool(self.args.kerberos or
                              self.args.use_kcache or
                              self.args.aesKey or
+                             (self.certificate_auth and not (self.protocol == "ldap" and self.args.schannel)) or   # PKINIT yields a TGT, while Schannel binds the certificate to the LDAP channel itself
                              (hasattr(self.args, "delegate") and self.args.delegate) or
+                             (hasattr(self.args, "generate_st") and self.args.generate_st) or
                              (hasattr(self.args, "no_preauth_targets") and self.args.no_preauth_targets))
         self.aesKey = None if not self.args.aesKey else self.args.aesKey[0]
         self.use_kcache = None if not self.args.use_kcache else self.args.use_kcache
         self.admin_privs = False
         self.failed_logins = 0
+        self.has_reusable_secret = not (self.protocol == "ldap" and self.args.schannel)   # a Schannel bind authenticates the LDAP connection only, leaving no secret for a second channel
 
         # Network info
         self.domain = None
@@ -174,12 +143,14 @@ class connection:
         if self.kerberos:
             self.host = self.hostname
 
-        self.logger.info(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
+        self.logger.debug(f"Socket info: host={self.host}, hostname={self.hostname}, kerberos={self.kerberos}, ipv6={self.is_ipv6}, link-local ipv6={self.is_link_local_ipv6}")
 
         try:
             self.proto_flow()
         except FileNotFoundError as e:
             self.logger.error(f"File not found error on target {target}: {e}")
+        except ConnectionRefusedError as e:
+            self.logger.error(f"Target {target} refused the connection: {e}")
         except Exception as e:
             if "ERROR_DEPENDENT_SERVICES_RUNNING" in str(e):
                 self.logger.error(f"Exception while calling proto_flow() on target {target}: {e}")
@@ -241,20 +212,20 @@ class connection:
         self.logger.debug("Kicking off proto_flow")
         self.proto_logger()
         if not self.create_conn_obj():
-            self.logger.info(f"Failed to create connection object for target {self.host}, exiting...")
+            self.logger.debug(f"Failed to create connection object for target {self.host}, exiting...")
         else:
-            self.logger.debug("Created connection object")
+            self.logger.info(f"Successfully created connection object for target '{self.host}'")
             self.enum_host_info()
 
             # Construct the output file template using os.path.join for OS compatibility
             base_log_dir = os.path.join(NXC_PATH, "logs")
-            filename_pattern = f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+            filename_pattern = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=220)
             self.output_file_template = os.path.join(base_log_dir, "{output_folder}", filename_pattern)
             # Default output filename for logs
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == ""):
+            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql" and not self.certificate_auth):   # a failed certificate auth is not a null session
                 self.logger.debug("Calling command arguments")
                 self.call_cmd_args()
                 if self.args.module:
@@ -334,7 +305,7 @@ class connection:
             if self.failed_logins == self.args.fail_limit:
                 return True
 
-            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # noqa: SIM103
+            if username in user_failed_logins and self.args.ufail_limit == user_failed_logins[username]:  # ruff: ignore[needless-bool]
                 return True
 
             return False
@@ -556,22 +527,29 @@ class connection:
         if self.args.use_kcache:
             self.logger.debug("Trying to authenticate using Kerberos cache")
             with sem:
+                from impacket.krb5.ccache import CCache
                 username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
                 self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
                 self.logger.info("Successfully authenticated using Kerberos cache")
                 return True
 
-        if self.args.pfx_cert or self.args.pfx_base64 or self.args.pem_cert:
+        if self.certificate_auth:
             self.logger.debug("Trying to authenticate using Certificate pfx")
-            if not self.args.username:
+            if self.args.protocol == "ldap" and self.args.schannel:
+                # Schannel maps the certificate to an account server-side, so the supplied username is ignored
+                with sem:
+                    return self.plaintext_login(self.domain, "", "")
+            if not username:
                 self.logger.fail("You must specify a username when using certificate authentication")
                 return False
             with sem:
-                return pfx_auth(self)
+                from nxc.helpers.pfx import pfx_auth
+                return pfx_auth(self, domain[0], username[0])
 
         if hasattr(self.args, "laps") and self.args.laps:
             self.logger.debug("Trying to authenticate using LAPS")
+            from nxc.protocols.ldap.laps import laps_search
             username[0], secret[0], domain[0] = laps_search(self, username, secret, cred_type, domain, self.dns_server)
             cred_type = ["plaintext"]
             if not (username[0] or secret[0] or domain[0]):
@@ -603,5 +581,9 @@ class connection:
         self.modules = []
 
         for module_path in self.module_paths:
-            module = loader.init_module(module_path)
+            try:
+                module = loader.init_module(module_path)
+            except ModuleOptionsError as e:
+                self.logger.debug(f"Skipping module: {e}")
+                continue
             self.modules.append(module)

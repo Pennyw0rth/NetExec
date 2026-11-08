@@ -1,6 +1,6 @@
 from sys import exit
 
-from nxc.connection import dcom_FirewallChecker
+from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import CATEGORY
 
 from impacket.dcerpc.v5 import rrp
@@ -101,7 +101,8 @@ class NXCModule:
                             context.log.fail("Looks like target system version is under NT6, please add 'OLD=true' in module options.")
                         else:
                             context.log.fail(str(e))
-                wmi_rdp._RdpWmi__dcom.disconnect()
+                if wmi_rdp._RdpWmi__dcom is not None:
+                    wmi_rdp._RdpWmi__dcom.disconnect()
 
 
 class RdpSmb:
@@ -222,7 +223,16 @@ class RdpWmi:
         self.__aesKey = connection.aesKey
         self.__timeout = timeout
 
+        self.__dcom = None
+        if self.__currentprotocol == "wmi":
+            # The wmi protocol already holds an authenticated IWbemLevel1Login:
+            # reuse it instead of creating a second DCOMConnection to the same
+            # target (whose disconnect would clash with the protocol's own)
+            self.__iWbemLevel1Login = connection.iWbemLevel1Login
+            return
+
         try:
+            *_, tgt, _ = connection.conn.getCredentials()
             self.__dcom = DCOMConnection(
                 self.__target,
                 self.__username,
@@ -235,11 +245,12 @@ class RdpWmi:
                 doKerberos=self.__doKerberos,
                 kdcHost=self.__kdcHost,
                 remoteHost=self.__remoteHost,
+                TGT=tgt,
             )
 
             i_interface = self.__dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
             if self.__currentprotocol == "smb":
-                flag, self.__stringBinding = dcom_FirewallChecker(i_interface, self.__remoteHost, self.__timeout)
+                flag, self.__stringBinding = dcom_FirewallChecker(i_interface, self.__remoteHost, self.__timeout, self.logger)
                 if not flag or not self.__stringBinding:
                     error_msg = f'RDP-WMI: Dcom initialization failed on connection with stringbinding: "{self.__stringBinding}", please increase the timeout with the module option "DCOM-TIMEOUT=10". If it\'s still failing maybe something is blocking the RPC connection, please try to use "-o" with "METHOD=smb"'
 

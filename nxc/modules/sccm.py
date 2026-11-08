@@ -1,6 +1,6 @@
 from impacket.ldap import ldap, ldaptypes
 from impacket.ldap.ldap import LDAPSearchError
-from ldap3.protocol.microsoft import security_descriptor_control
+from impacket.ldap.ldapasn1 import SDFlagsControl
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 
@@ -56,7 +56,7 @@ class NXCModule:
         try:
             # Search for SCCM root object
             search_filter = f"(distinguishedName=CN=System Management,CN=System,{self.base_dn})"
-            controls = security_descriptor_control(sdflags=0x04)
+            controls = [SDFlagsControl(criticality=False, flags=0x04)]
             context.log.display(f"Looking for the SCCM container with filter: '{search_filter}'")
             result = connection.ldap_connection.search(
                 searchFilter=search_filter,

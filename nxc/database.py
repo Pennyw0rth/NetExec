@@ -204,7 +204,10 @@ class BaseDB:
             self.db_execute(table.delete())
 
     def db_execute(self, *args):
-        self.lock.acquire()
-        res = self.sess.execute(*args)
-        self.lock.release()
-        return res
+        with self.lock:
+            res = self.sess.execute(*args)
+            return res.freeze()() if res.returns_rows else res
+
+    def get_keys(self, key_id=None, cred_id=None):
+        """Return an empty list by default. Protocols that support keys (e.g. SSH) override this."""
+        return []

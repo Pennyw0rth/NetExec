@@ -1,4 +1,4 @@
-# Author: xiaolichan # noqa: ERA001
+# Author: xiaolichan  # ruff: ignore[commented-out-code]
 # Link: https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-regOut.py
 # Note: windows version under NT6 not working with this command execution way
 #       https://github.com/XiaoliChan/wmiexec-RegOut/blob/main/wmiexec-reg-sch-UnderNT6-wip.py -- WIP
@@ -21,7 +21,7 @@ from impacket.dcerpc.v5.dtypes import NULL
 
 
 class WMIEXEC:
-    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec):
+    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec, cimv2_namespace=None):
         self.__target = target
         self.__iWbemLevel1Login = iWbemLevel1Login
         self.logger = logger
@@ -32,8 +32,10 @@ class WMIEXEC:
         self.__pwd = "C:\\"
         self.__codec = codec
 
-        self.__iWbemServices = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-        self.__iWbemLevel1Login.RemRelease()
+        self.__iWbemServices = cimv2_namespace
+        if self.__iWbemServices is None:
+            self.__iWbemServices = self.__iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
+            self.__iWbemLevel1Login.RemRelease()
         self.__win32Process, _ = self.__iWbemServices.GetObject("Win32_Process")
 
     def execute(self, command, output=False, use_powershell=False):

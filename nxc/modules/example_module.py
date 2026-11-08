@@ -22,6 +22,7 @@ class NXCModule:
         Module options get parsed here. Additionally, put the modules usage here as well
         """
         # Put "No options available" in the docstring if there are no options for the module
+        # Return False to abort the run if options are invalid (log with context.log.fail first).
 
     def on_login(self, context, connection):
         """Concurrent.

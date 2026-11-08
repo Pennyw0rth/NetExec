@@ -1,18 +1,25 @@
 import asyncio
+import base64
+import copy
+import contextlib
 from datetime import datetime
 from os import getenv
+from uuid import uuid4
 from anyio import Path
 from termcolor import colored
 
 from impacket.krb5.ccache import CCache
+from impacket.smb3 import WIN_VERSIONS
 
 from nxc.connection import connection
+from nxc.helpers.misc import sanitize_dns
+from nxc.helpers.path import sanitize_path_component
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.logger import NXCAdapter
 from nxc.config import host_info_colors, process_secret
 from nxc.paths import NXC_PATH
 
-from aardwolf.connection import RDPConnection
+from aardwolf.connection import RDPConnection, AUTHZ_ACCESS_DENIED
 from aardwolf.commons.queuedata.constants import VIDEO_FORMAT
 from aardwolf.commons.queuedata.keyboard import RDP_KEYBOARD_UNICODE
 from aardwolf.commons.iosettings import RDPIOSettings
@@ -33,7 +40,6 @@ class rdp(connection):
         self.domain = None
         self.server_os = None
         self.iosettings = RDPIOSettings()
-        self.iosettings.video_out_format = VIDEO_FORMAT.RAW
         self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
             SUPP_PROTOCOLS.SSL,
@@ -53,8 +59,8 @@ class rdp(connection):
         # servers dont support 8 any more :/
         self.iosettings.video_bpp_min = 15
         self.iosettings.video_bpp_max = 32
-        # PIL produces incorrect picture for some reason?! TODO: check bug
-        self.iosettings.video_out_format = VIDEO_FORMAT.PNG  #
+        # screenshots read the desktop buffer, so don't PNG-encode every update put on ext_out_queue
+        self.iosettings.video_out_format = VIDEO_FORMAT.PIL
         self.domain = None
         self.server_os = None
         self.url = None
@@ -80,7 +86,9 @@ class rdp(connection):
             "KDC_ERR_PREAUTH_FAILED": "KDC_ERR_PREAUTH_FAILED",
         }
 
-        connection.__init__(self, args, db, host)
+        # one event loop per target: aardwolf's reader tasks die with their loop, so a session can only be reused on the loop that opened it
+        with asyncio.Runner() as self.runner:
+            connection.__init__(self, args, db, host)
 
     def proto_logger(self):
         import platform
@@ -108,23 +116,35 @@ class rdp(connection):
             self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
-            self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os, self.nla)
+            try:
+                self.db.add_host(self.host, self.port, self.hostname, self.domain, self.server_os, self.nla)
+            except Exception as e:
+                self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
+
+    def _create_rdp_connection(self, credentials, supported_protocols=None):
+        iosettings = self.iosettings.clone_for_connection()
+        # Explicit protocols are used by discovery and screenshot fallbacks.
+        # Authenticated connections leave this unset so aardwolf selects the
+        # X224 flags appropriate for the credential type.
+        iosettings.supported_protocols = supported_protocols
+        return RDPConnection(
+            iosettings=iosettings,
+            target=copy.deepcopy(self.target),
+            credentials=copy.deepcopy(credentials),
+        )
 
     def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout)
+        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
         self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
 
-        asyncio.run(self.check_nla())
+        self.runner.run(self.check_nla())
 
         for proto in reversed(self.protoflags):
             try:
-                self.iosettings.supported_protocols = proto
-                self.conn = RDPConnection(
-                    iosettings=self.iosettings,
-                    target=self.target,
-                    credentials=self.auth,
+                self.conn = self._create_rdp_connection(
+                    self.auth, supported_protocols=proto
                 )
-                asyncio.run(self.connect_rdp())
+                self.runner.run(self.connect_rdp_with_cleanup())
             except OSError as e:
                 if "Errno 104" not in str(e):
                     return False
@@ -137,9 +157,10 @@ class rdp(connection):
                     except Exception:
                         pass
                     else:
-                        self.domain = info_domain["dnsdomainname"]
-                        self.hostname = info_domain["computername"]
-                        self.server_os = info_domain["os_guess"] + " Build " + str(info_domain["os_build"])
+                        self.hostname = sanitize_dns(info_domain.get("computername"), self.logger)
+                        self.domain = sanitize_dns(info_domain.get("dnsdomainname"), self.logger)
+                        self.remoteName = sanitize_dns(info_domain.get("dnscomputername"), self.logger) if self.kerberos else self.host
+                        self.server_os = self.guess_os(info_domain)
                         self.logger.extra["hostname"] = self.hostname
                     break
 
@@ -147,8 +168,6 @@ class rdp(connection):
             self.domain = self.args.domain
         if self.args.local_auth:
             self.domain = self.hostname
-
-        self.remoteName = self.host if not self.kerberos else f"{self.hostname}.{self.domain}"
 
         if not self.kdcHost and self.domain:
             result = self.resolver(self.domain)
@@ -162,22 +181,33 @@ class rdp(connection):
             domain=self.domain,
             dc_ip=self.domain,
             timeout=self.args.rdp_timeout,
+            unsafe_ssl=True,
         )
+
+        # Reset so aardwolf negotiates on its own (restricted admin + HYBRID_EX), the loop above pinned it
+        self.iosettings.supported_protocols = None
 
         return True
 
+    def guess_os(self, info_domain):
+        build = info_domain.get("os_build")
+        if build in WIN_VERSIONS:
+            return f"{WIN_VERSIONS[build]} Build {build}"
+        if info_domain.get("os_major_version") == "WINDOWS_MAJOR_VERSION_10":   # asyauth labels every 10.0 kernel "Windows 10 or Windows Server 2016", only trust it for older kernels
+            return f"Windows 10.0 Build {build}"
+        return f"{info_domain.get('os_guess') or 'Unknown'} Build {build or 'Unknown'}"
+
     async def check_nla(self):
         self.logger.debug(f"Checking NLA for {self.host}")
+        probe_connection = None
         try:
-            self.iosettings.supported_protocols = SUPP_PROTOCOLS.SSL
-            self.conn = RDPConnection(
-                iosettings=self.iosettings,
-                target=self.target,
-                credentials=None,
+            self.conn = self._create_rdp_connection(
+                None, supported_protocols=SUPP_PROTOCOLS.SSL
             )
             packetizer = TPKTPacketizer()
             client = UniClient(self.target, packetizer)
-            self.conn._connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            probe_connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
+            self.conn._connection = probe_connection
             self.conn._x224net = X224Network(self.conn._connection)
             _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
             # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
@@ -186,13 +216,59 @@ class rdp(connection):
                 return
         except Exception:
             pass
+        finally:
+            # this probe socket is not owned by aardwolf, terminate() would not close it
+            if probe_connection is not None:
+                await probe_connection.close()
 
     async def connect_rdp(self):
+        """Connect to the RDP server. Does NOT clean up on exit."""
         _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
         if err is not None:
             raise err
+        self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
+
+    async def terminate_conn(self):
+        """Terminate the RDP connection with a timeout so cleanup doesn't hang (https://github.com/skelsec/aardwolf/issues/43)."""
+        if self.conn is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(self.conn.terminate(), timeout=self.args.rdp_timeout)
+
+    def disconnect(self):
+        self.runner.run(self.terminate_conn())
+
+    async def connect_rdp_with_cleanup(self):
+        """Connect to the RDP server and always terminate the connection on exit"""
+        try:
+            await self.connect_rdp()
+        finally:
+            await self.terminate_conn()
+
+    async def login_and_confirm(self):
+        """Log on and return whether a real session opened (Save Session Info PDU). The session stays open for -x/-X/--screenshot until disconnect().
+
+        That PDU never comes when access is authorized but the logon is refused (restricted admin).
+        """
+        await self.terminate_conn()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
+        self.conn = self._create_rdp_connection(self.auth)
+        await self.connect_rdp()
+        try:
+            await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
+            return True
+        except TimeoutError:
+            self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
+            return False
+
+    def rdp_access_denied(self):
+        """Whether the Early User Authorization Result PDU says the account has no RDP access right at all.
+
+        Distinct from a valid right whose logon is later refused (restricted admin), which yields no such PDU.
+        """
+        self.logger.debug(f"authz_result from Early User Authorization Result PDU: {self.conn.authz_result}")
+        return self.conn.authz_result == AUTHZ_ACCESS_DENIED
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
+        self.username = username
         try:
             lmhash = ""
             nthash = ""
@@ -208,26 +284,26 @@ class rdp(connection):
             if nthash:
                 self.nthash = nthash
 
-            kerb_pass = next(s for s in [nthash, password, aesKey] if s) if not all(s == "" for s in [nthash, password, aesKey]) else ""
-
             self.hostname + "." + self.domain
             password = password if password else nthash
 
             if useCache:
                 stype = asyauthSecret.CCACHE
-                if not password:
-                    password = password if password else getenv("KRB5CCNAME")
-                    if "/" in password:
-                        self.logger.fail("Kerberos ticket need to be on the local directory")
-                        return False
-                    ccache = CCache.loadFile(getenv("KRB5CCNAME"))
-                    ticketCreds = ccache.credentials[0]
-                    username = ticketCreds["client"].prettyPrint().decode().split("@")[0]
+                password = getenv("KRB5CCNAME")
+                ccache = CCache.loadFile(password)
+                ticketCreds = ccache.credentials[0]
+                username = ticketCreds["client"].prettyPrint().decode().split("@")[0]
+            elif aesKey:
+                stype = asyauthSecret.AES
+                password = aesKey
             else:
                 stype = asyauthSecret.PASS if not nthash else asyauthSecret.NT
+                password = password if password else nthash
+
+            kerb_pass = password
 
             kerberos_target = UniTarget(
-                self.host,
+                self.kdcHost,
                 88,
                 UniProto.CLIENT_TCP,
                 timeout=self.args.rdp_timeout,
@@ -244,10 +320,8 @@ class rdp(connection):
                 domain=domain,
                 stype=stype,
             )
-            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp())
+            self.admin_privs = self.runner.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(
                 "{}\\{}{} {}".format(
                     domain,
@@ -275,8 +349,11 @@ class rdp(connection):
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
-            elif "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{(process_secret(password))} {self.mark_pwned()}")
+            elif self.rdp_access_denied():
+                self.logger.success(f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             elif "No such file" in str(e):
                 self.logger.fail(e)
             else:
@@ -293,6 +370,7 @@ class rdp(connection):
             return False
 
     def plaintext_login(self, domain, username, password):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=password,
@@ -300,10 +378,8 @@ class rdp(connection):
                 domain=domain,
                 stype=asyauthSecret.PASS,
             )
-            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp())
+            self.admin_privs = self.runner.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
@@ -311,8 +387,11 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
+            if self.rdp_access_denied():
+                self.logger.success(f"{domain}\\{username}:{process_secret(password)}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             else:
                 reason = None
                 for word in self.rdp_error_status:
@@ -327,6 +406,7 @@ class rdp(connection):
             return False
 
     def hash_login(self, domain, username, ntlm_hash):
+        self.username = username
         try:
             self.auth = NTLMCredential(
                 secret=ntlm_hash,
@@ -334,10 +414,8 @@ class rdp(connection):
                 domain=domain,
                 stype=asyauthSecret.NT,
             )
-            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            asyncio.run(self.connect_rdp())
+            self.admin_privs = self.runner.run(self.login_and_confirm())
 
-            self.admin_privs = True
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
                 add_user_bh(username, domain, self.logger, self.config)
@@ -345,8 +423,11 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if "Authentication failed!" in str(e):
-                self.logger.success(f"{domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
+            if self.rdp_access_denied():
+                self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)}")
+                if not self.args.local_auth and self.username != "":
+                    add_user_bh(username, domain, self.logger, self.config)
+                return True
             else:
                 reason = None
                 for word in self.rdp_error_status:
@@ -364,10 +445,11 @@ class rdp(connection):
     async def _send_keystrokes(self, text, delay=0.02):
         """Helper method to send keystrokes to the RDP session"""
         for char in text:
-            key_event = RDP_KEYBOARD_UNICODE()
-            key_event.char = char
-            key_event.is_pressed = True
-            await self.conn.ext_in_queue.put(key_event)
+            for is_pressed in (True, False):
+                key_event = RDP_KEYBOARD_UNICODE()
+                key_event.char = char
+                key_event.is_pressed = is_pressed
+                await self.conn.ext_in_queue.put(key_event)
             await asyncio.sleep(delay)
 
     async def _send_enter(self):
@@ -376,145 +458,223 @@ class rdp(connection):
         await asyncio.sleep(0.05)
         await self.conn.send_key_virtualkey("VK_RETURN", False, False)
 
+    async def _send_shortcut(self, modifier, key):
+        layout = KeyboardLayoutManager().get_layout_by_shortname("enus")
+        modifier_scancode = layout.vk_to_scancode(modifier)
+        key_scancode = layout.char_to_scancode(key)[0]
+
+        await self.conn.send_key_scancode(modifier_scancode, True, False)
+        await asyncio.sleep(0.05)
+        await self.conn.send_key_scancode(key_scancode, True, False)
+        await asyncio.sleep(0.05)
+        await self.conn.send_key_scancode(key_scancode, False, False)
+        await asyncio.sleep(0.05)
+        await self.conn.send_key_scancode(modifier_scancode, False, False)
+
     async def _send_win_r(self):
         """Helper method to send Windows+R key combination to open Run dialog"""
+        self.logger.debug("Sending Win+R using scancode method")
+        for _ in range(2):
+            _, err = await self.conn.send_focus_in()
+            if err is not None:
+                raise err
+        await self._send_shortcut("VK_LWIN", "r")
+        await asyncio.sleep(0.5)
+
+    @staticmethod
+    def _build_execution_command(payload, shell_type, marker, get_output):
+        if not get_output:
+            if shell_type == "cmd":
+                return f"cmd.exe /d /s /c {payload}"
+            if shell_type == "powershell":
+                return (
+                    "powershell.exe -NoLogo -NoProfile -NonInteractive "
+                    f"-WindowStyle Hidden -Command {payload}"
+                )
+            raise ValueError(f"Unsupported shell type: {shell_type}")
+
+        payload_encoded = base64.b64encode(payload.encode("utf-16-le")).decode("ascii")
+        decode_payload = f"$command = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{payload_encoded}'))"
+
+        if shell_type == "cmd":
+            invoke_command = "$output = & $env:ComSpec /d /s /c $command 2>&1"
+        elif shell_type == "powershell":
+            invoke_command = "$output = & ([ScriptBlock]::Create($command)) 2>&1"
+        else:
+            raise ValueError(f"Unsupported shell type: {shell_type}")
+
+        start_marker = f"__NXC_RDP_START_{marker}__"
+        end_marker = f"__NXC_RDP_END_{marker}__"
+        script = f"""
+$ErrorActionPreference = 'Continue'
+{decode_payload}
+try {{
+    {invoke_command}
+    $succeeded = $?
+    $nativeExitCode = $LASTEXITCODE
+}} catch {{
+    $output = $_
+    $succeeded = $false
+    $nativeExitCode = $null
+}}
+$exitCode = if ($null -ne $nativeExitCode) {{ [int]$nativeExitCode }} elseif (-not $succeeded) {{ 1 }} else {{ 0 }}
+$outputText = ($output | Out-String -Width 4096).TrimEnd()
+$result = @('{start_marker}', [string]$exitCode, $outputText, '{end_marker}') -join [Environment]::NewLine
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Clipboard]::SetText($result)
+"""
+
+        encoded_script = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+        return f"powershell.exe -NoLogo -NoProfile -NonInteractive -STA -WindowStyle Hidden -EncodedCommand {encoded_script}"
+
+    @staticmethod
+    def _parse_execution_result(clipboard_text, marker):
+        start_marker = f"__NXC_RDP_START_{marker}__"
+        end_marker = f"__NXC_RDP_END_{marker}__"
+        normalized = clipboard_text.replace("\r\n", "\n").rstrip("\x00")
+
+        start_index = normalized.find(start_marker)
+        end_index = normalized.find(end_marker, start_index + len(start_marker))
+        if start_index == -1 or end_index == -1:
+            return None
+
+        body = normalized[start_index + len(start_marker):end_index].lstrip("\n")
+        exit_code_text, separator, output = body.partition("\n")
+        if not separator:
+            return None
+
         try:
-            self.logger.debug("Sending Win+R using scancode method")
+            exit_code = int(exit_code_text.strip())
+        except ValueError:
+            return None
+        return exit_code, output.rstrip("\n")
 
-            layout = KeyboardLayoutManager().get_layout_by_shortname("enus")
+    async def _wait_for_event(self, event_names, max_wait):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max_wait
 
-            win_scancode = layout.vk_to_scancode("VK_LWIN")
-            await self.conn.send_key_scancode(win_scancode, True, False)
-            await asyncio.sleep(0.1)
+        while True:
+            if self.conn.disconnected_evt.is_set():
+                raise ConnectionError("RDP connection was terminated")
 
-            r_scancode = layout.char_to_scancode("r")[0]
-            await self.conn.send_key_scancode(r_scancode, True, False)
-            await asyncio.sleep(0.1)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError
 
-            await self.conn.send_key_scancode(r_scancode, False, False)
-            await asyncio.sleep(0.1)
+            data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=remaining)
+            if data is None:
+                raise ConnectionError("RDP connection was terminated")
 
-            await self.conn.send_key_scancode(win_scancode, False, False)
+            event_name = getattr(getattr(data, "type", None), "name", None)
+            if event_name in event_names:
+                return data
 
-            await asyncio.sleep(0.5)
+    async def _wait_for_desktop(self):
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
 
-            self.logger.debug("Win+R sent successfully")
-            return True
-        except (ConnectionResetError, ConnectionError, OSError) as e:
-            self.logger.debug(f"Connection error while waiting for clipboard: {e!s}")
-            self.logger.fail("Connection was reset by the remote host")
-            return False
-        except Exception as e:
-            self.logger.debug(f"Error sending Win+R: {e!s}")
-            self.logger.debug("Using fallback approach for opening command prompt")
-            return False
+        if not self.conn.desktop_buffer_has_data:
+            try:
+                await self._wait_for_event({"VIDEO"}, self.args.cmd_delay)
+            except TimeoutError:
+                self.logger.debug("No desktop update received before command execution; continuing")
+
+        remaining_delay = self.args.cmd_delay - (loop.time() - started_at)
+        if remaining_delay > 0:
+            await asyncio.sleep(remaining_delay)
+
+    async def _submit_run_command(self, command):
+        await self._send_win_r()
+        await self.conn.set_current_clipboard_text(command)
+        # server must acknowledge our clipboard data before we trigger the read
+        response = await self._wait_for_event({"CLIPBOARD_FORMAT_LIST_RESPONSE"}, self.args.clipboard_delay)
+        if not response.accepted:
+            raise RuntimeError("Remote session rejected the clipboard command data")
+        # type a one-liner that reads and executes the clipboard we just set
+        # uses .NET WinForms API instead of Get-Clipboard (which requires PS5+)
+        await self._send_keystrokes(
+            "powershell.exe -NoLogo -NoProfile -NonInteractive -STA "
+            '-WindowStyle Hidden -Command "Add-Type -AssemblyName '
+            "System.Windows.Forms; Invoke-Expression "
+            '([System.Windows.Forms.Clipboard]::GetText())"'
+        )
+        await self._send_enter()
+
+    async def _submit_typed_run_command(self, command):
+        await self._send_win_r()
+        await self._send_keystrokes(command, delay=0.005)
+        await self._send_enter()
+
+    async def _wait_for_command_result(self, marker):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.args.clipboard_delay
+
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError
+
+            data = await self._wait_for_event({"CLIPBOARD_DATA_TXT"}, remaining)
+            result = self._parse_execution_result(data.data, marker)
+            if result is not None:
+                return result
 
     async def execute_shell(self, payload, get_output, shell_type):
-        # Append | clip to send output to clipboard
-        if shell_type == "cmd":
-            payload_with_clip = f"{payload} | clip & exit"
-        elif shell_type == "powershell":
-            payload_with_clip = f"try {{ {payload} 2>&1 | clip}} catch {{ $_ | clip}}; exit"
-        else:
-            self.logger.fail(f"Unsupported shell type: {shell_type}")
-            return None
-        self.logger.debug(f"Executing command: {payload_with_clip}")
-
-        # Create a connection
-        try:
-            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            await self.connect_rdp()
-        except Exception as e:
-            self.logger.debug(f"Error connecting to RDP: {e!s}")
-            return None
+        marker = uuid4().hex if get_output else None
+        command = self._build_execution_command(payload, shell_type, marker, get_output)
+        self.logger.debug(f"Executing {shell_type} command through {'an encoded PowerShell launcher' if get_output else 'interactive keyboard input'}")
 
         try:
             if get_output:
                 self.logger.success("Waiting for clipboard to be ready...")
-                clipboard_ready = False
-                await asyncio.sleep(self.args.cmd_delay)
-
-                timeout_counter = 0
-                while not clipboard_ready and timeout_counter < (self.args.clipboard_delay * 10):  # Convert seconds to deciseconds
-                    try:
-                        data = await asyncio.wait_for(self.conn.ext_out_queue.get(), timeout=0.1)
-                        if hasattr(data, "type") and data.type.name == "CLIPBOARD_READY":
-                            clipboard_ready = True
-                            self.logger.debug("Clipboard is ready!")
-                            break
-                    except asyncio.TimeoutError:
-                        timeout_counter += 1
-                        continue
-                    except (ConnectionResetError, ConnectionError, OSError) as e:
-                        self.logger.debug(f"Connection error while waiting for clipboard: {e!s}")
-                        self.logger.fail("Connection was reset by the remote host")
-                        return ""
-                    except Exception as e:
-                        self.logger.debug(f"Error waiting for clipboard: {e!s}")
-                        self.logger.fail("Warning: Clipboard may not be fully initialized, no output can be retrieved")
-                        return ""
-
-                if not clipboard_ready:
+                try:
+                    await self._wait_for_event({"CLIPBOARD_READY"}, self.args.clipboard_delay)
+                except TimeoutError:
                     self.logger.fail("Clipboard cannot be initialized, no output can be retrieved")
-                    return ""
+                    return None
 
-            # Wait for desktop to be available
-            await asyncio.sleep(self.args.cmd_delay)
+            await self._wait_for_desktop()
+
+            if get_output:
+                # On first RDP logon after boot, Explorer may not be ready to
+                # process Win+R immediately after the desktop appears. This
+                # no-op warmup command absorbs the race: if the shell isn't
+                # ready it silently fails, and the 3-second pause gives Explorer
+                # time to finish initialization before the real command.
+                await self._submit_typed_run_command(
+                    "powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden "
+                    '-Command "Add-Type -AssemblyName System.Windows.Forms"'
+                )
+                await asyncio.sleep(3)
+
+            if get_output:
+                try:
+                    await self._submit_run_command(command)
+                except TimeoutError:
+                    self.logger.fail("Remote session did not acknowledge the clipboard command data")
+                    return None
+            else:
+                await self._submit_typed_run_command(command)
+
+            if not get_output:
+                await asyncio.sleep(self.args.cmd_delay)
+                self.logger.success("Executed command without retrieving output")
+                return None
 
             try:
-                # Try to open Run dialog using Windows+R
-                self.logger.debug("Attempting to open Run dialog")
-                win_r_success = await self._send_win_r()
-
-                if win_r_success:
-                    self.logger.debug(f"Launching {shell_type} via Run dialog")
-                    await self._send_keystrokes(f"{shell_type}.exe")
-                    await self._send_enter()
-                    await asyncio.sleep(self.args.cmd_delay)  # Wait for cmd window to open
-                else:
-                    # Fallback: Try direct command typing (assumes cmd may already be open)
-                    self.logger.debug(f"Sending {shell_type} command directly")
-                    await self._send_keystrokes(f"{shell_type}.exe")
-                    await self._send_enter()
-                    await asyncio.sleep(self.args.cmd_delay)
-
-                # Type the command with | clip
-                self.logger.debug(f"Typing command: {payload_with_clip}")
-                await self._send_keystrokes(payload_with_clip)
-                await self._send_enter()
-
-                # Wait for command to execute
-                await asyncio.sleep(self.args.cmd_delay)
-
-                if get_output:
-                    # Get the current clipboard text
-                    self.logger.debug("Getting clipboard content...")
-                    clipboard_text = await self.conn.get_current_clipboard_text()
-
-                    if clipboard_text:
-                        self.logger.debug("Command output retrieved from clipboard:")
-                        for line in clipboard_text.lstrip().strip("\n").splitlines():
-                            self.logger.highlight(line)
-                    else:
-                        self.logger.fail("Clipboard is empty or contains non-text data")
-                    return clipboard_text
-                else:
-                    self.logger.success("Executed command without retrieving output")
-
-                self.logger.debug("Command execution completed")
+                exit_code, output = await self._wait_for_command_result(marker)
+            except TimeoutError:
+                self.logger.fail("Timed out waiting for command output on the RDP clipboard")
                 return None
 
-            except (ConnectionResetError, ConnectionError, OSError) as e:
-                self.logger.debug(f"Connection error during command execution: {e!s}")
-                self.logger.fail("Connection was reset by the remote host during command execution")
-                return None
-            except Exception as e:
-                self.logger.debug(f"Error during command execution: {e!s}")
-                if "cannot unpack non-iterable NoneType object" in str(e):
-                    self.logger.fail("RDP connection was terminated unexpectedly")
-                else:
-                    self.logger.fail(f"Command execution failed: {e!s}")
-                return None
+            if exit_code != 0:
+                self.logger.fail(f"Command completed with exit code {exit_code}")
+            if output:
+                for line in output.splitlines():
+                    self.logger.highlight(line)
+            else:
+                self.logger.debug("Command completed without output")
+            return output
 
         except (ConnectionResetError, ConnectionError, OSError) as e:
             self.logger.debug(f"Connection error: {e!s}")
@@ -524,14 +684,6 @@ class rdp(connection):
             self.logger.debug(f"Unexpected error: {e!s}")
             self.logger.fail(f"Command execution failed: {e!s}")
             return None
-        finally:
-            # Always clean up the connection
-            if self.conn is not None:
-                self.logger.debug("Terminating RDP connection")
-                try:
-                    await self.conn.terminate()
-                except Exception as e:
-                    self.logger.debug(f"Error terminating connection: {e!s}")
 
     def execute(self, payload=None, shell_type="cmd"):
         """Execute a command via RDP"""
@@ -540,66 +692,70 @@ class rdp(connection):
 
         get_output = bool(not self.args.no_output)
 
-        self.logger.success(f"Executing command: {payload} with delay {self.args.cmd_delay} seconds")
+        if not self.username:  # every login method sets it, so empty means no credentials were given and there is no desktop to capture
+            self.logger.fail("-x/-X need credentials")
+            return None
+        if self.conn.disconnected_evt.is_set():  # valid credentials without the RDP right open no session: skip silently, like smb -x without admin rights
+            return None
+        self.logger.success(f"Executing command: {payload}")
 
         try:
-            result = asyncio.run(self.execute_shell(payload, get_output, shell_type))
+            result = self.runner.run(self.execute_shell(payload, get_output, shell_type))
 
-            if result:
+            if result is not None:
                 self.logger.debug("Command execution completed")
             return result
         except Exception as e:
             self.logger.error(f"Command execution error: {e!s}")
-            if shell_type == "cmd":
-                self.logger.info("Cannot execute command via cmd - now switching to PowerShell to attempt execution")
-                try:
-                    return self.execute(payload, shell_type="powershell")
-                except Exception as e2:
-                    self.logger.fail(f"Execute command failed, error: {e2!s}")
-            else:
-                self.logger.fail(f"Execute command failed, error: {e!s}")
+            self.logger.fail(f"Execute command failed, error: {e!s}")
 
     def ps_execute(self):
         self.execute(payload=self.args.ps_execute, shell_type="powershell")
 
+    async def save_screenshot(self, desktop, label):
+        filename_stem = sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=251)
+        filename = await (Path(NXC_PATH) / "screenshots" / f"{filename_stem}.png").expanduser()
+        desktop.save(filename, "png")
+        self.logger.highlight(f"{label} saved {filename}")
+
     async def screen(self):
         try:
-            self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-            await self.connect_rdp()
-        except Exception:
-            return
-
-        await asyncio.sleep(5)
-        if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-            buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
-            buffer.save(filename, "png")
-            self.logger.highlight(f"Screenshot saved {filename}")
+            await asyncio.sleep(self.args.screentime)
+            if self.conn.desktop_buffer_has_data:
+                await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "Screenshot")
+            else:
+                self.logger.fail(f"No desktop data after {self.args.screentime}s, try a longer --screentime")
+        except Exception as e:
+            self.logger.fail(f"Could not take the screenshot: {e!s}")
 
     def screenshot(self):
-        asyncio.run(self.screen())
+        if not self.username:  # every login method sets it, so empty means no credentials were given and there is no desktop to capture
+            self.logger.fail("--screenshot needs credentials, use --nla-screenshot to capture the login screen")
+        elif not self.conn.disconnected_evt.is_set():  # no session to capture: same silent skip as execute()
+            self.runner.run(self.screen())
 
     async def nla_screen(self):
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
-
+        connected = False
         for proto in self.protoflags_nla:
             try:
-                self.iosettings.supported_protocols = proto
-                self.conn = RDPConnection(iosettings=self.iosettings, target=self.target, credentials=self.auth)
-
+                self.conn = self._create_rdp_connection(self.auth, supported_protocols=proto)
                 await self.connect_rdp()
             except Exception as e:
                 self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
-                return
+                await self.terminate_conn()
+                continue
 
-            await asyncio.sleep(int(self.args.screentime))
-            if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-                buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-                filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
-                buffer.save(filename, "png")
-                self.logger.highlight(f"NLA Screenshot saved {filename}")
-                return
+            connected = True
+            try:
+                await asyncio.sleep(self.args.screentime)
+                if self.conn is not None and self.conn.desktop_buffer_has_data is True:
+                    await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "NLA Screenshot")
+                    return
+            finally:
+                await self.terminate_conn()
+        self.logger.fail(f"No login screen data after {self.args.screentime}s, try a longer --screentime" if connected else "Could not connect without NLA to capture the login screen")
 
     def nla_screenshot(self):
         if not self.nla:
-            asyncio.run(self.nla_screen())
+            self.runner.run(self.nla_screen())

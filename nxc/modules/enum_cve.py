@@ -1,7 +1,8 @@
-from impacket.dcerpc.v5 import transport, rrp
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, DCERPCException
+from impacket.dcerpc.v5 import rrp
+from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.smbconnection import SessionError
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 from impacket.nmb import NetBIOSError
 
 
@@ -33,6 +34,9 @@ class NXCModule:
         - CVE-2025-54918 (NTLM MIC Bypass)
         - CVE-2025-53779 (BadSuccessor)
         - CVE-2024-49019 (EKUwu / ESC15)
+        - CVE-2026-54121 (Certighost)
+        - CVE-2026-27912 (ResetNightmare)
+        - CVE-2026-102217 (PetitPotam WebDAV coercion)
 
         CVE             Filter for specific CVE number (default: All)
         EXPLOITATION    Also provide sources for exploitation details (default: False)
@@ -55,19 +59,9 @@ class NXCModule:
     def on_login(self, context, connection):
         connection.trigger_winreg()
 
-        # Connect to RemoteRegistry to read UBR from registry
-        rpc = transport.DCERPCTransportFactory(r"ncacn_np:445[\pipe\winreg]")
-        rpc.set_smb_connection(connection.conn)
-        if connection.kerberos:
-            rpc.set_kerberos(connection.kerberos, kdcHost=connection.kdcHost)
-        dce = rpc.get_dce_rpc()
-        if connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-
-        # Query the UBR
         try:
-            dce.connect()
-            dce.bind(rrp.MSRPC_UUID_RRP)
+            # Connect to RemoteRegistry to read UBR from registry
+            dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
             # Reading UBR from registry
             hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
             hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
@@ -113,10 +107,6 @@ class NXCModule:
         "CVE-2025-33073": {
             "alias": "NTLM reflection",
             "patches": {
-                (6, 0, 6003): 23351,      # Windows Server 2008 SP2
-                (6, 1, 7601): 27769,      # Windows Server 2008 R2 SP1
-                (6, 2, 9200): 25522,      # Windows Server 2012
-                (6, 3, 9600): 22620,      # Windows Server 2012 R2
                 (10, 0, 10240): 21034,    # Windows 10 1507
                 (10, 0, 14393): 8148,     # Windows Server 2016 / Win10 1607
                 (10, 0, 17763): 7434,     # Windows Server 2019 / Win10 1809
@@ -201,5 +191,55 @@ class NXCModule:
             },
             "message": "If host is an AD CS / CA server, it may be vulnerable to ESC15",
             "exploitation": "https://trustedsec.com/blog/ekuwu-not-just-another-ad-cs-esc",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54121
+        "CVE-2026-54121": {
+            "alias": "Certighost",
+            "patches": {
+                (6, 2, 9200): 26226,      # Windows Server 2012
+                (6, 3, 9600): 23291,      # Windows Server 2012 R2
+                (10, 0, 14393): 9339,     # Windows Server 2016
+                (10, 0, 17763): 9020,     # Windows Server 2019
+                (10, 0, 20348): 5386,     # Windows Server 2022
+                (10, 0, 26100): 33158,    # Windows Server 2025
+            },
+            "message": "If host is an AD CS / CA server, it may be vulnerable to Certighost",
+            "exploitation": "https://gist.github.com/H0j3n/a5ef2609b5f2944ac2390a191a534c26",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-27912
+        "CVE-2026-27912": {
+            "alias": "ResetNightmare",
+            "dc_only": True,
+            "patches": {
+                (6, 2, 9200): 26026,      # Windows Server 2012
+                (6, 3, 9600): 23132,      # Windows Server 2012 R2
+                (10, 0, 14393): 9060,     # Windows Server 2016
+                (10, 0, 17763): 8644,     # Windows Server 2019
+                (10, 0, 20348): 5020,     # Windows Server 2022
+                (10, 0, 25398): 2274,     # Windows Server 2022 23H2
+                (10, 0, 26100): 32690,    # Windows Server 2025
+            },
+            "message": "Password reset of any account possible via Kerberos change password abuse",
+            "exploitation": "https://www.semperis.com/blog/identity-crisis-novel-vulnerabilities-leading-to-kerberos-downgrade-dos-and-full-domain-takeover/",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-102217
+        "CVE-2026-102217": {
+            "alias": "PetitPotam WebDAV coercion",
+            "patches": {
+                (6, 2, 9200): 26434,      # Windows Server 2012
+                (6, 3, 9600): 23470,      # Windows Server 2012 R2
+                (10, 0, 14393): 9612,     # Windows Server 2016
+                (10, 0, 17763): 9376,     # Windows Server 2019
+                (10, 0, 19044): 7807,     # Windows 10 21H2
+                (10, 0, 19045): 7807,     # Windows 10 22H2
+                (10, 0, 20348): 5761,     # Windows Server 2022
+                (10, 0, 22631): 7652,     # Windows 11 23H2
+                (10, 0, 26100): 33650,    # Windows Server 2025 (Win11 24H2 ships the same build patched at 9711)
+                (10, 0, 26200): 9711,     # Windows 11 25H2
+                (10, 0, 26300): 9711,     # Windows 11 26H2
+                (10, 0, 28000): 3231,     # Windows 11 26H1
+            },
+            "message": "PetitPotam (EFSRPC) can coerce to a WebDAV listener, the HTTP authentication can be relayed to LDAP/LDAPS",
+            "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
         },
     }
