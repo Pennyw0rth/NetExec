@@ -16,12 +16,6 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
-    def __init__(self, context=None, module_options=None):
-        self.context = context
-        self.module_options = module_options
-        self.cve = "all"
-        self.exploitation_details = False
-
     def options(self, context, module_options):
         """
         Be aware that these checks solely rely on the OS version and UBR reported in the registry,
@@ -42,13 +36,11 @@ class NXCModule:
         CVE             Filter for a specific CVE/KB identifier from the list above (default: All)
         EXPLOITATION    Also provide sources for exploitation details (default: False)
         """
-        if "CVE" in module_options:
-            self.cve = module_options["CVE"].lower()
-            if self.cve != "all" and self.cve not in [cve.lower() for cve in self.CVE_PATCHES]:
-                context.log.fail(f"Unknown CVE '{module_options['CVE']}', supported identifiers: {', '.join(self.CVE_PATCHES)}")
-                return False
-        if "EXPLOITATION" in module_options:
-            self.exploitation_details = module_options["EXPLOITATION"].lower() in ["true", "1", "yes"]
+        self.cve = module_options.get("CVE", "all").lower()
+        if self.cve != "all" and self.cve not in [cve.lower() for cve in self.CVE_PATCHES]:
+            context.log.fail(f"Unknown CVE '{module_options['CVE']}', supported identifiers: {', '.join(self.CVE_PATCHES)}")
+            return False
+        self.exploitation_details = module_options.get("EXPLOITATION", "false").lower() in ["true", "1", "yes"]
 
     def is_vulnerable(self, major, minor, build, ubr, msrc):
         key = (major, minor, build)
