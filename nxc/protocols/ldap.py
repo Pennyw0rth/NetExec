@@ -1333,9 +1333,9 @@ class ldap(connection):
                     protocolTransition = 1
 
                 if item.get("msDS-AllowedToDelegateTo") is not None:
-                    if protocolTransition == 0:
-                        delegation = "Constrained"
-                    rightsTo = item.get("msDS-AllowedToDelegateTo")
+                    # Already flagged Unconstrained, record it before delegation/rightsTo get overwritten
+                    if delegation == "Unconstrained":
+                        answers.append([sAMAccountName, objectType, delegation, rightsTo])
 
                 # Not an elif as an object could both have RBCD and another type of delegation
                 if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
