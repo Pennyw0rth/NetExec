@@ -267,6 +267,8 @@ class rdp(connection):
 
         That PDU never comes when access is authorized but the logon is refused (restricted admin).
         """
+        if self.login_proto is not None and self.auth.stype != asyauthSecret.PASSWORD:  # without CredSSP aardwolf sends the secret as the autologon password, so a hash, key or ccache only fails (+2 badPwdCount)
+            raise ValueError("no CredSSP on this server, only a password can log on")
         await self.terminate_conn()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
         self.conn = self._create_rdp_connection(self.auth)
         await self.connect_rdp()
