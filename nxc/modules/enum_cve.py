@@ -42,9 +42,8 @@ class NXCModule:
             return False
         self.exploitation_details = module_options.get("EXPLOITATION", "false").lower() in ["true", "1", "yes"]
 
-    def is_vulnerable(self, major, minor, build, ubr, msrc):
-        key = (major, minor, build)
-        min_patched_ubr = msrc.get(key)
+    def is_vulnerable(self, os_key, ubr, msrc):
+        min_patched_ubr = msrc.get(os_key)
         if min_patched_ubr is None:
             return None  # Unknown product
         return ubr < min_patched_ubr
@@ -90,7 +89,7 @@ class NXCModule:
                 if self.CVE_PATCHES[cve].get("dc_only") and not connection.is_host_dc():
                     context.log.info(f"Skipping {self.CVE_PATCHES[cve]['alias']} - only applicable to Domain Controllers")
                     continue
-                vulnerable = self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"])
+                vulnerable = self.is_vulnerable(os_key, ubr, self.CVE_PATCHES[cve]["patches"])
                 if vulnerable is None:
                     context.log.info(f"Cannot check {self.CVE_PATCHES[cve]['alias']}: no patched UBR known for build {os_version}")
                     continue
