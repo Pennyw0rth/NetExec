@@ -8,7 +8,7 @@ exclude-newer-span = "P1D"
 
 [[package]]
 name = "aardwolf"
-version = "0.2.16"
+version = "0.2.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arc4" },
@@ -22,11 +22,11 @@ dependencies = [
     { name = "tqdm" },
     { name = "unicrypto" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/0f/79f2acb31e1144a3895d17ad9136272d2b75ed3bd24eb1c415129d5e089d/aardwolf-0.2.16.tar.gz", hash = "sha256:52cba79817af963108dcd39e82513deec742387f2fab01a9138abe56f94e7ad2", size = 1013103, upload-time = "2026-10-04T18:44:46.704Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6c/21/60829e9ab5fcc41b32886d80ad8fbe86e56ade3c68086aab0cef5cd30df7/aardwolf-0.2.17.tar.gz", hash = "sha256:42ee9e8d457e11b2bb8dc1400268c39c5898cc7b1fa9c3735a43ee2ee28505e0", size = 1015659, upload-time = "2026-11-07T13:17:18.893Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/8d/a0cfa361e4077c56bcda4b820c462dbea4a11ff60110bc8486c1f051b660/aardwolf-0.2.16-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:fbde3046d4cdd3a5596dfcc988965b85527632cee46db2522961893d101fcbc7", size = 2169322, upload-time = "2026-10-04T18:44:41.102Z" },
-    { url = "https://files.pythonhosted.org/packages/15/7b/079c9087a742763141d3e2e4b000f34c3962aa6cb67599158fcb08c9aaaa/aardwolf-0.2.16-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:69bedfad4b68b855a9d0df928c78eb0bbdc642c22f9845778c9df77a8fe9c259", size = 2241815, upload-time = "2026-10-04T18:44:43.011Z" },
-    { url = "https://files.pythonhosted.org/packages/71/43/b51e73133aae6a3e56bfb79174e8a4edc99f8ef051202b0e7173053a0886/aardwolf-0.2.16-cp311-abi3-win_amd64.whl", hash = "sha256:b4d6032110ee238cf11c1f5efa86636462d7dc2e972b8464e949da82df58f3a6", size = 1966337, upload-time = "2026-10-04T18:44:45.294Z" },
+    { url = "https://files.pythonhosted.org/packages/65/b9/622f084b4d5f5f00516c7a565388583b5e47c4f842a244ac619cd51f3052/aardwolf-0.2.17-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:24387eaa8a730e9317c5141b8e9fa41324e4a8ee2d21267d62af4b933c7195bf", size = 2171791, upload-time = "2026-11-07T13:17:13.867Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/fa/1b8c4c3b2cc0abc4da838f5a02974eea4991eec1f52d9b487dbc68bb6b0c/aardwolf-0.2.17-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:8a2fc66cb4c32ff5ede8f9a157e4b7f6f62ca34ca86a2b8443879ac963f34642", size = 2244445, upload-time = "2026-11-07T13:17:15.632Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/9e/b8d7b3cbd9b3f10d453c212069cfb53cd13f8025034b14bf07ac9bcb15e1/aardwolf-0.2.17-cp311-abi3-win_amd64.whl", hash = "sha256:4bb4f16f2acc3292a507197a35923a89763f7a173538c46d089e242b8f106910", size = 1968847, upload-time = "2026-11-07T13:17:17.033Z" },
 ]
 
 [[package]]
@@ -149,7 +149,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/9b/30/3338efbfe7a943b81
 
 [[package]]
 name = "asyauth"
-version = "0.0.23"
+version = "0.0.25"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asn1crypto" },
@@ -157,23 +157,23 @@ dependencies = [
     { name = "minikerberos" },
     { name = "unicrypto" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/95/a3/32dcd11aa43bcb25d5023fff69e94248a0ffabcaecd5e7260f5932c43a09/asyauth-0.0.23.tar.gz", hash = "sha256:36f0384ddb2b625a10333363cafe190d6e9c9ed17fd07b3e2887641a3cc626f0", size = 79960, upload-time = "2025-10-29T09:52:45.894Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/27/14/ef80b4933cd3a2bbfce17831d05f12daaaffe15f2f425a24ab67a7dc7e44/asyauth-0.0.25.tar.gz", hash = "sha256:6326599e7951bdf9fd1dfee20811dbbef41f5fdd591dbccb8d8af6d4edc36775", size = 85439, upload-time = "2026-11-07T12:14:58.522Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/ca/6d909a8bfff38ad3c1477d502c7ebf61288ac790d16eeb8bfbe2dcfcb4f0/asyauth-0.0.23-py3-none-any.whl", hash = "sha256:bbca62d10c4b0d2585103791d7451adda325c3d654114253638456fe84d39b0e", size = 116185, upload-time = "2025-10-29T09:52:44.684Z" },
+    { url = "https://files.pythonhosted.org/packages/26/88/285eceb8bbe28bef074f0902808a6713e429187922269c2bc8bbac791be9/asyauth-0.0.25-py3-none-any.whl", hash = "sha256:c3d8b98d9ec5895a4aebd3d3bb10d52440c210c43f65cbb3a3dc04b5b6522f32", size = 121261, upload-time = "2026-11-07T12:14:57.278Z" },
 ]
 
 [[package]]
 name = "asysocks"
-version = "0.2.18"
+version = "0.2.19"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asn1crypto" },
     { name = "cryptography" },
     { name = "h11" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e3/67/62b03894335465f89bea910e33d15878b3c997bbaafaecf630bcdf8e89de/asysocks-0.2.18.tar.gz", hash = "sha256:cc6196e82c8adc8b3ce2321dddf635500c760316da4b7cca321b532cbb3dfdf5", size = 117822, upload-time = "2025-10-29T08:00:23.186Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/83/5151a060e58582f1d395b84c106f64d61313fa157c224364646c170ad03c/asysocks-0.2.19.tar.gz", hash = "sha256:c8ffa154ad7ca46aaa06c1f86f347bc20f3b8c696186b08fc4193791212b2bec", size = 127145, upload-time = "2026-11-04T21:27:14.011Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/71/b5/abf85f5444b264bf9f943eb1f6f577ebf3af34c8c4f66c1629d1f063eaa0/asysocks-0.2.18-py3-none-any.whl", hash = "sha256:a881536456d922a9fde44031aba262bc34ee39a9d14749ded1e8a4820602a37d", size = 149610, upload-time = "2025-10-29T08:00:21.76Z" },
+    { url = "https://files.pythonhosted.org/packages/53/70/99cd52c7c541d79174ef8b978fb00fe5bb5285ef424f8ee50ec7bc71a189/asysocks-0.2.19-py3-none-any.whl", hash = "sha256:be34dd128287371cad5ff6332314034d54d587ba58a0c7dd8be2787138c29d28", size = 160234, upload-time = "2026-11-04T21:27:12.603Z" },
 ]
 
 [[package]]
@@ -1179,7 +1179,7 @@ wheels = [
 
 [[package]]
 name = "minikerberos"
-version = "0.4.9"
+version = "0.4.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asn1crypto" },
@@ -1189,9 +1189,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "unicrypto" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f2/a9/2d2538224db85f8c4d513efa2f01697c7be5a15c6ef174132a371945d777/minikerberos-0.4.9.tar.gz", hash = "sha256:095a980a1976adff48c3de1f73d75efe9b39da7214dc7c891a2363240716a9e7", size = 144960, upload-time = "2025-10-29T09:50:50.932Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/6b/3fe5bba950ea9c5f802cadf43f590757c014f9261cdab9f422f4f3c3f1d7/minikerberos-0.4.12.tar.gz", hash = "sha256:607498d430042d6ba53f390a5a11e0a29cb1d3744bbb130ef2e7bf2f5e86b06c", size = 154227, upload-time = "2026-11-07T12:07:18.385Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/24/ebe89493824e99be641faddb355594782b634af093866f2b19f398c60ecc/minikerberos-0.4.9-py3-none-any.whl", hash = "sha256:3c3a422541bc66719bd495f89cb6f9e149fba8f1499b9f550aa88cd9aa532ffa", size = 162058, upload-time = "2025-10-29T09:50:49.219Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/06/2ea3a877d6add3cb5ebaa34513f171dc6297213237d750492cf5a82dfc8c/minikerberos-0.4.12-py3-none-any.whl", hash = "sha256:4a8b0ce5ccd28e858e72124dc5764168da230b9af0b400406b6a7788cf7fa82e", size = 165033, upload-time = "2026-11-07T12:07:16.934Z" },
 ]
 
 [[package]]
@@ -1278,7 +1278,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aardwolf", specifier = ">=0.2.16" },
+    { name = "aardwolf", specifier = ">=0.2.17" },
     { name = "argcomplete", specifier = ">=3.1.4" },
     { name = "asyauth", specifier = ">=0.0.20" },
     { name = "bloodhound-ce", specifier = ">=1.8.0" },
