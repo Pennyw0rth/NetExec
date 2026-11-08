@@ -13,7 +13,7 @@ from nxc.helpers.path import sanitize_path_component
 class Klist:
     """Enumerate Kerberos logon sessions on a target and export their cached TGTs as ccache files."""
 
-    SESSION_LINE = re.compile(r"\[\d+\]\s+Session\s+\d+\s+0:(0x[0-9a-fA-F]+)\s+(.+?)\s+(\S+:\S+)\s*$")
+    SESSION_LINE = re.compile(r"\[\d+\]\s+\S+\s+\d+\s+0:(0x[0-9a-fA-F]+)\s+(.+?)\s+(\S+:\S+)\s*$")
     MACHINE_LOGON_IDS = {"0x3e7", "0x3e4"}  # SYSTEM, NETWORK SERVICE
     KEY_SIZES = {
         constants.EncryptionTypes.des_cbc_crc.value: 8,
@@ -157,6 +157,9 @@ class Klist:
                     return local + self.bias_minutes * 60  # local wallclock -> true UTC epoch
             return 0
 
+        def time_field(name):
+            return parse_time(field(rf"{name}\s*:\s*(\d{{1,2}}/\d{{1,2}}/\d{{4}}\s+\d{{1,2}}:\d{{2}}(?::\d{{2}})?)"))
+
         ticket_hex = [re.sub(r"[^0-9a-fA-F]", "", match.group(1)) for match in re.finditer(r"^[0-9a-fA-F]{4}\s+((?:[0-9a-fA-F]{2}[\s:])+)", text, re.MULTILINE)]
         ticket_bytes = bytes.fromhex("".join(ticket_hex)) if ticket_hex else b""
 
@@ -201,10 +204,10 @@ class Klist:
             "key_type": key_type,
             "key_data": key_bytes,
             "cred_guard": cred_guard,
-            "auth_time": parse_time(field(r"StartTime\s*:\s*(.+?)\s*\(local\)")),
-            "start_time": parse_time(field(r"StartTime\s*:\s*(.+?)\s*\(local\)")),
-            "end_time": parse_time(field(r"EndTime\s*:\s*(.+?)\s*\(local\)")),
-            "renew_till": parse_time(field(r"RenewUntil\s*:\s*(.+?)\s*\(local\)")),
+            "auth_time": time_field("StartTime"),
+            "start_time": time_field("StartTime"),
+            "end_time": time_field("EndTime"),
+            "renew_till": time_field("RenewUntil"),
             "ticket_data": ticket_bytes,
         }
 
