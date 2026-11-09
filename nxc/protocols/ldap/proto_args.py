@@ -42,7 +42,11 @@ def proto_args(parser, parents):
     vgroup.add_argument("--pass-pol", action="store_true", help="Dump password policy")
 
     ggroup = ldap_parser.add_argument_group("Retrieve gmsa on the remote DC", "Options to play with gmsa")
-    ggroup.add_argument("--gmsa", action="store_true", help="Enumerate GMSA passwords")
+    ggroup.add_argument(
+        "--gmsa",
+        action="store_true",
+        help="Enumerate GMSA passwords and add the authenticated principal when write access permits",
+    )
     ggroup.add_argument("--gmsa-convert-id", help="Get the secret name of specific gmsa or all gmsa if no gmsa provided")
     ggroup.add_argument("--gmsa-decrypt-lsa", help="Decrypt the gmsa encrypted value from LSA")
 
