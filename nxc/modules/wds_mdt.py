@@ -6,6 +6,9 @@ from nxc.helpers.misc import CATEGORY, decode_text
 from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
+# WinPE boot images are typically 300-600 MB; install.wim easily exceeds 5 GB.
+# Anything under 1 GB is almost certainly a PE, not an OS image.
+WIM_MAX_SIZE = 1 * 1024 * 1024 * 1024
 
 CRED_KEYWORDS = [
     "DomainAdmin", "DomainAdminPassword",
@@ -13,19 +16,6 @@ CRED_KEYWORDS = [
     "JoinDomain", "DomainAdminDomain", "UserDomain",
     "MachineObjectOU",
 ]
-
-# Match only the exact config filenames - avoids false positives on .vbs/.exe
-SENSITIVE_REGEXES = [
-    re.compile(r"bootstrap\.ini$", re.I),
-    re.compile(r"customsettings\.ini$", re.I),
-    re.compile(r"unattend\.xml$", re.I),
-]
-
-WIM_REGEX = re.compile(r"\.wim$", re.I)
-
-# WinPE boot images are typically 300-600 MB; install.wim easily exceeds 5 GB.
-# Anything under 1 GB is almost certainly a PE, not an OS image.
-WIM_MAX_SIZE = 1 * 1024 * 1024 * 1024
 
 
 def _extract_key_values(content, keys):
