@@ -737,17 +737,11 @@ class smb(connection):
         if self.args.no_admin_check:
             return
         self.logger.debug(f"Checking if user is admin on {self.host}")
-        for attempt in range(3):
-            try:
-                dce = NXCRPCConnection(self).connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
-                break
-            except Exception as e:
-                # Concurrent logins to the same host can momentarily exhaust the listening \svcctl pipe instances
-                if "STATUS_PIPE_NOT_AVAILABLE" not in str(e) or attempt == 2:
-                    self.admin_privs = False
-                    return
-                self.logger.debug(f"No listening \\svcctl pipe instance on {self.host}, retrying ({attempt + 1}/2)")
-                sleep(0.5)
+        try:
+            dce = NXCRPCConnection(self).connect(r"\svcctl", scmr.MSRPC_UUID_SCMR)
+        except Exception:
+            self.admin_privs = False
+            return
         try:
             # 0xF003F - SC_MANAGER_ALL_ACCESS
             # http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx
