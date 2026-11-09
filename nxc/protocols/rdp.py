@@ -26,13 +26,10 @@ from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.target import RDPTarget
 from aardwolf.keyboard.layoutmanager import KeyboardLayoutManager
 from aardwolf.protocol.x224.constants import SUPP_PROTOCOLS
-from aardwolf.network.x224 import X224Network
-from aardwolf.network.tpkt import TPKTPacketizer
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
-from asysocks.unicomm.client import UniClient
 
 
 class rdp(connection):
@@ -121,27 +118,33 @@ class rdp(connection):
             except Exception as e:
                 self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
-    def _create_rdp_connection(self, credentials, supported_protocols=None):
+    def create_conn_obj(self, credentials=None, supported_protocols=SUPP_PROTOCOLS.SSL):
+        """Create self.conn. The call from proto_flow() has no credentials: it is the null-auth probe, which returns False when the host doesn't answer."""
+        if credentials is None:
+            self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
+            self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
         iosettings = self.iosettings.clone_for_connection()
-        # Explicit protocols are used by discovery and screenshot fallbacks.
-        # Authenticated connections leave this unset so aardwolf selects the
-        # X224 flags appropriate for the credential type.
+        # the probe, the enumeration and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type
         iosettings.supported_protocols = supported_protocols
-        return RDPConnection(
-            iosettings=iosettings,
-            target=copy.deepcopy(self.target),
-            credentials=copy.deepcopy(credentials),
-        )
+        self.conn = RDPConnection(iosettings=iosettings, target=copy.deepcopy(self.target), credentials=copy.deepcopy(credentials))
+        if credentials is not None:
+            return True
 
-    def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
-        self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
-        return self.runner.run(self.check_nla())
+        self.logger.debug(f"Checking NLA for {self.host}")
+        try:
+            self.runner.run(self.connect_rdp(auth_only=True))
+        except OSError as e:
+            self.logger.debug(f"No RDP answer from {self.host}:{self.port}: {e!r}")
+            return False
+        except Exception as e:
+            # a server that requires NLA refuses this SSL-only offer, else auth_only stops with a RuntimeError before any session opens
+            self.nla = not isinstance(e, RuntimeError) and "SSL_NOT_ALLOWED_BY_SERVER" not in str(e)
+        return True
 
     def enum_host_info(self):
         for proto in reversed(self.protoflags):
             try:
-                self.conn = self._create_rdp_connection(self.auth, supported_protocols=proto)
+                self.create_conn_obj(self.auth, supported_protocols=proto)
                 self.runner.run(self.connect_rdp_with_cleanup())
             except OSError as e:
                 if "Errno 104" not in str(e):
@@ -185,27 +188,9 @@ class rdp(connection):
             return f"Windows 10.0 Build {build}"
         return f"{info_domain.get('os_guess') or 'Unknown'} Build {build or 'Unknown'}"
 
-    async def check_nla(self):
-        """Offer SSL only: a server that accepts it does not require NLA. Returns False when the host does not answer."""
-        self.logger.debug(f"Checking NLA for {self.host}")
-        probe_connection = None
-        try:
-            probe_connection = await asyncio.wait_for(UniClient(self.target, TPKTPacketizer()).connect(), timeout=self.args.rdp_timeout)
-            _, err = await asyncio.wait_for(X224Network(probe_connection).client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
-        except OSError as e:
-            self.logger.debug(f"No RDP answer from {self.host}:{self.port}: {e!r}")
-            return False
-        finally:
-            if probe_connection is not None:
-                await probe_connection.close()
-        # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
-        if err is None or "SSL_NOT_ALLOWED_BY_SERVER" in str(err):
-            self.nla = False
-        return True
-
-    async def connect_rdp(self):
+    async def connect_rdp(self, auth_only=False):
         """Connect to the RDP server. Does NOT clean up on exit."""
-        _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
+        _, err = await asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout)
         if err is not None:
             raise err
         self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
@@ -232,7 +217,7 @@ class rdp(connection):
         That PDU never comes when access is authorized but the logon is refused (restricted admin).
         """
         await self.terminate_conn()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
-        self.conn = self._create_rdp_connection(self.auth)
+        self.create_conn_obj(self.auth, supported_protocols=None)
         await self.connect_rdp()
         try:
             await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
@@ -721,7 +706,7 @@ Add-Type -AssemblyName System.Windows.Forms
         connected = False
         for proto in self.protoflags_nla:
             try:
-                self.conn = self._create_rdp_connection(self.auth, supported_protocols=proto)
+                self.create_conn_obj(self.auth, supported_protocols=proto)
                 await self.connect_rdp()
             except Exception as e:
                 self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
