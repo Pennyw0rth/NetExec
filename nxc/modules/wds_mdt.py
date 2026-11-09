@@ -197,7 +197,6 @@ class NXCModule:
         ]
         # Probe access silently - failure is expected on hardened configs
         try:
-            print(share)
             self.connection.conn.listPath(share, "*")
         except Exception as e:
             self.context.log.fail(f"Failed to list {share} (expected for hardened MDT share): {e}")
