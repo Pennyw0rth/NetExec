@@ -2,7 +2,6 @@ import re
 import os
 from os.path import join
 from io import BytesIO
-import zipfile
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
@@ -161,16 +160,14 @@ class NXCModule:
         os.makedirs(self.output_path, exist_ok=True)
 
         for share in connection.conn.listShares():
-            name = share["shi1_netname"].rstrip("\x00")
-            name_lower = name.lower()
-            if name_lower in {"reminst", "remoteinstall"}:
+            name = share["shi1_netname"].rstrip("\x00").lower()
+            if name in {"reminst", "remoteinstall"}:
                 self.explore_wds(name)
-            elif name_lower in {"deploymentshare$"}:
+            elif name in {"deploymentshare$"}:
                 self.explore_mdt(name)
 
-
         for wds_share in ["REMINST", "REMOTEINSTALL", "DeploymentShare$"]:
-            is_privileged = wds_share.lower() in WDS_SHARES_AUTH
+            is_privileged = wds_share.lower() in {"deploymentshare$"}
             access_note = "admin access or misconfigured ACLs" if is_privileged else "standard user access"
             context.log.success(f"Found share: {wds_share} ({access_note})")
 
@@ -181,27 +178,6 @@ class NXCModule:
                 continue
 
             for path, file_size in paths:
-                is_wim = bool(WIM_REGEX.search(path))
-                size_mb = file_size / (1024 * 1024)
-
-                if is_wim:
-                    if file_size < WIM_MAX_SIZE:
-                        context.log.success(f"Found WinPE image: {path} ({size_mb:.0f} MB)")
-                        if self.download:
-                            local = _download(context, connection, wds_share, "\\" + path, self.outdir)
-                            if local:
-                                context.log.success(f"Saved WinPE: {local}")
-                                context.log.display(
-                                    "You need to manually extract the image to try gathering credentials "
-                                    "(use 7zip or wimlib-imagex)."
-                                )
-                    else:
-                        # Oversized - almost certainly an OS install image, no credentials inside
-                        context.log.display(
-                            f"Found .wim: {path} - skipped (install image, {size_mb:.0f} MB, no creds here :/)"
-                        )
-                    continue
-
                 context.log.debug(f"Found {path}")
 
                 buf = BytesIO()
@@ -261,10 +237,10 @@ class NXCModule:
                         self.context.log.success(f"Saved WinPE: {path}\\{entry.get_longname()}")
                     except Exception as e:
                         self.context.log.fail(f"Failed to download {path}\\{entry.get_longname()}: {e}")
-        # for file in extract_files:
-        #     pass
+
         if extract_files:
             self.context.log.display("You need to manually extract the image to try gathering credentials (use 7zip or wimlib-imagex).")
+            self.context.log.display(r"Check out the paths: 'Deploy\Scripts\Bootstrap.ini' and 'Deploy\Scripts\CustomSettings.ini'")
 
     def explore_mdt(self, share):
         """
