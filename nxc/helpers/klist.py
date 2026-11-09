@@ -13,6 +13,8 @@ from nxc.helpers.path import sanitize_path_component
 class Klist:
     """Enumerate Kerberos logon sessions on a target and export their cached TGTs as ccache files."""
 
+    # klist sessions line: "[n] <Session, localized> <ts session> 0:0x<luid> <DOMAIN\account> <package>:<logon type>"
+    # e.g. "[2] Sitzung 5 0:0x16268e1b NORTH\eddard.stark Kerberos:RemoteInteractive"
     SESSION_LINE = re.compile(r"\[\d+\]\s+\S+\s+\d+\s+0:(0x[0-9a-fA-F]+)\s+(.+?)\s+(\S+:\S+)\s*$")
     MACHINE_LOGON_IDS = {"0x3e7", "0x3e4"}  # SYSTEM, NETWORK SERVICE
     KEY_SIZES = {
