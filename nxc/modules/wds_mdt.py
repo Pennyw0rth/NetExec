@@ -74,6 +74,7 @@ class NXCModule:
             local_path = local_path.resolve()
             if not local_path.is_relative_to(self.output_path):
                 raise ValueError("Output path escapes the module directory")
+
             local_path.parent.mkdir(parents=True, exist_ok=True)
             with local_path.open("wb") as output:
                 if content is None:
@@ -138,6 +139,7 @@ class NXCModule:
             self.context.log.success(f"Found deployment settings in {source}")
             for key, value in fields.items():
                 self.context.log.highlight(f"  {key}={value if value is not None else '<no value>'}")
+
             for domain, username, password in credentials:
                 if not domain and "\\" in username:
                     domain, username = username.split("\\", 1)
@@ -150,6 +152,7 @@ class NXCModule:
         # https://learn.microsoft.com/en-us/intune/configmgr/mdt/use-the-mdt#values-in-the-customsettingsini-file
         parser = ConfigParser(interpolation=None, delimiters=("=",), strict=False, allow_no_value=True, default_section="")
         parser.read_string(decode_text(content))
+
         for section in parser.values():
             fields = {}
             credentials = []
@@ -157,6 +160,7 @@ class NXCModule:
                 fields.update({key: section[key] for key in (username, password, domain) if key and key in section})
                 if section.get(password) is not None and (not username or section.get(username)):
                     credentials.append((section.get(domain) or "", section[username] if username else "Administrator", section[password]))
+
             fields.update({key: section[key] for key in self.ini_settings if key in section})
             if fields:
                 yield f"{source} [{section.name}]", fields, credentials
@@ -192,6 +196,7 @@ class NXCModule:
                         fields["password"] = password
                         fields.pop("value", None)
                         fields.pop("plaintext", None)
+
             if password is not None and (not self.xml_accounts[element.tag] or fields.get(self.xml_accounts[element.tag])):
                 credentials.append((fields.get("domain", ""), fields[self.xml_accounts[element.tag]] if self.xml_accounts[element.tag] else "Administrator", password))
             if fields:
@@ -204,6 +209,7 @@ class NXCModule:
         password = element.findtext("value")
         if password is None or element.findtext("plaintext", "true").strip().lower() not in {"false", "0"}:
             return password
+
         try:
             password = b64decode("".join(password.split()), validate=True).decode("utf-16-le")
             if not password.endswith(suffix):
