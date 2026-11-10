@@ -10,115 +10,6 @@ from nxc.paths import NXC_PATH
 # Anything under 1 GB is almost certainly a PE, not an OS image.
 WIM_MAX_SIZE = 1 * 1024 * 1024 * 1024
 
-CRED_KEYWORDS = [
-    "DomainAdmin", "DomainAdminPassword",
-    "UserID", "UserPassword",
-    "JoinDomain", "DomainAdminDomain", "UserDomain",
-    "MachineObjectOU",
-]
-
-
-def _extract_key_values(content, keys):
-    """Parse INI-style key=value pairs, handling quoted and unquoted values."""
-    results = []
-    text = content.replace("\r\n", "\n").replace("\r", "\n")
-    for key in keys:
-        patt = re.compile(
-            rf'(?im)^\s*{re.escape(key)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n]+))\s*$'
-        )
-        for m in patt.finditer(text):
-            val = (m.group(1) or m.group(2) or m.group(3) or "").strip()
-            results.append(f"{key}={val}")
-    return results
-
-
-def _extract_xml_credentials(content):
-    """
-    Extract credentials from WDS/MDT Unattend.xml structures.
-
-    Processes each named block independently to avoid duplicates -
-    flat <Username>/<Password> tags are only matched outside known nested blocks.
-    """
-    results = []
-
-    # Strip known nested blocks first so flat tag matching does not produce duplicates.
-    stripped = content
-    for block_tag in ("AutoLogon", "Credentials", "AdministratorPassword"):
-        stripped = re.sub(
-            rf"<{block_tag}>.*?</{block_tag}>", "", stripped,
-            flags=re.IGNORECASE | re.DOTALL
-        )
-
-    # Flat tags - safe to match now that nested blocks are removed.
-    for key, patt in [
-        ("Username", r"<Username>\s*([^<]+)\s*</Username>"),
-        ("Password", r"<Password>\s*([^<]+)\s*</Password>"),
-    ]:
-        results.extend(f"{key}={val.strip()}" for val in re.findall(patt, stripped, flags=re.IGNORECASE))
-
-    # AutoLogon block - Password nested under <Password><Value>
-    m = re.search(r"<AutoLogon>(.*?)</AutoLogon>", content, flags=re.IGNORECASE | re.DOTALL)
-    if m:
-        block = m.group(1)
-        for tag, patt in [
-            ("AutoLogon.Username", r"<Username>\s*([^<]+)\s*</Username>"),
-            ("AutoLogon.Password", r"<Value>\s*([^<]+)\s*</Value>"),
-        ]:
-            hit = re.search(patt, block, flags=re.IGNORECASE)
-            if hit:
-                results.append(f"{tag}={hit.group(1).strip()}")
-
-    # Credentials block - domain join account
-    m = re.search(r"<Credentials>(.*?)</Credentials>", content, flags=re.IGNORECASE | re.DOTALL)
-    if m:
-        block = m.group(1)
-        for tag, patt in [
-            ("Credentials.Domain", r"<Domain>\s*([^<]+)\s*</Domain>"),
-            ("Credentials.Username", r"<Username>\s*([^<]+)\s*</Username>"),
-            ("Credentials.Password", r"<Password>\s*([^<]+)\s*</Password>"),
-        ]:
-            hit = re.search(patt, block, flags=re.IGNORECASE)
-            if hit:
-                results.append(f"{tag}={hit.group(1).strip()}")
-
-    # AdministratorPassword - always nested under <Value>
-    m = re.search(
-        r"<AdministratorPassword>.*?<Value>\s*([^<]+)\s*</Value>.*?</AdministratorPassword>",
-        content, flags=re.IGNORECASE | re.DOTALL
-    )
-    if m:
-        results.append(f"AdministratorPassword={m.group(1).strip()}")
-
-    return results
-
-
-def _cred_scan(content):
-    """
-    Best-effort credential extraction from a decoded file.
-    Priority: INI key=value > XML tags > bare keyword presence (fallback).
-    """
-    if not content:
-        return []
-    if isinstance(content, (bytes, bytearray)):
-        content = content.decode("utf-8", errors="ignore")
-    # High null-byte density means likely binary, skip
-    if content.count("\x00") > 5:
-        return []
-
-    lower = content.lower()
-
-    kvs = _extract_key_values(content, CRED_KEYWORDS)
-    if kvs:
-        return kvs
-
-    if any(tag in lower for tag in ("<username>", "<password>", "<administratorpassword>")):
-        xml_hits = _extract_xml_credentials(content)
-        if xml_hits:
-            return xml_hits
-
-    # Fallback: at least signal which sensitive keys are present, even without values
-    return [kw for kw in CRED_KEYWORDS if kw.lower() in lower]
-
 
 class NXCModule:
     """
@@ -209,7 +100,7 @@ class NXCModule:
             try:
                 buf = BytesIO()
                 self.connection.conn.getFile(share, path, buf.write)
-                hits = _cred_scan(decode_text(buf.getvalue()))
+                hits = self._cred_scan(decode_text(buf.getvalue()))
                 if hits:
                     self.context.log.success(f"Credentials found in {path}")
                     for hit in hits:
@@ -293,3 +184,109 @@ class NXCModule:
             })
 
         return credentials
+
+    def _extract_key_values(self, content, keys):
+        """Parse INI-style key=value pairs, handling quoted and unquoted values."""
+        results = []
+        text = content.replace("\r\n", "\n").replace("\r", "\n")
+        for key in keys:
+            patt = re.compile(
+                rf'(?im)^\s*{re.escape(key)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n]+))\s*$'
+            )
+            for m in patt.finditer(text):
+                val = (m.group(1) or m.group(2) or m.group(3) or "").strip()
+                results.append(f"{key}={val}")
+        return results
+
+    def _extract_xml_credentials(self, content):
+        """
+        Extract credentials from WDS/MDT Unattend.xml structures.
+
+        Processes each named block independently to avoid duplicates -
+        flat <Username>/<Password> tags are only matched outside known nested blocks.
+        """
+        results = []
+
+        # Strip known nested blocks first so flat tag matching does not produce duplicates.
+        stripped = content
+        for block_tag in ("AutoLogon", "Credentials", "AdministratorPassword"):
+            stripped = re.sub(
+                rf"<{block_tag}>.*?</{block_tag}>", "", stripped,
+                flags=re.IGNORECASE | re.DOTALL
+            )
+
+        # Flat tags - safe to match now that nested blocks are removed.
+        for key, patt in [
+            ("Username", r"<Username>\s*([^<]+)\s*</Username>"),
+            ("Password", r"<Password>\s*([^<]+)\s*</Password>"),
+        ]:
+            results.extend(f"{key}={val.strip()}" for val in re.findall(patt, stripped, flags=re.IGNORECASE))
+
+        # AutoLogon block - Password nested under <Password><Value>
+        m = re.search(r"<AutoLogon>(.*?)</AutoLogon>", content, flags=re.IGNORECASE | re.DOTALL)
+        if m:
+            block = m.group(1)
+            for tag, patt in [
+                ("AutoLogon.Username", r"<Username>\s*([^<]+)\s*</Username>"),
+                ("AutoLogon.Password", r"<Value>\s*([^<]+)\s*</Value>"),
+            ]:
+                hit = re.search(patt, block, flags=re.IGNORECASE)
+                if hit:
+                    results.append(f"{tag}={hit.group(1).strip()}")
+
+        # Credentials block - domain join account
+        m = re.search(r"<Credentials>(.*?)</Credentials>", content, flags=re.IGNORECASE | re.DOTALL)
+        if m:
+            block = m.group(1)
+            for tag, patt in [
+                ("Credentials.Domain", r"<Domain>\s*([^<]+)\s*</Domain>"),
+                ("Credentials.Username", r"<Username>\s*([^<]+)\s*</Username>"),
+                ("Credentials.Password", r"<Password>\s*([^<]+)\s*</Password>"),
+            ]:
+                hit = re.search(patt, block, flags=re.IGNORECASE)
+                if hit:
+                    results.append(f"{tag}={hit.group(1).strip()}")
+
+        # AdministratorPassword - always nested under <Value>
+        m = re.search(
+            r"<AdministratorPassword>.*?<Value>\s*([^<]+)\s*</Value>.*?</AdministratorPassword>",
+            content, flags=re.IGNORECASE | re.DOTALL
+        )
+        if m:
+            results.append(f"AdministratorPassword={m.group(1).strip()}")
+
+        return results
+
+    def _cred_scan(self, content):
+        """
+        Best-effort credential extraction from a decoded file.
+        Priority: INI key=value > XML tags > bare keyword presence (fallback).
+        """
+        CRED_KEYWORDS = [
+            "DomainAdmin", "DomainAdminPassword",
+            "UserID", "UserPassword",
+            "JoinDomain", "DomainAdminDomain", "UserDomain",
+            "MachineObjectOU",
+        ]
+
+        if not content:
+            return []
+        if isinstance(content, (bytes, bytearray)):
+            content = content.decode("utf-8", errors="ignore")
+        # High null-byte density means likely binary, skip
+        if content.count("\x00") > 5:
+            return []
+
+        lower = content.lower()
+
+        kvs = self._extract_key_values(content, CRED_KEYWORDS)
+        if kvs:
+            return kvs
+
+        if any(tag in lower for tag in ("<username>", "<password>", "<administratorpassword>")):
+            xml_hits = self._extract_xml_credentials(content)
+            if xml_hits:
+                return xml_hits
+
+        # Fallback: at least signal which sensitive keys are present, even without values
+        return [kw for kw in CRED_KEYWORDS if kw.lower() in lower]
