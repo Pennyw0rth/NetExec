@@ -163,22 +163,17 @@ class NXCModule:
 
             fields.update({key: section[key] for key in self.ini_settings if key in section})
             if fields:
-                yield f"{source} [{section.name}]", fields, credentials
-
-    def walk_xml(self, element, source):
-        yield source, element
-        for index, child in enumerate(element, 1):
-            yield from self.walk_xml(child, f"{source}/{child.tag}[{index}]")
+                yield source, fields, credentials
 
     def parse_xml(self, content, source):
         content = ET.fromstring(content)
         for element in content.iter():
             element.tag = element.tag.rsplit("}", 1)[-1].lower()
 
-        for location, element in self.walk_xml(content, f"{source}/{content.tag}"):
+        for element in content.iter():
             # https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-unattendedjoin-identification-machinepassword
             if element.tag == "machinepassword":
-                yield location, {"MachinePassword": element.text or ""}, []
+                yield source, {"MachinePassword": element.text or ""}, []
             if element.tag not in self.xml_accounts:
                 continue
             fields = {child.tag: child.text or "" for child in element if child.tag in {"username", "name", "domain"}}
@@ -191,7 +186,7 @@ class NXCModule:
                 password = element if not self.xml_accounts[element.tag] else element.find("password")
                 if password is not None:
                     fields.update({child.tag: child.text or "" for child in password if child.tag in {"value", "plaintext"}})
-                    password = self.xml_password(password, location, "Password" if self.xml_accounts[element.tag] else "AdministratorPassword")
+                    password = self.xml_password(password, source, "Password" if self.xml_accounts[element.tag] else "AdministratorPassword")
                     if password is not None:
                         fields["password"] = password
                         fields.pop("value", None)
@@ -200,7 +195,7 @@ class NXCModule:
             if password is not None and (not self.xml_accounts[element.tag] or fields.get(self.xml_accounts[element.tag])):
                 credentials.append((fields.get("domain", ""), fields[self.xml_accounts[element.tag]] if self.xml_accounts[element.tag] else "Administrator", password))
             if fields:
-                yield location, fields, credentials
+                yield source, fields, credentials
 
     def xml_password(self, element, source, suffix):
         # Encoding inferred from Microsoft's examples; PlainText defaults to true.
