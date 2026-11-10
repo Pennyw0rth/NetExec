@@ -100,7 +100,7 @@ class NXCModule:
             try:
                 buf = BytesIO()
                 self.connection.conn.getFile(share, path, buf.write)
-                hits = self._cred_scan(decode_text(buf.getvalue()))
+                hits = self.cred_scan(decode_text(buf.getvalue()))
                 if hits:
                     self.context.log.success(f"Credentials found in {path}")
                     for hit in hits:
@@ -129,70 +129,37 @@ class NXCModule:
             except Exception as e:
                 self.context.log.fail(f"Failed to read {share} (expected for protected MDT share): {e}")
 
-    def parse_creds(self, hits):
+    def cred_scan(self, content):
         """
-        Reconstruct (username, password, domain) tuples from raw key=value hits.
-        Handles both INI-style pairs and XML-structured blocks (AutoLogon, Credentials).
-        Returns a list of dicts ready for context.db.add_credential().
+        Best-effort credential extraction from a decoded file.
+        Priority: INI key=value > XML tags > bare keyword presence (fallback).
         """
-        kv = {}
-        for hit in hits:
-            if "=" in hit:
-                key, _, val = hit.partition("=")
-                kv[key.strip()] = val.strip()
+        CRED_KEYWORDS = [
+            "DomainAdmin", "DomainAdminPassword",
+            "UserID", "UserPassword",
+            "JoinDomain", "DomainAdminDomain", "UserDomain",
+            "MachineObjectOU",
+        ]
+        lower = content.lower()
 
-        credentials = []
+        kvs = self._extract_key_values(content, CRED_KEYWORDS)
+        if kvs:
+            return kvs
 
-        # Domain admin account from CustomSettings.ini
-        if "DomainAdmin" in kv and "DomainAdminPassword" in kv:
-            credentials.append({
-                "username": kv["DomainAdmin"],
-                "password": kv["DomainAdminPassword"],
-                "domain": kv.get("DomainAdminDomain") or kv.get("JoinDomain", ""),
-            })
+        if any(tag in lower for tag in ("<username>", "<password>", "<administratorpassword>")):
+            xml_hits = self._extract_xml_credentials(content)
+            if xml_hits:
+                return xml_hits
 
-        # Service account from Bootstrap.ini
-        if "UserID" in kv and "UserPassword" in kv:
-            credentials.append({
-                "username": kv["UserID"],
-                "password": kv["UserPassword"],
-                "domain": kv.get("UserDomain", ""),
-            })
-
-        # Domain join account from Unattend.xml Credentials block
-        if "Credentials.Username" in kv and "Credentials.Password" in kv:
-            credentials.append({
-                "username": kv["Credentials.Username"],
-                "password": kv["Credentials.Password"],
-                "domain": kv.get("Credentials.Domain", ""),
-            })
-
-        # AutoLogon account from Unattend.xml
-        if "AutoLogon.Username" in kv and "AutoLogon.Password" in kv:
-            credentials.append({
-                "username": kv["AutoLogon.Username"],
-                "password": kv["AutoLogon.Password"],
-                "domain": "",  # AutoLogon is typically a local account
-            })
-
-        # Local administrator password from the Unattend.xml
-        if "AdministratorPassword" in kv:
-            credentials.append({
-                "username": "Administrator",
-                "password": kv["AdministratorPassword"],
-                "domain": "",
-            })
-
-        return credentials
+        # Fallback: at least signal which sensitive keys are present, even without values
+        return [kw for kw in CRED_KEYWORDS if kw.lower() in lower]
 
     def _extract_key_values(self, content, keys):
         """Parse INI-style key=value pairs, handling quoted and unquoted values."""
         results = []
         text = content.replace("\r\n", "\n").replace("\r", "\n")
         for key in keys:
-            patt = re.compile(
-                rf'(?im)^\s*{re.escape(key)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n]+))\s*$'
-            )
+            patt = re.compile(rf'^\s*{re.escape(key)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n]+))\s*$', re.IGNORECASE | re.MULTILINE)
             for m in patt.finditer(text):
                 val = (m.group(1) or m.group(2) or m.group(3) or "").strip()
                 results.append(f"{key}={val}")
@@ -257,36 +224,58 @@ class NXCModule:
 
         return results
 
-    def _cred_scan(self, content):
+    def parse_creds(self, hits):
         """
-        Best-effort credential extraction from a decoded file.
-        Priority: INI key=value > XML tags > bare keyword presence (fallback).
+        Reconstruct (username, password, domain) tuples from raw key=value hits.
+        Handles both INI-style pairs and XML-structured blocks (AutoLogon, Credentials).
+        Returns a list of dicts ready for context.db.add_credential().
         """
-        CRED_KEYWORDS = [
-            "DomainAdmin", "DomainAdminPassword",
-            "UserID", "UserPassword",
-            "JoinDomain", "DomainAdminDomain", "UserDomain",
-            "MachineObjectOU",
-        ]
+        kv = {}
+        for hit in hits:
+            if "=" in hit:
+                key, _, val = hit.partition("=")
+                kv[key.strip()] = val.strip()
 
-        if not content:
-            return []
-        if isinstance(content, (bytes, bytearray)):
-            content = content.decode("utf-8", errors="ignore")
-        # High null-byte density means likely binary, skip
-        if content.count("\x00") > 5:
-            return []
+        credentials = []
 
-        lower = content.lower()
+        # Domain admin account from CustomSettings.ini
+        if "DomainAdmin" in kv and "DomainAdminPassword" in kv:
+            credentials.append({
+                "username": kv["DomainAdmin"],
+                "password": kv["DomainAdminPassword"],
+                "domain": kv.get("DomainAdminDomain") or kv.get("JoinDomain", ""),
+            })
 
-        kvs = self._extract_key_values(content, CRED_KEYWORDS)
-        if kvs:
-            return kvs
+        # Service account from Bootstrap.ini
+        if "UserID" in kv and "UserPassword" in kv:
+            credentials.append({
+                "username": kv["UserID"],
+                "password": kv["UserPassword"],
+                "domain": kv.get("UserDomain", ""),
+            })
 
-        if any(tag in lower for tag in ("<username>", "<password>", "<administratorpassword>")):
-            xml_hits = self._extract_xml_credentials(content)
-            if xml_hits:
-                return xml_hits
+        # Domain join account from Unattend.xml Credentials block
+        if "Credentials.Username" in kv and "Credentials.Password" in kv:
+            credentials.append({
+                "username": kv["Credentials.Username"],
+                "password": kv["Credentials.Password"],
+                "domain": kv.get("Credentials.Domain", ""),
+            })
 
-        # Fallback: at least signal which sensitive keys are present, even without values
-        return [kw for kw in CRED_KEYWORDS if kw.lower() in lower]
+        # AutoLogon account from Unattend.xml
+        if "AutoLogon.Username" in kv and "AutoLogon.Password" in kv:
+            credentials.append({
+                "username": kv["AutoLogon.Username"],
+                "password": kv["AutoLogon.Password"],
+                "domain": "",  # AutoLogon is typically a local account
+            })
+
+        # Local administrator password from the Unattend.xml
+        if "AdministratorPassword" in kv:
+            credentials.append({
+                "username": "Administrator",
+                "password": kv["AdministratorPassword"],
+                "domain": "",
+            })
+
+        return credentials
