@@ -1437,12 +1437,11 @@ class ldap(connection):
                     # Get all SIDs that have the right to read the password
                     sids = [ace["Ace"]["Sid"].formatCanonical() for ace in dacl["Dacl"]["Data"] if ace["AceType"] == 0x00]
                     self.logger.debug(f"msDS-GroupMSAMembership: {sids}")
-                    if not sids:
-                        # An empty DACL (or one holding only deny ACEs) makes the filter
-                        # string "(|)", which impacket rejects with
-                        # LDAPFilterInvalidException and that aborts the whole --gmsa run.
-                        self.logger.debug(f"{acc['sAMAccountName']}: no allowed ACE in DACL, skipping SID lookup")
-                    else:
+                    
+                    # An empty DACL (or one holding only deny ACEs) makes the filter
+                    # string "(|)", which impacket rejects with
+                    # LDAPFilterInvalidException and that aborts the whole --gmsa run.
+                    if sids:
                         search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
                         resp = self.ldap_connection.search(
                             searchBase=self.baseDN,
