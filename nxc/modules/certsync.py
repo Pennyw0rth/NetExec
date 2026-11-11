@@ -169,7 +169,11 @@ class NXCModule:
             context.log.fail("Failed to connect to the Service Control Manager on the CA host")
             return None, None
 
-        handle = scmr.hROpenSCManagerW(dce)["lpScHandle"]
+        try:
+            handle = scmr.hROpenSCManagerW(dce)["lpScHandle"]
+        except Exception as e:
+            context.log.fail(f"Could not dump the CA key: admin rights on the CA host are required, or provide one with CA_PFX ({e})")
+            return None, None
         config = f" -config {ca_module.config}" if ca_module.config else ""
         backup_cmd = (
             f"cmd.exe /c certutil{config} -backupkey -f -p certipy C:\\Windows\\Tasks\\Certipy && "
