@@ -1437,18 +1437,24 @@ class ldap(connection):
                     # Get all SIDs that have the right to read the password
                     sids = [ace["Ace"]["Sid"].formatCanonical() for ace in dacl["Dacl"]["Data"] if ace["AceType"] == 0x00]
                     self.logger.debug(f"msDS-GroupMSAMembership: {sids}")
-                    search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
-                    resp = self.ldap_connection.search(
-                        searchBase=self.baseDN,
-                        searchFilter=search_filter,
-                        attributes=["sAMAccountName"],
-                        sizeLimit=0,
-                    )
-                    resp_parsed = parse_result_attributes(resp)
-                    if len(resp_parsed) > 1:
-                        principal_with_read = [f"{item['sAMAccountName']}" for item in resp_parsed]
-                    elif len(resp_parsed) == 1:
-                        principal_with_read = resp_parsed[0]["sAMAccountName"]
+                    if not sids:
+                        # An empty DACL (or one holding only deny ACEs) makes the filter
+                        # string "(|)", which impacket rejects with
+                        # LDAPFilterInvalidException and that aborts the whole --gmsa run.
+                        self.logger.debug(f"{acc['sAMAccountName']}: no allowed ACE in DACL, skipping SID lookup")
+                    else:    
+                        search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
+                        resp = self.ldap_connection.search(
+                            searchBase=self.baseDN,
+                            searchFilter=search_filter,
+                            attributes=["sAMAccountName"],
+                            sizeLimit=0,
+                        )
+                        resp_parsed = parse_result_attributes(resp)
+                        if len(resp_parsed) > 1:
+                            principal_with_read = [f"{item['sAMAccountName']}" for item in resp_parsed]
+                        elif len(resp_parsed) == 1:
+                            principal_with_read = resp_parsed[0]["sAMAccountName"]
 
                 # Get the password
                 rc4 = "<no read permissions>"
