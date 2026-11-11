@@ -2435,10 +2435,6 @@ class smb(connection):
             self.logger.exception(str(e))
 
     def ntds(self):
-        if self.args.ntds == "certsync":
-            from nxc.helpers.certsync import certsync_dump
-            return certsync_dump(self)
-
         self.enable_remoteops()
         is_remote = True
         use_vss_method = False
