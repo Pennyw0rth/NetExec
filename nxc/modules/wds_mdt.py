@@ -1,6 +1,3 @@
-import shutil
-import subprocess
-import tempfile
 from base64 import b64decode
 from configparser import ConfigParser, Error as ConfigError
 from io import BytesIO
@@ -10,7 +7,7 @@ from xml.etree import ElementTree as ET
 from dissect.archive.wim import WIM
 from nxc.helpers.misc import CATEGORY, decode_text
 from nxc.helpers.path import sanitize_path_component
-from nxc.paths import NXC_PATH, TMP_PATH
+from nxc.paths import NXC_PATH
 
 
 class NXCModule:
@@ -94,10 +91,10 @@ class NXCModule:
                 else:
                     output.write(content)
             self.context.log.success(f"Saved: {local_path}")
-            return True
+            return local_path
         except Exception as e:
             self.context.log.fail(f"Failed to save {share}\\{path}: {e}")
-            return False
+            return None
 
     WIM_CRED_PATHS = {
         ("Deploy", "Scripts", "Bootstrap.ini"),
@@ -129,9 +126,9 @@ class NXCModule:
                 except Exception as e:
                     self.context.log.fail(f"Failed to download {share}\\{full_path}: {e}")
                     continue
-                self.save_file(share, full_path, buf.getvalue())
+                local_wim = self.save_file(share, full_path, buf.getvalue())
                 buf.seek(0)
-                self.parse_wim(buf, f"{share}\\{full_path}")
+                self.parse_wim(buf, f"{share}\\{full_path}", local_wim)
 
     def explore_mdt(self, share):
         self.context.log.success(f"Found share: {share} (admin access or misconfigured ACLs)")
@@ -253,8 +250,7 @@ class NXCModule:
                     display = {prefix: fields.get("password", "")}
                 yield source, display, credentials
 
-    def parse_wim(self, fh, source):
-        """Extract credentials from a WIM image using dissect, falling back to 7z for unsupported compression."""
+    def parse_wim(self, fh, source, local_wim=None):
         try:
             wim = WIM(fh)
             found = False
@@ -264,7 +260,11 @@ class NXCModule:
             if not found:
                 self.context.log.display(f"No credential files found inside {source}")
         except NotImplementedError:
-            self.parse_wim_7z(fh, source)
+            self.context.log.display(f"Cannot extract {source} (unsupported WIM compression)")
+            if local_wim:
+                self.context.log.display(f'Try: 7z e "{local_wim}" -r "Deploy/Scripts/*.ini" && grep -iE "password|userID|userName|domain" *.ini')
+            else:
+                self.context.log.display('Try: 7z e "~/.nxc/modules/wds_mdt/(...)/image.wim" -r "Deploy/Scripts/*.ini" && grep -iE "password|userID|userName|domain" *.ini')
 
     def walk_wim_dir(self, directory, path_parts, source):
         if directory.entry.SubdirOffset == 0:
@@ -289,39 +289,6 @@ class NXCModule:
                 except (ConfigError, ValueError, LookupError) as e:
                     self.context.log.fail(f"Failed to parse {source} -> {wim_file_path}: {e}")
         return found
-
-    def parse_wim_7z(self, fh, source):
-        """Fallback: extract credential files from a WIM using 7z when dissect lacks the compression codec."""
-        if not shutil.which("7z"):
-            self.context.log.display(f"Cannot extract {source} (unsupported compression and 7z not installed)")
-            self.context.log.display(r"Install p7zip or extract manually: Deploy\Scripts\Bootstrap.ini and Deploy\Scripts\CustomSettings.ini")
-            return
-        tmp_dir = tempfile.mkdtemp(dir=TMP_PATH)
-        tmp_wim = str(Path(tmp_dir, "image.wim"))
-        try:
-            fh.seek(0)
-            with open(tmp_wim, "wb") as f:
-                shutil.copyfileobj(fh, f)
-            targets = ["Deploy/Scripts/Bootstrap.ini", "Deploy/Scripts/CustomSettings.ini"]
-            subprocess.run(["7z", "e", tmp_wim, f"-o{tmp_dir}", *targets, "-r", "-aoa"], capture_output=True, timeout=120)
-            found = False
-            for name in ("Bootstrap.ini", "CustomSettings.ini"):
-                extracted = Path(tmp_dir, name)
-                if extracted.is_file():
-                    content = extracted.read_bytes()
-                    try:
-                        findings = list(self.parse_ini(content, f"{source} -> Deploy\\Scripts\\{name}"))
-                        if findings:
-                            found = True
-                            self.report_findings(findings)
-                    except (ConfigError, ValueError, LookupError) as e:
-                        self.context.log.fail(f"Failed to parse {source} -> Deploy\\Scripts\\{name}: {e}")
-            if not found:
-                self.context.log.display(f"No credential files found inside {source}")
-        except Exception as e:
-            self.context.log.fail(f"7z extraction failed for {source}: {e}")
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def xml_password(self, element, source, suffix):
         # Encoding inferred from Microsoft's examples; PlainText defaults to true.
