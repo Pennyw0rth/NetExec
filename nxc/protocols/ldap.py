@@ -1442,7 +1442,7 @@ class ldap(connection):
                         # string "(|)", which impacket rejects with
                         # LDAPFilterInvalidException and that aborts the whole --gmsa run.
                         self.logger.debug(f"{acc['sAMAccountName']}: no allowed ACE in DACL, skipping SID lookup")
-                    else:    
+                    else:
                         search_filter = "(|" + "".join([f"(objectSid={sid})" for sid in sids]) + ")"
                         resp = self.ldap_connection.search(
                             searchBase=self.baseDN,
