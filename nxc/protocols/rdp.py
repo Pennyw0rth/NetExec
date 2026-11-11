@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import copy
 import contextlib
 from datetime import datetime
 from os import getenv
@@ -126,7 +125,7 @@ class rdp(connection):
         iosettings = self.iosettings.clone_for_connection()
         # the probe, the enumeration and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type
         iosettings.supported_protocols = supported_protocols
-        self.conn = RDPConnection(iosettings=iosettings, target=copy.deepcopy(self.target), credentials=copy.deepcopy(credentials))
+        self.conn = RDPConnection(iosettings=iosettings, target=self.target, credentials=credentials)
         if credentials is not None:
             return True
 
