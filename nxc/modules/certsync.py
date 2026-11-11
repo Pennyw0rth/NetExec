@@ -58,8 +58,7 @@ class NXCModule:
 
         ca_key, ca_cert = self.load_ca(context, connection, ldap_conn)
         if ca_key is None or ca_cert is None:
-            context.log.fail("No CA certificate/private key available (backup failed or bad CA_PFX); aborting")
-            return
+            return  # load_ca already logged the specific reason
 
         output_filename = connection.output_file_template.format(output_folder="ntds")
         os.makedirs(os.path.dirname(output_filename), exist_ok=True)
@@ -131,8 +130,12 @@ class NXCModule:
             return self.dump_ca_pki(context, connection, ldap_conn)
 
         ca_pass = self.ca_pfx_pass.encode() if self.ca_pfx_pass else None
-        with open(self.ca_pfx, "rb") as ca_file:
-            ca_key, ca_cert = load_pfx(ca_file.read(), ca_pass)
+        try:
+            with open(self.ca_pfx, "rb") as ca_file:
+                ca_key, ca_cert = load_pfx(ca_file.read(), ca_pass)
+        except Exception as e:
+            context.log.fail(f"Could not load CA_PFX {self.ca_pfx}: {e}")
+            return None, None
         context.log.debug(f"Loaded CA certificate and private key from {self.ca_pfx}")
         return ca_key, ca_cert
 
@@ -198,6 +201,8 @@ class NXCModule:
             pfx = ca_module.get_backup()
             if pfx:
                 key, cert = load_pfx(pfx, b"certipy")
+            else:
+                context.log.fail("CA backup produced no PFX (the certutil backup likely failed)")
         except Exception as e:
             context.log.fail(f"CA backup failed: {e}")
         finally:
