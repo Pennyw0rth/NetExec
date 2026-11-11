@@ -65,12 +65,20 @@ class NXCModule:
         self.context = context
         self.connection = connection
 
+        found = False
         for share in connection.conn.listShares():
             share = share["shi1_netname"].rstrip("\x00")
             if share.lower() in {"reminst", "remoteinstall"}:
                 self.explore_wds(share)
+                found = True
             elif share.lower() == "deploymentshare$":
                 self.explore_mdt(share)
+                found = True
+
+        if found:
+            self.context.log.display("Done")
+        else:
+            self.context.log.display("No WDS/MDT deployment shares found")
 
     def save_file(self, share, path, content=None):
         try:
