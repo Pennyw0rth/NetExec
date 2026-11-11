@@ -34,7 +34,8 @@ def proto_args(parser, parents):
     cred_gathering_group = smb_parser.add_argument_group("Credential Gathering")
     cred_gathering_group.add_argument("--sam", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump SAM hashes from target systems")
     cred_gathering_group.add_argument("--lsa", choices={"regdump", "secdump"}, nargs="?", const="regdump", help="dump LSA secrets from target systems")
-    ntds_arg = cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
+    ntds_arg = cred_gathering_group.add_argument("--ntds", choices={"vss", "drsuapi", "certsync"}, nargs="?", const="drsuapi", help="dump the NTDS.dit from target DCs using the specifed method")
+    cred_gathering_group.add_argument("--ca-pfx", action="store", help="certsync option. CA certificate+private key PFX; if omitted the CA key is dumped remotely")
     cred_gathering_group.add_argument("--history", action="store_true", help="Also retrieve password history (NTDS.dit or SAM)")
     # NTDS options
     kerb_keys_arg = cred_gathering_group.add_argument("--kerberos-keys", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Also dump Kerberos AES and DES keys from target DC (NTDS.dit)")

