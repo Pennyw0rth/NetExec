@@ -1,3 +1,4 @@
+import contextlib
 from nxc.helpers.misc import CATEGORY
 from impacket.examples.secretsdump import RemoteOperations
 from impacket.dcerpc.v5 import rrp
@@ -73,6 +74,7 @@ class NXCModule:
             context.log.error("No matching policies found in SYSVOL Share.")
 
     def on_admin_login(self, context, connection):
+        remoteOps = None
         try:
             remoteOps = RemoteOperations(connection.conn, False)
             remoteOps.enableRegistry()
@@ -83,3 +85,7 @@ class NXCModule:
             context.log.success(f"Found VulnerableChannelAllowList registry configuration: {value}")
         except Exception as e:
             context.log.error(f"Error while querying registry: {e}")
+        finally:
+            if remoteOps is not None:
+                with contextlib.suppress(Exception):
+                    remoteOps.finish()
