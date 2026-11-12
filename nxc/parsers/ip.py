@@ -82,7 +82,8 @@ def process_targets(args):
         excluded_targets = [target for target in targets if target in excluded_ips]
         targets = [target for target in targets if target not in excluded_ips]
         nxc_logger.info(f"Excluding {original_count - len(targets)} hosts from scan: {excluded_targets}")
-    return targets
+    # Drop duplicate targets (order kept), a target listed twice would otherwise run every login twice in parallel
+    return list(dict.fromkeys(targets))
 
 
 def get_local_ips():
