@@ -39,12 +39,10 @@ def upgrade_to_dploot_connection(target, connection):
                 else:
                     conn.connect()
             case "winrm":
+                # The winrm protocol runs on impacket's WinRSClient, dploot needs its own pypsrp session
                 from dploot.lib.network.winrm import DPLootWINRMConnection
                 conn = DPLootWINRMConnection(target)
-                if connection is not None:
-                    conn.conn = connection.conn
-                else:
-                    conn.connect()
+                conn.connect()
             case "mssql":
                 from dploot.lib.network.mssql import DPLootMSSQLConnection
                 conn = DPLootMSSQLConnection(target)
