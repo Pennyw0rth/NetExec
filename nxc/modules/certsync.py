@@ -245,6 +245,9 @@ class NXCModule:
         sid_extension = forger.create_sid_extension()
         if sid_extension:
             builder = builder.add_extension(sid_extension, False)
+        crl_extension = forger.get_crl()
+        if crl_extension:
+            builder = builder.add_extension(crl_extension, False)
         return builder.sign(ca_key, forger.get_allowed_hash_algorithm(ca_cert.signature_hash_algorithm))
 
     def unpac_user(self, target, cert, key, sam):
