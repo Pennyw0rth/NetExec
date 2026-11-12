@@ -114,7 +114,7 @@ class NXCModule:
 
     def enum_users(self, ldap_conn):
         user_filter = (
-            "(&(objectClass=user)(objectCategory=person)"
+            "(&(objectClass=user)(|(objectCategory=person)(objectClass=computer))"
             + (f"(sAMAccountName={self.user})" if self.user else "")
             + (self.DISABLED_ACCOUNT_FILTER if self.enabled else "")
             + ")"
