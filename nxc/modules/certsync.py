@@ -35,12 +35,6 @@ class NXCModule:
         USER          Only dump this sAMAccountName (optional)
         ENABLED       Only dump enabled accounts when set to true (optional)
         """
-        known = {"CA_PFX", "CA_PFX_PASS", "USER", "ENABLED"}
-        unknown = set(module_options) - known
-        if unknown:
-            context.log.fail(f"Unknown option(s): {', '.join(sorted(unknown))}. Valid options: {', '.join(sorted(known))}")
-            return False
-
         self.ca_pfx = module_options.get("CA_PFX")
         self.ca_pfx_pass = module_options.get("CA_PFX_PASS")
         self.user = module_options.get("USER")
