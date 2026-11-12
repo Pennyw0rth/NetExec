@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from impacket.dcerpc.v5 import samr
 from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.dcerpc.v5.samr import USER_ACCOUNT_DISABLED
 from impacket.nt_errors import STATUS_MORE_ENTRIES
 
 from nxc.helpers.rpc import NXCRPCConnection
@@ -16,7 +17,7 @@ class UserSamrDump:
         self.users = []
         self.dce = None
 
-    def dump(self, requested_users=None, dump_path=None):
+    def dump(self, requested_users=None, dump_path=None, active_only=False):
         try:
             self.dce = NXCRPCConnection(self.connection).connect(r"\samr", samr.MSRPC_UUID_SAMR)
         except Exception as e:
@@ -24,12 +25,12 @@ class UserSamrDump:
             return self.users
 
         try:
-            self.fetch_users(requested_users, dump_path)
+            self.fetch_users(requested_users, dump_path, active_only)
         except Exception as e:
             self.logger.debug(f"Connection failed: {e}")
         return self.users
 
-    def fetch_users(self, requested_users, dump_path):
+    def fetch_users(self, requested_users, dump_path, active_only=False):
         users = []
 
         # Setup Connection
@@ -74,7 +75,7 @@ class UserSamrDump:
                 names_lookup_resp = samr.hSamrLookupNamesInDomain(self.dce, domain_handle, requested_users)
                 rids = [r["Data"] for r in names_lookup_resp["RelativeIds"]["Element"]]
                 self.logger.debug(f"Specific RIDs retrieved: {rids}")
-                users = self.get_user_info(domain_handle, rids)
+                users.extend(self.get_user_info(domain_handle, rids, active_only))
             except DCERPCException as e:
                 self.logger.debug(f"Exception while requesting users in domain: {e}")
                 if "STATUS_SOME_NOT_MAPPED" in str(e):
@@ -96,7 +97,7 @@ class UserSamrDump:
 
                 rids = [r["RelativeId"] for r in enumerate_users_resp["Buffer"]["Buffer"]]
                 self.logger.debug(f"Full domain RIDs retrieved: {rids}")
-                users = self.get_user_info(domain_handle, rids)
+                users.extend(self.get_user_info(domain_handle, rids, active_only))
 
                 # set these for the while loop
                 enumerationContext = enumerate_users_resp["EnumerationContext"]
@@ -107,9 +108,10 @@ class UserSamrDump:
             self.logger.display(f"Writing {len(users)} local users to {dump_path}")
             with open(dump_path, "w+") as file:
                 file.writelines(f"{user}\n" for user in users)
+        self.users = users
         self.dce.disconnect()
 
-    def get_user_info(self, domain_handle, user_ids):
+    def get_user_info(self, domain_handle, user_ids, active_only=False):
         self.logger.debug(f"Getting user info for users: {user_ids}")
         self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}{'-BadPW-':<8}{'-Description-':<60}")
         users = []
@@ -129,6 +131,15 @@ class UserSamrDump:
             )["Buffer"]
 
             user_info = info_user_resp["All"]
+            samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
+            # SAMR's own UserAccountControl field uses the MS-SAMR 2.2.1.12 "USER_ACCOUNT"
+            # flags (USER_ACCOUNT_DISABLED = 0x1), not the UF_* / ADS_UF_* flags LDAP's
+            # userAccountControl attribute uses (UF_ACCOUNTDISABLE = 0x2). The two map
+            # 1:1 per MS-SAMR 3.1.5.14.2, but are numerically different - using UF_ACCOUNTDISABLE
+            # here would silently never match.
+            if active_only and (int(user_info["UserAccountControl"]) & USER_ACCOUNT_DISABLED):
+                continue
+
             user_name = user_info["UserName"]
             bad_pwd_count = user_info["BadPasswordCount"]
             user_description = user_info["AdminComment"]
@@ -137,7 +148,6 @@ class UserSamrDump:
                 last_pw_set = "<never>"
             users.append(user_name)
             self.logger.highlight(f"{user_name:<30}{last_pw_set:<20}{bad_pwd_count:<8}{user_description} ")
-            samr.hSamrCloseHandle(self.dce, open_user_resp["UserHandle"])
         return users
 
 
