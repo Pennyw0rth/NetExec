@@ -530,9 +530,7 @@ class connection:
                 from impacket.krb5.ccache import CCache
                 username = self.args.username[0] if len(self.args.username) else CCache.parseFile()[1]
                 password = self.args.password[0] if len(self.args.password) else ""
-                self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
-                self.logger.info("Successfully authenticated using Kerberos cache")
-                return True
+                return self.kerberos_login(self.domain, username, password, "", "", self.kdcHost, True)
 
         if self.certificate_auth:
             self.logger.debug("Trying to authenticate using Certificate pfx")
