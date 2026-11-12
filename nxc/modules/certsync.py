@@ -92,7 +92,7 @@ class NXCModule:
         context.log.success(f"Dumped {dumped} hashes to {outfile} of which {added} were added to the database")
 
     def make_target(self, connection, remote_name=None, target_ip=None):
-        dns_server = getattr(connection.args, "dns_server", None) or connection.kdcHost or connection.host
+        dns_server = connection.args.dns_server or connection.kdcHost or socket.gethostbyname(connection.host)
         resolver = DnsResolver.create(ns=dns_server, dc_ip=connection.kdcHost or connection.host)
         if remote_name and not target_ip:
             target_ip = resolver.resolve(remote_name)
