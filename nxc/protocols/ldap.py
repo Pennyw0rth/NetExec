@@ -1326,16 +1326,16 @@ class ldap(connection):
 
                 # Filter out DCs, unconstrained delegation to DCs is not a useful information
                 if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
-                    delegation = "Unconstrained"
-                    rightsTo.append("N/A")
-                elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                    # Append immediately: an account can also have constrained delegation configured
+                    answers.append([sAMAccountName, objectType, "Unconstrained", "N/A"])
+                if userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
                     delegation = "Constrained w/ Protocol Transition"
                     protocolTransition = 1
-
+                
                 if item.get("msDS-AllowedToDelegateTo") is not None:
-                    # Already flagged Unconstrained, record it before delegation/rightsTo get overwritten
-                    if delegation == "Unconstrained":
-                        answers.append([sAMAccountName, objectType, delegation, rightsTo])
+                    if protocolTransition == 0:
+                        delegation = "Constrained"
+                    rightsTo = item.get("msDS-AllowedToDelegateTo")
 
                 # Not an elif as an object could both have RBCD and another type of delegation
                 if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
