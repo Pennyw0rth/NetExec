@@ -31,6 +31,10 @@ class Klist:
         self.logger = connection.logger
         self.bias_minutes = 0
 
+    def run(self, command):
+        # klist prints non-ASCII names, and a NBSP before ':' on French Windows, in the target's OEM codepage; force UTF-8 on both ends so parsing is locale-independent
+        return self.connection.execute(f"chcp 65001 > nul & {command}", True, codec="utf-8")
+
     def display(self):
         tgts = self.load_tgts()
         if tgts is None:
@@ -66,7 +70,7 @@ class Klist:
 
     def load_tgts(self):
         """Returns None when klist itself could not run, a (possibly empty) list otherwise."""
-        output = self.connection.execute("klist sessions", True)
+        output = self.run("klist sessions")
         if not output:
             self.logger.fail("Failed to enumerate Kerberos sessions")
             return None
@@ -109,7 +113,7 @@ class Klist:
         klist prints local wallclock with no zone, so without this the ccache times and the
         expiry check are off by the target's UTC offset whenever it differs from ours.
         """
-        output = self.connection.execute(r'reg query "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v ActiveTimeBias', True)
+        output = self.run(r'reg query "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v ActiveTimeBias')
         match = re.search(r"ActiveTimeBias\s+REG_DWORD\s+0x([0-9a-fA-F]+)", output) if output else None
         if not match:
             self.logger.debug("Could not read ActiveTimeBias, assuming target is in UTC")
@@ -123,7 +127,7 @@ class Klist:
         now = datetime.now(UTC).timestamp()
         tgts = []
         for logon_hex, account in sessions:
-            tgt_text = self.connection.execute(f"klist tgt -li {logon_hex}", True)
+            tgt_text = self.run(f"klist tgt -li {logon_hex}")
             if not tgt_text:
                 self.logger.debug(f"{account} ({logon_hex}): no output from klist tgt")
                 continue
