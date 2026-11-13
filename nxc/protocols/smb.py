@@ -2481,7 +2481,7 @@ class smb(connection):
                     self.logger.display("Trust keys:")
                     printed_trust_keys_banner = True
                 self.logger.highlight(secret)
-                if secret_type == NTDSHashes.SECRET_TYPE.NTDS:
+                if secret_type == NTDSHashes.SECRET_TYPE.NTDS and not is_trust_key:
                     add_hash.kept_ntds.append(raw_secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
