@@ -26,8 +26,30 @@ class NXCModule:
         """No options available"""
 
     def on_login(self, context, connection):
-        if getattr(connection.args, "kerberos", False):
-            context.log.fail(f"{connection.host} - Kerberos auth in use, NTLM check not applicable")
+        args = connection.args
+        method = "NTLM"
+
+        if getattr(args, "kerberos", False) or getattr(args, "use_kcache", False):
+            method = "Kerberos"
+        elif any(getattr(args, a, None) for a in ("pfx_cert", "pfx_base64", "pem_cert", "pem_key")):
+            method = "Schannel/certificate"
+        elif getattr(args, "simple_bind", False):
+            method = "LDAP simple bind"
+
+        if method != "NTLM":
+            context.log.fail(f"Auth method {method} not valid. NTLM signing check not applicable.")
+            return
+
+        username = (connection.username or "").strip()
+        password = connection.password or ""
+        nthash = getattr(connection, "nthash", "") or ""
+        lmhash = getattr(connection, "lmhash", "") or ""
+
+        is_null_session = not username or (not password and not nthash and not lmhash)
+        is_guest = username.lower() == "guest"
+
+        if is_null_session or is_guest:
+            context.log.fail(f"{connection.host} - null/guest auth is exempt from ServerRequireNtlmSign (KB5135557). Re-run with a non-guest account")
             return
 
         if connection.args.protocol == "smb":
@@ -41,16 +63,6 @@ class NXCModule:
         else:
             context.log.fail(f"{connection.host} - unsupported protocol {connection.args.protocol!r}")
             return
-
-        host = connection.host
-
-        if signed_ok and not unsigned_ok:
-            context.log.success(f"{host} - NTLM signing ENFORCED (unsigned {label} rejected, signed accepted)")
-        elif signed_ok and unsigned_ok:
-            context.log.highlight(f"{host} - NTLM signing NOT enforced (signed and unsigned {label}s accepted)")
-        else:
-            state = "inconclusive" if not unsigned_ok else "UNEXPECTED (unsigned ok, signed failed)"
-            context.log.fail(f"{host} - {state}: signed={signed_msg!r} unsigned={unsigned_msg!r}")
 
     def _bind_smb(self, context, c, sign):
         """One full SMB NTLM login. Returns (success, diagnostic_message)."""
