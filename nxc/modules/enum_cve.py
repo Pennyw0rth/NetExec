@@ -31,6 +31,7 @@ class NXCModule:
         - CVE-2026-54121 (Certighost)
         - CVE-2026-27912 (ResetNightmare)
         - CVE-2026-102217 (PetitPotam WebDAV coercion)
+        - CVE-2026-118737 (Unsigned NTLM over HTTP)
         - KB5126646 (LDAP Signing Bypass, no CVE assigned)
 
         CVE             Filter for a specific CVE/KB identifier from the list above (default: All)
@@ -242,6 +243,25 @@ class NXCModule:
                 (10, 0, 28000): 3231,     # Windows 11 26H1
             },
             "message": "PetitPotam (EFSRPC) can coerce to a WebDAV listener, the HTTP authentication can be relayed to LDAP/LDAPS",
+            "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-118737
+        # https://support.microsoft.com/en-us/servicing/os/windows/docs/2026/11/kb5135557-ntlm-signing-security-improvements
+        "CVE-2026-118737": {
+            "alias": "Unsigned NTLM over HTTP",
+            "patches": {
+                (10, 0, 14393): 9688,     # Windows Server 2016 / Win10 1607
+                (10, 0, 17763): 9487,     # Windows Server 2019 / Win10 1809
+                (10, 0, 19044): 7846,     # Windows 10 21H2
+                (10, 0, 19045): 7846,     # Windows 10 22H2
+                (10, 0, 20348): 5870,     # Windows Server 2022
+                (10, 0, 22631): 7711,     # Windows 11 23H2
+                (10, 0, 26100): 33730,    # Windows Server 2025 (Win11 24H2 ships the same build patched at 9911)
+                (10, 0, 26200): 9911,     # Windows 11 25H2
+                (10, 0, 26300): 9911,     # Windows 11 26H2
+                (10, 0, 28000): 3501,     # Windows 11 26H1
+            },
+            "message": "HTTP authentication coerced from this host does not negotiate NTLM signing and can be relayed to LDAP",
             "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
         },
         # https://support.microsoft.com/en-us/servicing/os/azure-marketplace/windows-server/2026/windows-server-images-for-october-2026
