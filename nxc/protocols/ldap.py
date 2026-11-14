@@ -20,6 +20,7 @@ from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 from impacket.dcerpc.v5.samr import (
     UF_ACCOUNTDISABLE,
     UF_DONT_REQUIRE_PREAUTH,
+    UF_DONT_EXPIRE_PASSWD,
     UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
     UF_SERVER_TRUST_ACCOUNT,
@@ -1396,6 +1397,20 @@ class ldap(connection):
         if resp_parsed:
             for user in resp_parsed:
                 status = "disabled" if int(user["userAccountControl"]) & 2 else "enabled"
+                self.logger.highlight(f"User: {user['sAMAccountName']} Status: {status}")
+        else:
+            self.logger.fail("No entries found!")
+
+    def password_never_expires(self):
+        searchFilter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_DONT_EXPIRE_PASSWD})"
+        attributes = ["sAMAccountName", "userAccountControl"]
+        resp = self.search(searchFilter, attributes, baseDN=self.baseDN)
+        resp_parsed = parse_result_attributes(resp)
+        self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
+
+        if resp_parsed:
+            for user in resp_parsed:
+                status = "disabled" if int(user["userAccountControl"]) & UF_ACCOUNTDISABLE else "enabled"
                 self.logger.highlight(f"User: {user['sAMAccountName']} Status: {status}")
         else:
             self.logger.fail("No entries found!")
