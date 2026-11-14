@@ -18,10 +18,13 @@ from bloodhound.ad.authentication import ADAuthentication
 from bloodhound.ad.domain import AD
 from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 from impacket.dcerpc.v5.samr import (
-    UF_ACCOUNTDISABLE, UF_DONT_REQUIRE_PREAUTH,
-    UF_DONT_EXPIRE_PASSWD, UF_TRUSTED_FOR_DELEGATION,
+    UF_ACCOUNTDISABLE,
+    UF_DONT_REQUIRE_PREAUTH,
+    UF_DONT_EXPIRE_PASSWD,
+    UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
-    UF_SERVER_TRUST_ACCOUNT, SAM_MACHINE_ACCOUNT,
+    UF_SERVER_TRUST_ACCOUNT,
+    SAM_MACHINE_ACCOUNT,
 )
 from impacket.krb5 import constants
 from impacket.krb5.crypto import generate_kerberos_keys
