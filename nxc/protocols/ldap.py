@@ -1333,20 +1333,9 @@ class ldap(connection):
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
 
         if answers:
-            header = ["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"]
-            colLen = []
-
-            # Calculating maximum length before parsing CN.
-            for i, col in enumerate(header):
-                rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in answers) if i == 1 else max(len(str(row[i])) for row in answers)
-                colLen.append(max(rowMaxLen, len(col)))
-
-            # Create the format string for each row
-            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
-
             # Print header
-            self.logger.highlight(outputFormat.format(*header))
-            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+            self.logger.highlight(f"{'AccountName':<15} {'AccountType':<15} {'DelegationType':<35} {'DelegationRightsTo':<40}")
+            self.logger.highlight(f"{'-' * 15} {'-' * 15} {'-' * 35} {'-' * 40}")
 
             # Print rows
             for row in answers:
@@ -1357,7 +1346,7 @@ class ldap(connection):
                 # Added join for DelegationRightsTo
                 row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
 
-                self.logger.highlight(outputFormat.format(*row))
+                self.logger.highlight(f"{row[0]:<15} {row[1]:<15} {row[2]:<35} {row[3]:<40}")
         else:
             self.logger.fail("No entries found!")
 
