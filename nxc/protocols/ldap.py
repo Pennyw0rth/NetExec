@@ -1351,6 +1351,9 @@ class ldap(connection):
             self.logger.fail("No entries found!")
 
     def trusted_for_delegation(self):
+        self.logger.fail("[REMOVED] Use --find-delegation instead.")
+        return
+
         # Building the search filter
         searchFilter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
         resp = self.search(searchFilter, attributes=["sAMAccountName"], sizeLimit=0)

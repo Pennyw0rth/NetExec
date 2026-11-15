@@ -27,7 +27,7 @@ def proto_args(parser, parents):
     vgroup.add_argument("--base-dn", metavar="BASE_DN", dest="base_dn", type=str, default=None, help="base DN for search queries")
     vgroup.add_argument("--query", nargs=2, help="Query LDAP with a custom filter and attributes")
     vgroup.add_argument("--find-delegation", action="store_true", help="Finds delegation relationships within an Active Directory domain. (Enabled Accounts only)")
-    vgroup.add_argument("--trusted-for-delegation", action="store_true", help="Get the list of users and computers with flag TRUSTED_FOR_DELEGATION")
+    vgroup.add_argument("--trusted-for-delegation", action="store_true", help="[REMOVED] Use --find-delegation instead.")
     vgroup.add_argument("--password-not-required", action="store_true", help="Get the list of users with flag PASSWD_NOTREQD")
     vgroup.add_argument("--admin-count", action="store_true", help="Get user that had the value adminCount=1")
     vgroup.add_argument("--users", nargs="*", help="Enumerate domain users")
