@@ -1270,32 +1270,6 @@ class ldap(connection):
                     self.logger.highlight(f"{attribute:<20} {value}")
 
     def find_delegation(self):
-        def printTable(items, header):
-            colLen = []
-
-            # Calculating maximum length before parsing CN.
-            for i, col in enumerate(header):
-                rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
-                colLen.append(max(rowMaxLen, len(col)))
-
-            # Create the format string for each row
-            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
-
-            # Print header
-            self.logger.highlight(outputFormat.format(*header))
-            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
-
-            # Print rows
-            for row in items:
-                # Get first CN value.
-                if "CN=" in row[1]:
-                    row[1] = row[1].split(",")[0].split("CN=")[-1]
-
-                # Added join for DelegationRightsTo
-                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
-
-                self.logger.highlight(outputFormat.format(*row))
-
         # Building the search filter
         search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
                          f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
@@ -1366,7 +1340,31 @@ class ldap(connection):
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
 
         if answers:
-            printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
+            header = ["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"]
+            colLen = []
+
+            # Calculating maximum length before parsing CN.
+            for i, col in enumerate(header):
+                rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in answers) if i == 1 else max(len(str(row[i])) for row in answers)
+                colLen.append(max(rowMaxLen, len(col)))
+
+            # Create the format string for each row
+            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
+
+            # Print header
+            self.logger.highlight(outputFormat.format(*header))
+            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
+
+            # Print rows
+            for row in answers:
+                # Get first CN value.
+                if "CN=" in row[1]:
+                    row[1] = row[1].split(",")[0].split("CN=")[-1]
+
+                # Added join for DelegationRightsTo
+                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
+
+                self.logger.highlight(outputFormat.format(*row))
         else:
             self.logger.fail("No entries found!")
 
