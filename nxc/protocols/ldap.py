@@ -1285,32 +1285,25 @@ class ldap(connection):
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         for item in resp_parsed:
-            sAMAccountName = ""
-            userAccountControl = 0
-            delegation = ""
-            objectType = ""
-            rightsTo = []
-            protocolTransition = 0
-
             try:
                 sAMAccountName = item["sAMAccountName"]
-
                 userAccountControl = int(item["userAccountControl"])
-                objectType = item.get("objectCategory")
+                objectType = item["objectCategory"]
 
                 # Filter out DCs, unconstrained delegation to DCs is not a useful information
                 if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
                     # Append immediately: an account can also have constrained delegation configured
                     answers.append([sAMAccountName, objectType, "Unconstrained", "N/A"])
 
-                if userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
-                    delegation = "Constrained w/ Protocol Transition"
-                    protocolTransition = 1
-
+                # Constrained delegation
+                delegation = ""
+                rightsTo = []
                 if item.get("msDS-AllowedToDelegateTo") is not None:
-                    if protocolTransition == 0:
+                    if userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                        delegation = "Constrained w/ Protocol Transition"
+                    else:
                         delegation = "Constrained"
-                    rightsTo = item.get("msDS-AllowedToDelegateTo")
+                    rightsTo = item["msDS-AllowedToDelegateTo"]
 
                 # Add to answers if delegation was found
                 if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
