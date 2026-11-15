@@ -28,7 +28,11 @@ from impacket.examples.regsecrets import (
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.dcerpc.v5 import lsat, lsad, scmr, rrp, srvs, wkst
-from impacket.dcerpc.v5.srvs import STYPE_DISKTREE, STYPE_MASK
+from impacket.dcerpc.v5.srvs import (
+    STYPE_DISKTREE, STYPE_PRINTQ, STYPE_DEVICE, STYPE_IPC,
+    STYPE_CLUSTER_FS, STYPE_CLUSTER_SOFS, STYPE_CLUSTER_DFS,
+    STYPE_SPECIAL, STYPE_TEMPORARY, STYPE_MASK,
+)
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -1616,15 +1620,25 @@ class smb(connection):
                 self.logger.debug(f"Skipping excluded share: {share_name}")
                 continue
 
-            # Mask off STYPE_SPECIAL/STYPE_TEMPORARY flags; only the base type
-            # (DISKTREE/PRINTQ/DEVICE/IPC) determines whether write checks apply.
+            # Keep the base type for write checks and display cluster types and the temporary flag.
             share_remark = share["shi1_remark"].rstrip("\x00")
             share_info = {
                 "name": share_name,
                 "remark": share_remark,
                 "type": share["shi1_type"] & STYPE_MASK,
+                "type_name": {
+                    STYPE_DISKTREE: "DISKTREE",
+                    STYPE_PRINTQ: "PRINTQ",
+                    STYPE_DEVICE: "DEVICE",
+                    STYPE_IPC: "IPC",
+                    STYPE_CLUSTER_FS: "CLUSTER_FS",
+                    STYPE_CLUSTER_SOFS: "CLUSTER_SOFS",
+                    STYPE_CLUSTER_DFS: "CLUSTER_DFS",
+                }.get(share["shi1_type"] & ~(STYPE_SPECIAL | STYPE_TEMPORARY), "UNKNOWN"),
                 "access": [],
             }
+            if share["shi1_type"] & STYPE_TEMPORARY:
+                share_info["type_name"] += ",TEMPORARY"
             read = False
             write = False
             try:
@@ -1750,8 +1764,8 @@ class smb(connection):
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
         self.logger.display("Enumerated shares")
-        self.logger.highlight(f"{'Share':<15} {'Permissions':<22} {'Remark'}")
-        self.logger.highlight(f"{'-----':<15} {'-----------':<22} {'------'}")
+        self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Type':<10} {'Remark'}")
+        self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'----':<10} {'------'}")
 
         for share in permissions:
             name = share["name"]
@@ -1759,7 +1773,7 @@ class smb(connection):
             perms = ",".join(share["access"])
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {perms:<22} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<15} {share['type_name']:<10} {remark}")
         return permissions
 
     def dir(self):
