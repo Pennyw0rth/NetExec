@@ -1328,14 +1328,19 @@ class ldap(connection):
                 if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
                     # Append immediately: an account can also have constrained delegation configured
                     answers.append([sAMAccountName, objectType, "Unconstrained", "N/A"])
+
                 if userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
                     delegation = "Constrained w/ Protocol Transition"
                     protocolTransition = 1
-                
+
                 if item.get("msDS-AllowedToDelegateTo") is not None:
                     if protocolTransition == 0:
                         delegation = "Constrained"
                     rightsTo = item.get("msDS-AllowedToDelegateTo")
+
+                # Add to answers if delegation was found
+                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
+                    answers.append([sAMAccountName, objectType, delegation, rightsTo])
 
                 # Not an elif as an object could both have RBCD and another type of delegation
                 if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
@@ -1357,10 +1362,6 @@ class ldap(connection):
 
                         for rights, objType in zip(rbcdRights, rbcdObjType, strict=True):
                             answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
-
-                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
-                    answers.append([sAMAccountName, objectType, delegation, rightsTo])
-
             except Exception as e:
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
 
