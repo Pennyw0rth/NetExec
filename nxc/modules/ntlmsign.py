@@ -1,8 +1,9 @@
-
 from impacket.smbconnection import SMBConnection
 from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ntlm import getNTLMSSPType1, getNTLMSSPType3
+from impacket.spnego import SPNEGO_NegTokenInit, SPNEGO_NegTokenResp, TypesMech
+from impacket.smb3structs import SMB2SessionSetup, SMB2SessionSetup_Response, SMB2_SESSION_SETUP
 
 from nxc.helpers.misc import CATEGORY
 import contextlib
@@ -64,28 +65,91 @@ class NXCModule:
             context.log.fail(f"{connection.host} - unsupported protocol {connection.args.protocol!r}")
             return
 
+        host = connection.host
+
+        if signed_ok and not unsigned_ok:
+            context.log.success(f"{host} - NTLM signing ENFORCED (unsigned {label} rejected, signed accepted)")
+        elif signed_ok and unsigned_ok:
+            context.log.highlight(f"{host} - NTLM signing NOT enforced (signed and unsigned {label}s both accepted)")
+        else:
+            state = "inconclusive" if not unsigned_ok else "UNEXPECTED (unsigned ok, signed failed)"
+            context.log.fail(f"{host} - {state}: signed={signed_msg!r} unsigned={unsigned_msg!r}")
+
     def _bind_smb(self, context, c, sign):
-        """One full SMB NTLM login. Returns (success, diagnostic_message)."""
+        """One full NTLM authentication. Returns (success, status_string)."""
         label = "signed" if sign else "unsigned"
         conn = None
         try:
-            conn = SMBConnection(c.host, c.host, sess_port=getattr(c, "port", 445), timeout=10)
-            server = conn.getSMBServer()
-            if not hasattr(server, "_Connection"):
+            conn = SMBConnection(remoteName=c.host, remoteHost=c.host, sess_port=getattr(c, "port", 445), timeout=10)
+            smb = conn.getSMBServer()
+            if not hasattr(smb, "_Connection"):
                 return False, "SMB1 dialect negotiated, not supported"
+            
+            # Type 1
+            negotiate = getNTLMSSPType1(signingRequired=sign)
+            blob1 = SPNEGO_NegTokenInit()
+            blob1["MechTypes"] = [TypesMech["NTLMSSP - Microsoft NTLM Security Support Provider"]]
+            blob1["MechToken"] = negotiate.getData()
 
-            # Controls the NTLM Type1 signing flag (and client-side signing after login)
-            server._Connection["RequireSigning"] = sign
+            ss1 = SMB2SessionSetup()
+            ss1["Flags"] = 0
+            ss1["SecurityMode"] = smb._Connection["ClientSecurityMode"]
+            ss1["Capabilities"] = smb._Connection["Capabilities"]
+            ss1["Channel"] = 0
+            ss1["PreviousSessionId"] = 0
+            ss1["SecurityBufferOffset"] = 0x58
+            ss1["SecurityBufferLength"] = len(blob1)
+            ss1["Buffer"] = blob1.getData()
 
-            conn.login(
-                c.username,
+            pkt1 = smb.SMB_PACKET()
+            pkt1["Command"] = SMB2_SESSION_SETUP
+            pkt1["SessionID"] = 0
+            pkt1["Data"] = ss1
+            pkt1_id = smb.sendSMB(pkt1)
+            resp1 = smb.recvSMB(pkt1_id)
+
+            session_id = resp1["SessionID"]
+            resp1_data = SMB2SessionSetup_Response(resp1["Data"])
+
+            spnego_resp = SPNEGO_NegTokenResp(resp1_data["Buffer"])
+
+            # Type 2
+            challenge = bytes(spnego_resp["ResponseToken"])
+
+            smb._Session["SessionID"] = session_id
+
+            # Type 3
+            type3, _ = getNTLMSSPType3(
+                negotiate, challenge,
+                c.username or "",
                 c.password or "",
                 c.domain or "",
                 c.lmhash or "",
                 c.nthash or "",
             )
-            context.log.debug(f"[smb:{label}] login ok")
-            return True, "STATUS_SUCCESS"
+            auth_token = SPNEGO_NegTokenResp()
+            auth_token["ResponseToken"] = type3.getData()
+            blob2 = auth_token.getData()
+
+            ss2 = SMB2SessionSetup()
+            ss2["Flags"] = 0
+            ss2["SecurityMode"] = smb._Connection["ClientSecurityMode"]
+            ss2["Capabilities"] = smb._Connection["Capabilities"]
+            ss2["Channel"] = 0
+            ss2["PreviousSessionId"] = 0
+            ss2["SecurityBufferOffset"] = 0x58
+            ss2["SecurityBufferLength"] = len(blob2)
+            ss2["Buffer"] = blob2
+
+            pkt2 = smb.SMB_PACKET()
+            pkt2["Command"] = SMB2_SESSION_SETUP
+            pkt2["SessionID"] = session_id
+            pkt2["Data"] = ss2
+            pkt2_id = smb.sendSMB(pkt2)
+            resp2 = smb.recvSMB(pkt2_id)
+            status = resp2["Status"]
+            context.log.debug(f"[smb:{label}] status={status:#010x}")
+            return status == 0, f"STATUS={status:#010x}"
         except Exception as e:
             context.log.debug(f"[smb:{label}] login error: {e!r}")
             return False, str(e)
