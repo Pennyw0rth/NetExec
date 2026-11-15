@@ -142,6 +142,7 @@ class database(BaseDB):
         remark = Column(String)
         read = Column(Boolean)
         write = Column(Boolean)
+        type = Column(String)
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
@@ -655,19 +656,19 @@ class database(BaseDB):
         nxc_logger.debug(f"is_share_valid(shareID={share_id}) => {len(results) > 0}")
         return len(results) > 0
 
-    def add_share(self, host_id, user_id, name, remark, read, write):
-        share_data = {
-            "hostid": host_id,
-            "userid": user_id,
-            "name": name,
-            "remark": remark,
-            "read": read,
-            "write": write,
-        }
+    def add_share(self, host_id, user_id, name, remark, read, write, share_type):
         self.db_execute(
-            Insert(self.SharesTable).on_conflict_do_nothing(),  # .returning(self.SharesTable.c.id),
-            share_data,
-        )  # .scalar_one()
+            Insert(self.SharesTable).on_conflict_do_update(index_elements=["hostid", "userid", "name"], set_={"type": share_type}),
+            {
+                "hostid": host_id,
+                "userid": user_id,
+                "name": name,
+                "remark": remark,
+                "read": read,
+                "write": write,
+                "type": share_type,
+            },
+        )
 
     def get_shares(self, filter_term=None):
         if self.is_share_valid(filter_term):
