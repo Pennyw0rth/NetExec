@@ -1639,11 +1639,8 @@ class smb(connection):
             }
             if share["shi1_type"] & STYPE_TEMPORARY:
                 share_info["type_name"] += ",TEMPORARY"
-            read = False
-            write = False
             try:
                 self.conn.listPath(share_name, "*")
-                read = True
                 share_info["access"].append("READ")
             except SessionError as e:
                 error = get_error_string(e)
@@ -1703,7 +1700,6 @@ class smb(connection):
 
                 # If we either can create a file or a directory we add the write privs to the output. Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
                 if write_dir or write_file:
-                    write = True
                     share_info["access"].append("WRITE")
             else:
                 # ACL-based write check (default) — opens share root with FILE_OPEN +
@@ -1745,20 +1741,9 @@ class smb(connection):
                 if "WRITE" in write_labels:
                     write_labels = ["WRITE"]
 
-                for lbl in write_labels:
-                    share_info["access"].append(lbl)
-                    if not write:
-                        write = True
+                share_info["access"].extend(write_labels)
 
             permissions.append(share_info)
-
-            if share_name != "IPC$":
-                try:
-                    # TODO: check if this already exists in DB before adding
-                    self.db.add_share(self.hostname, user_id, share_name, share_remark, read, write)
-                except Exception as e:
-                    error = get_error_string(e)
-                    self.logger.debug(f"Error adding share: {error}")
 
         if self.args.filter_shares:
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
@@ -1768,6 +1753,11 @@ class smb(connection):
         self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'----':<10} {'------'}")
 
         for share in permissions:
+            if share["name"] != "IPC$":
+                try:
+                    self.db.add_share(self.hostname, user_id, share["name"], share["remark"], "READ" in share["access"], any(access.startswith("WRITE") for access in share["access"]), share["type_name"])
+                except Exception as e:
+                    self.logger.debug(f"Error adding share: {get_error_string(e)}")
             name = share["name"]
             remark = share["remark"]
             perms = ",".join(share["access"])
