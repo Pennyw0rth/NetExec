@@ -1402,16 +1402,19 @@ class ldap(connection):
             self.logger.fail("No entries found!")
 
     def password_never_expires(self):
-        searchFilter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_DONT_EXPIRE_PASSWD})"
-        attributes = ["sAMAccountName", "userAccountControl"]
-        resp = self.search(searchFilter, attributes, baseDN=self.baseDN)
+        search_filter = f"(&(userAccountControl:1.2.840.113556.1.4.803:={UF_DONT_EXPIRE_PASSWD})(!(userAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))"
+        attributes = ["sAMAccountName", "pwdLastSet"]
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
         resp_parsed = parse_result_attributes(resp)
         self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
 
         if resp_parsed:
+            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}")
             for user in resp_parsed:
-                status = "disabled" if int(user["userAccountControl"]) & UF_ACCOUNTDISABLE else "enabled"
-                self.logger.highlight(f"User: {user['sAMAccountName']} Status: {status}")
+                pwd_last_set = user.get("pwdLastSet", "")
+                if pwd_last_set:
+                    pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}")
         else:
             self.logger.fail("No entries found!")
 
