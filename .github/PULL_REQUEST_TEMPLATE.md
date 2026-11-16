@@ -2,10 +2,16 @@
 Please include a summary of the change and which issue is fixed, or what the enhancement does.
 List any dependencies that are required for this change.
 
-If you have used AI in any form, please state the tool you used (e.g. Claude Code, Cursor, Amp) along with the extent that the work was AI-assisted. See the project's AI policy for more details: https://github.com/Pennyw0rth/NetExec/blob/main/AI_POLICY.md
+### AI Assistance
+If you have used AI in any form, please state the tool you used (e.g. Claude Code, Cursor, Amp) along with the extent that the work was AI-assisted.
+
+Note that if you have used AI, you:
+- MUST test the changes against a live system
+- MUST include a screenshot of such a test (e.g.  with a before and after screenshot when submitting a bug fix)
+- MUST fill out this PR template by hand, see the project's AI policy: [AI_POLICY.md](https://github.com/Pennyw0rth/NetExec/blob/main/AI_POLICY.md)
 
 ## Type of change
-Insert an "x" inside the brackets for relevant items (do not delete options)
+Insert an "x" inside the brackets for relevant items
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
@@ -16,7 +22,8 @@ Insert an "x" inside the brackets for relevant items (do not delete options)
 - [ ] This PR was created with the assistance of AI (list what type of assistance, tool(s)/model(s) in the description)
 
 ## Setup guide for the review
-Please provide guidance on what setup is needed to test the introduced changes, such as your locally running machine Python version & OS, as well as the target(s) you tested against, including software versions.
+Please provide guidance on what setup is needed to test the introduced changes, such as the target(s) you tested against or software versions.
+
 In particular:
 - Bug Fix: Please provide a short description on how to trigger the bug, to make the bug reproducable for the reviewer.
 - Added Feature/Enhancement: Please specify what setup is needed in order to test the changes, such as:

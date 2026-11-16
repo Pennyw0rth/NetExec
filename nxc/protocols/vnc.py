@@ -7,6 +7,7 @@ import struct
 from nxc.config import host_info_colors
 from nxc.connection import connection
 from nxc.helpers.logger import highlight
+from nxc.helpers.path import sanitize_path_component
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 from aardwolf.commons.target import RDPTarget
@@ -100,7 +101,7 @@ class vnc(connection):
             credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.PASS)
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
             asyncio.run(self.connect_vnc(True))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # asyncio.TimeoutError is only an alias of the builtin from 3.11 on,
             # and the project supports 3.10, so catch it by its asyncio name.
             self.logger.debug(f"Timed out after {self.args.vnc_timeout}s connecting to {self.host}:{self.port}")
@@ -144,7 +145,7 @@ class vnc(connection):
             )
             return True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Reporting an unresponsive server as a rejected password would be wrong:
             # nothing was authenticated, so say what actually happened.
             self.logger.fail(f"{password} - Connection timed out after {self.args.vnc_timeout}s")
@@ -160,7 +161,7 @@ class vnc(connection):
         await asyncio.sleep(int(self.args.screentime))
         if self.conn is not None and self.conn.desktop_buffer_has_data is True:
             buffer = self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL)
-            filename = await Path(f"{NXC_PATH}/screenshots/{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png").expanduser()
+            filename = await (Path(NXC_PATH) / "screenshots" / sanitize_path_component(f"{self.hostname}_{self.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.png")).expanduser()
             buffer.save(filename, "png")
             self.logger.highlight(f"Screenshot saved {filename}")
 

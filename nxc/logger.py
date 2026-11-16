@@ -44,18 +44,7 @@ def create_temp_logger(caller_frame, formatted_text, args, kwargs):
     temp_logger = logging.getLogger("temp")
     formatter = logging.Formatter("%(message)s", datefmt="[%X]")
     handler = SmartDebugRichHandler(formatter=formatter)
-    handler.handle(
-        LogRecord(
-            temp_logger.name,
-            logging.INFO,
-            caller_frame.f_code.co_filename,
-            caller_frame.f_lineno,
-            formatted_text,
-            args,
-            None,
-            caller_frame=caller_frame,
-        )
-    )
+    handler.handle(LogRecord(temp_logger.name, logging.INFO, caller_frame.f_code.co_filename, caller_frame.f_lineno, formatted_text, args, None, caller_frame=caller_frame))
 
 
 class SmartDebugRichHandler(RichHandler):
@@ -80,7 +69,6 @@ def no_debug(func):
     It creates a temporary logger and logs the message to the console and file
     This is so we don't get both normal output AND debugging output, AND so we get the proper log calling file & line number
     """
-
     @functools.wraps(func)
     def wrapper(self, msg, *args, **kwargs):
         if self.json_output:
@@ -92,7 +80,6 @@ def no_debug(func):
             caller_frame = inspect.currentframe().f_back
             create_temp_logger(caller_frame, formatted_text, args, kwargs)
             self.log_console_to_file(formatted_text, *args, **kwargs)
-
     return wrapper
 
 
@@ -102,14 +89,12 @@ class NXCAdapter(logging.LoggerAdapter):
         logging.basicConfig(
             format="%(message)s",
             datefmt="[%X]",
-            handlers=[
-                RichHandler(
-                    console=nxc_console,
-                    rich_tracebacks=True,
-                    tracebacks_show_locals=False,
-                )
-            ],
-            encoding="utf-8",
+            handlers=[RichHandler(
+                console=nxc_console,
+                rich_tracebacks=True,
+                tracebacks_show_locals=False
+            )],
+            encoding="utf-8"
         )
         self.logger = logging.getLogger("nxc")
         self.extra = extra
@@ -141,43 +126,29 @@ class NXCAdapter(logging.LoggerAdapter):
 
         # If the logger is being called when hooking the 'options' module function
         if len(self.extra) == 1 and ("module_name" in self.extra):
-            return (
-                f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}",
-                kwargs,
-            )
+            return (f"{colored(self.extra['module_name'], 'cyan', attrs=['bold']):<64} {msg}", kwargs)
 
         # If the logger is being called from a protocol
-        module_name = (
-            colored(self.extra["module_name"], "cyan", attrs=["bold"])
-            if "module_name" in self.extra
-            else colored(self.extra["protocol"], "blue", attrs=["bold"])
-        )
+        module_name = colored(self.extra["module_name"], "cyan", attrs=["bold"]) if "module_name" in self.extra else colored(self.extra["protocol"], "blue", attrs=["bold"])
 
-        return (
-            f"{module_name:<24} {self.extra['host']:<15} {self.extra['port']:<6} {self.extra['hostname'] if self.extra['hostname'] else 'NONE':<16} {msg}",
-            kwargs,
-        )
+        return (f"{module_name:<24} {self.extra['host']:<15} {self.extra['port']:<6} {self.extra['hostname'] if self.extra['hostname'] else 'NONE':<16} {msg}", kwargs)
 
-    def _emit_json(self, event_type, message):
+    def emit_json(self, event_type, message):
         record = {
             "timestamp": datetime.now().isoformat(),
             "type": event_type,
             "message": str(message),
         }
         if self.extra:
-            record.update({
-                key: value for key, value in self.extra.items() if value is not None
-            })
+            record.update({key: value for key, value in self.extra.items() if value is not None})
         nxc_console.print(json.dumps(record, default=str))
 
     @no_debug
     def display(self, msg, *args, **kwargs):
         """Display text to console, formatted for nxc"""
         if self.json_output:
-            return self._emit_json("display", msg)
-        msg, kwargs = self.format(
-            f"{colored('[*]', 'blue', attrs=['bold'])} {msg}", kwargs
-        )
+            return self.emit_json("display", msg)
+        msg, kwargs = self.format(f"{colored('[*]', 'blue', attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
@@ -186,10 +157,8 @@ class NXCAdapter(logging.LoggerAdapter):
     def success(self, msg, color="green", *args, **kwargs):
         """Prints some sort of success to the user"""
         if self.json_output:
-            return self._emit_json("success", msg)
-        msg, kwargs = self.format(
-            f"{colored('[+]', color, attrs=['bold'])} {msg}", kwargs
-        )
+            return self.emit_json("success", msg)
+        msg, kwargs = self.format(f"{colored('[+]', color, attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
@@ -198,7 +167,7 @@ class NXCAdapter(logging.LoggerAdapter):
     def highlight(self, msg, *args, **kwargs):
         """Prints a completely yellow highlighted message to the user"""
         if self.json_output:
-            return self._emit_json("highlight", msg)
+            return self.emit_json("highlight", msg)
         msg, kwargs = self.format(f"{colored(msg, 'yellow', attrs=['bold'])}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
@@ -208,10 +177,8 @@ class NXCAdapter(logging.LoggerAdapter):
     def fail(self, msg, color="red", *args, **kwargs):
         """Prints a failure (may or may not be an error) - e.g. login creds didn't work"""
         if self.json_output:
-            return self._emit_json("fail", msg)
-        msg, kwargs = self.format(
-            f"{colored('[-]', color, attrs=['bold'])} {msg}", kwargs
-        )
+            return self.emit_json("fail", msg)
+        msg, kwargs = self.format(f"{colored('[-]', color, attrs=['bold'])} {msg}", kwargs)
         text = Text.from_ansi(msg)
         nxc_console.print(text, *args, **kwargs)
         self.log_console_to_file(text, *args, **kwargs)
@@ -223,30 +190,15 @@ class NXCAdapter(logging.LoggerAdapter):
         so we create a custom LogRecord and pass it to all the additional handlers (which will be all the file handlers)
         """
         caller_frame = inspect.currentframe().f_back.f_back.f_back
-        if len(
-            self.logger.handlers
-        ):  # will be 0 if it's just the console output, so only do this if we actually have file loggers
+        if len(self.logger.handlers):  # will be 0 if it's just the console output, so only do this if we actually have file loggers
             try:
                 for handler in self.logger.handlers:
-                    handler.handle(
-                        LogRecord(
-                            "nxc",
-                            20,
-                            pathname=caller_frame.f_code.co_filename,
-                            lineno=caller_frame.f_lineno,
-                            msg=text,
-                            args=args,
-                            exc_info=None,
-                        )
-                    )
+                    handler.handle(LogRecord("nxc", 20, pathname=caller_frame.f_code.co_filename, lineno=caller_frame.f_lineno, msg=text, args=args, exc_info=None))
             except Exception as e:
                 self.logger.fail(f"Issue while trying to custom print handler: {e}")
 
     def add_file_log(self, log_file=None):
-        file_formatter = logging.Formatter(
-            "%(asctime)s | %(filename)s:%(lineno)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
+        file_formatter = logging.Formatter("%(asctime)s | %(filename)s:%(lineno)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         output_file = self.init_log_file() if log_file is None else log_file
         file_creation = False
 
@@ -255,25 +207,17 @@ class NXCAdapter(logging.LoggerAdapter):
                 with open(output_file, "x"):
                     pass
             except FileNotFoundError:
-                print(
-                    f"{colored('[-]', 'red', attrs=['bold'])} Log file path does not exist: {os.path.dirname(output_file)}"
-                )
+                print(f"{colored('[-]', 'red', attrs=['bold'])} Log file path does not exist: {os.path.dirname(output_file)}")
                 exit(1)
             file_creation = True
 
-        file_handler = RotatingFileHandler(
-            output_file, maxBytes=100000, encoding="utf-8"
-        )
+        file_handler = RotatingFileHandler(output_file, maxBytes=100000, encoding="utf-8")
 
         with file_handler._open() as f:
             if file_creation:
-                f.write(
-                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n"
-                )
+                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
             else:
-                f.write(
-                    f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n"
-                )
+                f.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]> {' '.join(sys.argv)}\n\n")
 
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)

