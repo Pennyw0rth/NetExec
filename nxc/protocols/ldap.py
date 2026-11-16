@@ -1275,7 +1275,6 @@ class ldap(connection):
                          f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
                          "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
                          f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
-        # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
 
         attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
 
@@ -1290,26 +1289,21 @@ class ldap(connection):
                 userAccountControl = int(item["userAccountControl"])
                 objectType = item["objectCategory"]
 
+                # Unconstrained delegation
                 # Filter out DCs, unconstrained delegation to DCs is not a useful information
                 if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
                     # Append immediately: an account can also have constrained delegation configured
                     answers.append([sAMAccountName, objectType, "Unconstrained", "N/A"])
 
                 # Constrained delegation
-                delegation = ""
-                rightsTo = []
                 if item.get("msDS-AllowedToDelegateTo") is not None:
                     if userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
                         delegation = "Constrained w/ Protocol Transition"
                     else:
                         delegation = "Constrained"
-                    rightsTo = item["msDS-AllowedToDelegateTo"]
+                    answers.append([sAMAccountName, objectType, delegation, item["msDS-AllowedToDelegateTo"]])
 
-                # Add to answers if delegation was found
-                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
-                    answers.append([sAMAccountName, objectType, delegation, rightsTo])
-
-                # Not an elif as an object could both have RBCD and another type of delegation
+                # Resource-Based Constrained Delegation
                 if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
                     databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
                     rbcdRights = []
