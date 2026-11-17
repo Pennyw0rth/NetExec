@@ -50,7 +50,7 @@ class NXCModule:
             label = "bind"
 
         if signed_ok and not unsigned_ok:
-            self.context.log.success(f"{connection.host} - NTLM signing ENFORCED (unsigned {label} rejected, signed accepted)")
+            self.context.log.display(f"{connection.host} - NTLM signing ENFORCED (unsigned {label} rejected, signed accepted)")
         elif signed_ok and unsigned_ok:
             self.context.log.highlight(f"{connection.host} - NTLM signing NOT enforced (signed and unsigned {label}s both accepted)")
         else:
