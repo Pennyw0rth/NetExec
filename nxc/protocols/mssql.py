@@ -492,7 +492,7 @@ class mssql(connection):
                     {
                         "rid": rid,
                         "domain": domain,
-                        "username": username.split("\\")[1],
+                        "username": username.split("\\")[1] if username and "\\" in username else username,
                     }
                 )
 
