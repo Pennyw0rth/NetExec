@@ -29,8 +29,7 @@ class NXCModule:
         self.context = context
         self.connection = connection
 
-        if (connection.kerberos or connection.args.use_kcache
-                or connection.args.pfx_cert or connection.args.pfx_base64
+        if (connection.kerberos or connection.args.pfx_cert or connection.args.pfx_base64
                 or connection.args.pem_cert or connection.args.pem_key
                 or (connection.args.protocol == "ldap" and connection.args.simple_bind)):
             context.log.fail("Non-NTLM auth detected. NTLM signing check not applicable.")
@@ -49,9 +48,6 @@ class NXCModule:
             signed_ok, signed_msg = self._bind_ldap(True)
             unsigned_ok, unsigned_msg = self._bind_ldap(False)
             label = "bind"
-        else:
-            self.context.log.fail(f"{connection.host} - unsupported protocol {connection.args.protocol!r}")
-            return
 
         if signed_ok and not unsigned_ok:
             self.context.log.success(f"{connection.host} - NTLM signing ENFORCED (unsigned {label} rejected, signed accepted)")
