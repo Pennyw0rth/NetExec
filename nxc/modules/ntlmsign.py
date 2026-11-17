@@ -3,8 +3,7 @@ from impacket.ldap import ldap as ldap_impacket
 from impacket.ldap import ldapasn1 as ldapasn1_impacket
 from impacket.ntlm import getNTLMSSPType1, getNTLMSSPType3
 from impacket.spnego import SPNEGO_NegTokenInit, SPNEGO_NegTokenResp, TypesMech
-from impacket.smb3structs import SMB2SessionSetup, SMB2SessionSetup_Response, SMB2_SESSION_SETUP
-
+from impacket.smb3structs import SMB2SessionSetup, SMB2SessionSetup_Response, SMB2_SESSION_SETUP, SMB2_DIALECT_30
 from nxc.helpers.misc import CATEGORY
 import contextlib
 
@@ -14,77 +13,69 @@ class NXCModule:
     Checks whether a target enforces NTLM signing (KB5135557 / ServerRequireNtlmSign)
     by doing two NTLM authentications with the same creds, one negotiating signing
     and one not. Unsigned rejected + signed accepted = enforced.
+
+    Module by @SoftAndoWetto
     """
 
     name = "ntlmsign"
     description = "Checks NTLM signing enforcement (KB5135557 / ServerRequireNtlmSign)"
     supported_protocols = ["smb", "ldap"]
-    opsec_safe = True
-    multiple_hosts = True
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
         """No options available"""
 
     def on_login(self, context, connection):
-        args = connection.args
+        self.context = context
+        self.connection = connection
         method = "NTLM"
 
-        if getattr(args, "kerberos", False) or getattr(args, "use_kcache", False):
-            method = "Kerberos"
-        elif any(getattr(args, a, None) for a in ("pfx_cert", "pfx_base64", "pem_cert", "pem_key")):
-            method = "Schannel/certificate"
-        elif getattr(args, "simple_bind", False):
-            method = "LDAP simple bind"
-
-        if method != "NTLM":
-            context.log.fail(f"Auth method {method} not valid. NTLM signing check not applicable.")
+        if connection.kerberos or connection.args.use_kcache or connection.args.simple_bind \
+                or connection.args.pfx_cert or connection.args.pfx_base64 \
+                or connection.args.pem_cert or connection.args.pem_key:
+            context.log.fail("Non-NTLM auth detected. NTLM signing check not applicable.")
             return
 
-        username = (connection.username or "").strip()
-        password = connection.password or ""
-        nthash = getattr(connection, "nthash", "") or ""
-        lmhash = getattr(connection, "lmhash", "") or ""
-
-        is_null_session = not username or (not password and not nthash and not lmhash)
-        is_guest = username.lower() == "guest"
-
-        if is_null_session or is_guest:
-            context.log.fail(f"{connection.host} - null/guest auth is exempt from ServerRequireNtlmSign (KB5135557). Re-run with a non-guest account")
+        if not connection.username or not (connection.password or connection.nthash or connection.lmhash):
+            self.context.log.fail(f"{connection.host} - requires a username and credential. Re-run with a non-guest account.")
             return
 
         if connection.args.protocol == "smb":
-            signed_ok, signed_msg = self._bind_smb(context, connection, True)
-            unsigned_ok, unsigned_msg = self._bind_smb(context, connection, False)
+            signed_ok, signed_msg = self._bind_smb(True)
+            unsigned_ok, unsigned_msg = self._bind_smb(False)
             label = "login"
+
         elif connection.args.protocol == "ldap":
-            signed_ok, signed_msg = self._bind_ldap(context, connection, True)
-            unsigned_ok, unsigned_msg = self._bind_ldap(context, connection, False)
+            signed_ok, signed_msg = self._bind_ldap(True)
+            unsigned_ok, unsigned_msg = self._bind_ldap(False)
             label = "bind"
         else:
-            context.log.fail(f"{connection.host} - unsupported protocol {connection.args.protocol!r}")
+            self.context.log.fail(f"{connection.host} - unsupported protocol {connection.args.protocol!r}")
             return
 
-        host = connection.host
-
         if signed_ok and not unsigned_ok:
-            context.log.success(f"{host} - NTLM signing ENFORCED (unsigned {label} rejected, signed accepted)")
+            self.context.log.success(f"{connection.host} - NTLM signing ENFORCED (unsigned {label} rejected, signed accepted)")
         elif signed_ok and unsigned_ok:
-            context.log.highlight(f"{host} - NTLM signing NOT enforced (signed and unsigned {label}s both accepted)")
+            self.context.log.highlight(f"{connection.host} - NTLM signing NOT enforced (signed and unsigned {label}s both accepted)")
         else:
             state = "inconclusive" if not unsigned_ok else "UNEXPECTED (unsigned ok, signed failed)"
-            context.log.fail(f"{host} - {state}: signed={signed_msg!r} unsigned={unsigned_msg!r}")
+            self.context.log.fail(f"{connection.host} - {state}: signed={signed_msg!r} unsigned={unsigned_msg!r}")
 
-    def _bind_smb(self, context, c, sign):
+    def _bind_smb(self, sign):
         """One full NTLM authentication. Returns (success, status_string)."""
         label = "signed" if sign else "unsigned"
         conn = None
         try:
-            conn = SMBConnection(remoteName=c.host, remoteHost=c.host, sess_port=getattr(c, "port", 445), timeout=10)
+            conn = SMBConnection(
+                remoteName=self.connection.host,
+                remoteHost=self.connection.host,
+                sess_port=445,
+                preferredDialect=SMB2_DIALECT_30,
+                timeout=10
+            )
+
             smb = conn.getSMBServer()
-            if not hasattr(smb, "_Connection"):
-                return False, "SMB1 dialect negotiated, not supported"
-            
+
             # Type 1
             negotiate = getNTLMSSPType1(signingRequired=sign)
             blob1 = SPNEGO_NegTokenInit()
@@ -121,11 +112,11 @@ class NXCModule:
             # Type 3
             type3, _ = getNTLMSSPType3(
                 negotiate, challenge,
-                c.username or "",
-                c.password or "",
-                c.domain or "",
-                c.lmhash or "",
-                c.nthash or "",
+                self.connection.username,
+                self.connection.password,
+                self.connection.domain,
+                self.connection.lmhash,
+                self.connection.nthash,
             )
             auth_token = SPNEGO_NegTokenResp()
             auth_token["ResponseToken"] = type3.getData()
@@ -148,21 +139,21 @@ class NXCModule:
             pkt2_id = smb.sendSMB(pkt2)
             resp2 = smb.recvSMB(pkt2_id)
             status = resp2["Status"]
-            context.log.debug(f"[smb:{label}] status={status:#010x}")
+            self.context.log.debug(f"[smb:{label}] status={status:#010x}")
             return status == 0, f"STATUS={status:#010x}"
         except Exception as e:
-            context.log.debug(f"[smb:{label}] login error: {e!r}")
+            self.context.log.debug(f"[smb:{label}] login error: {e!r}")
             return False, str(e)
         finally:
             if conn is not None:
                 with contextlib.suppress(Exception):
                     conn.close()
 
-    def _bind_ldap(self, context, c, sign):
+    def _bind_ldap(self, sign):
         """One full sicily bind. Returns (success, diagnostic_message)."""
         label = "signed" if sign else "unsigned"
         try:
-            conn = ldap_impacket.LDAPConnection(f"ldap://{c.host}", dstIp=c.host)
+            conn = ldap_impacket.LDAPConnection(f"ldap://{self.connection.host}", dstIp=self.connection.host)
 
             negotiate = getNTLMSSPType1(signingRequired=sign)
             req = ldapasn1_impacket.BindRequest()
@@ -173,18 +164,23 @@ class NXCModule:
             challenge = bytes(resp["bindResponse"]["matchedDN"])
 
             type3, _ = getNTLMSSPType3(
-                negotiate, challenge, c.username, c.password or "", c.domain or "",
-                c.lmhash or "", c.nthash or "",
+                negotiate,
+                challenge,
+                self.connection.username,
+                self.connection.password,
+                self.connection.domain,
+                self.connection.lmhash,
+                self.connection.nthash,
             )
             req = ldapasn1_impacket.BindRequest()
             req["version"] = 3
-            req["name"] = c.username
+            req["name"] = self.connection.username
             req["authentication"]["sicilyResponse"] = type3.getData()
             resp = conn.sendReceive(req)[0]["protocolOp"]["bindResponse"]
 
             code, msg = int(resp["resultCode"]), str(resp["diagnosticMessage"])
-            context.log.debug(f"[ldap:{label}] resultCode={code} msg={msg!r}")
+            self.context.log.debug(f"[ldap:{label}] resultCode={code} msg={msg!r}")
             return code == 0, msg
         except Exception as e:
-            context.log.debug(f"[ldap:{label}] bind error: {e!r}")
+            self.context.log.debug(f"[ldap:{label}] bind error: {e!r}")
             return False, str(e)
