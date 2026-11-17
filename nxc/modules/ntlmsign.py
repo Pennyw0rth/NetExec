@@ -28,11 +28,11 @@ class NXCModule:
     def on_login(self, context, connection):
         self.context = context
         self.connection = connection
-        method = "NTLM"
 
-        if connection.kerberos or connection.args.use_kcache or connection.args.simple_bind \
-                or connection.args.pfx_cert or connection.args.pfx_base64 \
-                or connection.args.pem_cert or connection.args.pem_key:
+        if (connection.kerberos or connection.args.use_kcache
+                or connection.args.pfx_cert or connection.args.pfx_base64
+                or connection.args.pem_cert or connection.args.pem_key
+                or (connection.args.protocol == "ldap" and connection.args.simple_bind)):
             context.log.fail("Non-NTLM auth detected. NTLM signing check not applicable.")
             return
 
