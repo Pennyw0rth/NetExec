@@ -18,7 +18,7 @@ class NXCModule:
     """
 
     name = "ntlmsign"
-    description = "Checks NTLM signing enforcement (KB5135557 / ServerRequireNtlmSign)"
+    description = "Actively probes NTLM signing enforcement (KB5135557 / ServerRequireNtlmSign)"
     supported_protocols = ["smb", "ldap"]
     category = CATEGORY.ENUMERATION
 
