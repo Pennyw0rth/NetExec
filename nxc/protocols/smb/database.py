@@ -658,7 +658,7 @@ class database(BaseDB):
 
     def add_share(self, host_id, user_id, name, remark, read, write, share_type):
         self.db_execute(
-            Insert(self.SharesTable).on_conflict_do_update(index_elements=["hostid", "userid", "name"], set_={"type": share_type}),
+            Insert(self.SharesTable).on_conflict_do_update(index_elements=["hostid", "userid", "name"], set_={"remark": remark, "read": read, "write": write, "type": share_type}),
             {
                 "hostid": host_id,
                 "userid": user_id,
