@@ -1,4 +1,4 @@
-# Author: xiaolichan # noqa: ERA001
+# Author: xiaolichan  # ruff: ignore[commented-out-code]
 # Link: https://github.com/XiaoliChan/wmiexec-Pro
 # Note: windows version under NT6 not working with this command execution way, it need Win32_ScheduledJob.
 #       https://github.com/XiaoliChan/wmiexec-Pro/blob/main/lib/modules/exec_command.py
@@ -30,7 +30,7 @@ from impacket.dcerpc.v5.dcom.wmi import WBEMSTATUS
 
 
 class WMIEXEC_EVENT:
-    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec):
+    def __init__(self, target, iWbemLevel1Login, logger, exec_timeout, codec, subscription_namespace=None):
         self.__target = target
         self.__iWbemLevel1Login = iWbemLevel1Login
         self.__outputBuffer = ""
@@ -41,8 +41,10 @@ class WMIEXEC_EVENT:
         self.__instanceID = f"windows-object-{uuid.uuid4()!s}"
         self.__instanceID_StoreResult = f"windows-object-{uuid.uuid4()!s}"
 
-        self.__iWbemServices = self.__iWbemLevel1Login.NTLMLogin("//./root/subscription", NULL, NULL)
-        self.__iWbemLevel1Login.RemRelease()
+        self.__iWbemServices = subscription_namespace
+        if self.__iWbemServices is None:
+            self.__iWbemServices = self.__iWbemLevel1Login.NTLMLogin("//./root/subscription", NULL, NULL)
+            self.__iWbemLevel1Login.RemRelease()
 
     def execute(self, command, output=False, use_powershell=False):
         if "'" in command:

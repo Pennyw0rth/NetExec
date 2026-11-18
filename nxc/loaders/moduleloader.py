@@ -1,16 +1,22 @@
+import ast
 import nxc
 import importlib
 import traceback
 import sys
 
 from os import listdir
-from os.path import dirname
+from os.path import basename, dirname
 from os.path import join as path_join
+from types import SimpleNamespace
 
 from nxc.context import Context
 from nxc.helpers.misc import CATEGORY
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
+
+
+class ModuleOptionsError(Exception):
+    """Raised when a module aborts the run from options() (returned False)."""
 
 
 class ModuleLoader:
@@ -40,27 +46,46 @@ class ModuleLoader:
         elif not hasattr(module, "options"):
             self.logger.fail(f"{module_path} missing the options function")
             module_error = True
-        elif not hasattr(module, "on_login") and not (module, "on_admin_login"):
+        elif not hasattr(module, "on_login") and not hasattr(module, "on_admin_login"):
             self.logger.fail(f"{module_path} missing the on_login/on_admin_login function(s)")
             module_error = True
 
         return not module_error
 
-    def load_module(self, module_path):
-        """Load a module, initializing it and checking that it has the proper attributes"""
-        try:
-            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
-            module = spec.loader.load_module().NXCModule()
+    module_cache = {}
 
-            if self.module_is_sane(module, module_path):
-                return module
+    @classmethod
+    def load_module_file(cls, module_path):
+        """Load a module file and return the raw module object with isolated namespace.
+
+        Each module gets a unique name to avoid sys.modules collisions that
+        caused NXCModule class references to be overwritten when loading
+        multiple modules. Results are cached so each file is only parsed
+        and executed once regardless of how many targets are scanned.
+        """
+        if module_path not in cls.module_cache:
+            module_name = f"nxc_module_{basename(module_path)[:-3]}"
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            module = importlib.util.module_from_spec(spec)
+            # Register before executing. Modules that define their own impacket
+            # NDRCALL requests rely on impacket resolving the matching Response
+            # class via sys.modules[request.__module__] (rpcrt.py), which the
+            # previous load_module() satisfied implicitly.
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+            cls.module_cache[module_path] = module
+        return cls.module_cache[module_path]
+
+    def load_module(self, module_path):
+        """Load and initialize a module, list_modules() already checked that it has the proper attributes"""
+        try:
+            return self.load_module_file(module_path).NXCModule()
         except Exception as e:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
 
     def init_module(self, module_path):
         """Initialize a module for execution"""
-        module = None
         module = self.load_module(module_path)
 
         if module:
@@ -78,7 +103,8 @@ class ModuleLoader:
                     key, value = option.split("=", 1)
                     module_options[str(key).upper()] = value
 
-                module.options(context, module_options)
+                if module.options(context, module_options) is False:
+                    raise ModuleOptionsError(f"Module {module.name} aborted the run from options()")
                 return module
             else:
                 self.logger.fail(f"Module {module.name.upper()} is not supported for protocol {self.args.protocol}")
@@ -87,8 +113,7 @@ class ModuleLoader:
     def get_module_info(self, module_path):
         """Get the path, description, and options from a module"""
         try:
-            spec = importlib.util.spec_from_file_location("NXCModule", module_path)
-            module_spec = spec.loader.load_module().NXCModule
+            module_spec = self.load_module_file(module_path).NXCModule
 
             module = {
                 f"{module_spec.name}": {
@@ -106,8 +131,28 @@ class ModuleLoader:
             self.logger.fail(f"Failed loading module at {module_path}: {e}")
             self.logger.debug(traceback.format_exc())
 
-    def list_modules(self):
-        """List modules without initializing them"""
+    def get_module_info_static(self, module_path):
+        """Read the listing info of a module from its source without running it, falling back to get_module_info() if it is not plain literals"""
+        try:
+            with open(module_path, "rb") as f:
+                module_class = [node for node in ast.parse(f.read()).body if isinstance(node, ast.ClassDef) and node.name == "NXCModule"][-1]
+
+            # ast can't see what a base class or a decorator adds, so these modules are imported
+            if not module_class.bases and not module_class.decorator_list:
+                values = {target.id: node.value for node in module_class.body if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name)}
+                module = SimpleNamespace(
+                    **{node.name: node for node in module_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)},
+                    **{key: ast.literal_eval(values[key]) for key in ("name", "description", "supported_protocols")},
+                    category=CATEGORY[values["category"].attr],
+                )
+                # No "options" key on purpose: only -M --options reads it, and -M goes through get_module_info()
+                return {module.name: {"path": module_path, "description": module.description, "supported_protocols": module.supported_protocols, "category": module.category, "requires_admin": hasattr(module, "on_admin_login")}} if self.module_is_sane(module, module_path) else {}
+        except Exception as e:
+            self.logger.debug(f"Could not read {module_path} statically: {e}")
+        return self.get_module_info(module_path)
+
+    def list_modules(self, names=None):
+        """List modules without initializing them, only the ones in names if given"""
         modules = {}
         modules_paths = [
             path_join(dirname(nxc.__file__), "modules"),
@@ -116,10 +161,11 @@ class ModuleLoader:
 
         for path in modules_paths:
             for module in listdir(path):
-                if module[-3:] == ".py" and module != "example_module.py":
+                if module[-3:] == ".py" and module != "example_module.py" and (names is None or module[:-3] in names):
                     try:
                         module_path = path_join(path, module)
-                        module_data = self.get_module_info(module_path)
+                        # -L reads the shipped modules statically, user modules are still imported so a broken one is reported
+                        module_data = self.get_module_info_static(module_path) if names is None and path == modules_paths[0] else self.get_module_info(module_path)
                         modules.update(module_data)
                     except Exception as e:
                         self.logger.debug(f"Error loading module {module}: {e}")

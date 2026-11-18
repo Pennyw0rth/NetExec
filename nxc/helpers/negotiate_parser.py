@@ -12,6 +12,7 @@ import contextlib
 def parse_challenge(challange):
     target_info = {
         "hostname": None,
+        "dns_hostname": None,
         "domain": None,
         "os_version": None
     }
@@ -20,6 +21,9 @@ def parse_challenge(challange):
     if av_pairs[ntlm.NTLMSSP_AV_HOSTNAME] is not None:
         with contextlib.suppress(Exception):
             target_info["hostname"] = av_pairs[ntlm.NTLMSSP_AV_HOSTNAME][1].decode("utf-16le")
+    if av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME] is not None:
+        with contextlib.suppress(Exception):
+            target_info["dns_hostname"] = av_pairs[ntlm.NTLMSSP_AV_DNS_HOSTNAME][1].decode("utf-16le")
     if av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME] is not None:
         with contextlib.suppress(Exception):
             target_info["domain"] = av_pairs[ntlm.NTLMSSP_AV_DNS_DOMAINNAME][1].decode("utf-16le")

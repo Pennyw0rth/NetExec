@@ -97,7 +97,7 @@ class NXCModule:
                 if ready:
                     reply = sock.recvfrom(120)[0]
 
-                    # Extract RID, hash and "salt" if succesful.
+                    # Extract RID, hash and "salt" if successful.
                     if len(reply) == 68:
                         salt = reply[:48]
                         answer_rid = unpack("<I", reply[-20:-16])[0] ^ keyflag

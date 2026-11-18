@@ -71,8 +71,10 @@ class NXCRPCConnection:
     def create_smb_transport(self, named_pipe, target_ip=None):
         conn = self.connection
 
-        if conn.conn is not None and conn.host == target_ip:
-            return transport.SMBTransport(conn.conn.getRemoteHost(), filename=named_pipe, smb_connection=conn.conn,)
+        # Create a new SMB conn if we don't have one already or
+        # if we are targetting a different IP (e.g. the DC instead of the original host) and therefore need to recreate the conn
+        if conn.conn is not None and (target_ip is None or conn.host == target_ip):
+            return transport.SMBTransport(conn.conn.getRemoteHost(), filename=named_pipe, smb_connection=conn.conn)
         rpc_transport = transport.SMBTransport(conn.remoteName, conn.port, named_pipe, conn.username, conn.password if conn.password else "", conn.domain, conn.lmhash, conn.nthash, conn.aesKey, doKerberos=conn.kerberos, kdcHost=conn.kdcHost)
         if target_ip or conn.host:
             rpc_transport.setRemoteHost(target_ip or conn.host)
@@ -97,3 +99,34 @@ class NXCRPCConnection:
 
         self.setup_credentials(rpc_transport, anonymous_rpc)
         return rpc_transport
+
+
+def dcom_FirewallChecker(iInterface, remoteHost, timeout, logger):
+    stringBindings = iInterface.get_cinstance().get_string_bindings()
+    for strBinding in stringBindings:
+        if strBinding["wTowerId"] == 7:
+            if strBinding["aNetworkAddr"].find("[") >= 0:
+                binding, _, bindingPort = strBinding["aNetworkAddr"].partition("[")
+                bindingPort = "[" + bindingPort
+            else:
+                binding = strBinding["aNetworkAddr"]
+                bindingPort = ""
+
+            if binding.upper().find(iInterface.get_target().upper()) >= 0:
+                stringBinding = "ncacn_ip_tcp:" + strBinding["aNetworkAddr"][:-1]
+                break
+            elif iInterface.is_fqdn() and binding.upper().find(iInterface.get_target().upper().partition(".")[0]) >= 0:
+                stringBinding = f"ncacn_ip_tcp:{iInterface.get_target()}{bindingPort}"
+    if "stringBinding" not in locals():
+        return True, None
+    try:
+        rpctransport = transport.DCERPCTransportFactory(stringBinding)
+        rpctransport.setRemoteHost(remoteHost)
+        rpctransport.set_connect_timeout(timeout)
+        rpctransport.connect()
+        rpctransport.disconnect()
+    except Exception as e:
+        logger.debug(f"Exception while connecting to {stringBinding}: {e}")
+        return False, stringBinding
+    else:
+        return True, stringBinding
