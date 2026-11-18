@@ -158,6 +158,7 @@ class rdp(connection):
         # the fingerprint, the NLA probe and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type, unless the server has no CredSSP and only takes the protocol the fingerprint found
         iosettings.supported_protocols = self.login_proto if supported_protocols is None else supported_protocols
         self.conn = RDPConnection(iosettings=iosettings, target=self.target, credentials=credentials)
+        self.conn.autologon_timeout = self.args.rdp_logon_timeout
         # Without CredSSP, connect() also waits up to autologon_timeout for the server to confirm the logon
         _, err = self.runner.run(asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout + (self.conn.autologon_timeout if self.login_proto is not None else 0)))
         if err is not None:
