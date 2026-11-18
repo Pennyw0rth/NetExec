@@ -133,11 +133,13 @@ class rdp(connection):
         # X224 flags appropriate for the credential type, unless the server
         # has no CredSSP and only takes the protocol create_conn_obj() found.
         iosettings.supported_protocols = self.login_proto if supported_protocols is None else supported_protocols
-        return RDPConnection(
+        conn = RDPConnection(
             iosettings=iosettings,
             target=copy.deepcopy(self.target),
             credentials=copy.deepcopy(credentials),
         )
+        conn.autologon_timeout = self.args.rdp_logon_timeout
+        return conn
 
     def create_conn_obj(self):
         self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True, autologon=False)  # old servers only offer ciphers OpenSSL rejects at its default security level; no autologon with the dummy credentials
