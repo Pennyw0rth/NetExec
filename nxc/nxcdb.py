@@ -222,7 +222,7 @@ class DatabaseNavigator(cmd.Cmd):
                         share[3],  # name
                         bool(share[5]),  # read
                         bool(share[6]),  # write
-                        share.type,
+                        share[7],  # type
                         share[4],  # remark
                     )
                     formatted_shares.append(entry)
