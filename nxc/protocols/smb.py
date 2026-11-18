@@ -1580,6 +1580,15 @@ class smb(connection):
             (WRITE_DAC, "WRITE (ACL)"),
             (WRITE_OWNER, "WRITE (ACL)"),
         ]
+        SMB_SHARE_TYPES = {
+            STYPE_DISKTREE: "DISKTREE",
+            STYPE_PRINTQ: "PRINTQ",
+            STYPE_DEVICE: "DEVICE",
+            STYPE_IPC: "IPC",
+            STYPE_CLUSTER_FS: "CLUSTER_FS",
+            STYPE_CLUSTER_SOFS: "CLUSTER_SOFS",
+            STYPE_CLUSTER_DFS: "CLUSTER_DFS",
+        }
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -1626,15 +1635,7 @@ class smb(connection):
                 "name": share_name,
                 "remark": share_remark,
                 "type": share["shi1_type"] & STYPE_MASK,
-                "type_name": {
-                    STYPE_DISKTREE: "DISKTREE",
-                    STYPE_PRINTQ: "PRINTQ",
-                    STYPE_DEVICE: "DEVICE",
-                    STYPE_IPC: "IPC",
-                    STYPE_CLUSTER_FS: "CLUSTER_FS",
-                    STYPE_CLUSTER_SOFS: "CLUSTER_SOFS",
-                    STYPE_CLUSTER_DFS: "CLUSTER_DFS",
-                }.get(share["shi1_type"] & ~(STYPE_SPECIAL | STYPE_TEMPORARY), "UNKNOWN"),
+                "type_name": SMB_SHARE_TYPES.get(share["shi1_type"] & ~(STYPE_SPECIAL | STYPE_TEMPORARY), "UNKNOWN"),
                 "access": [],
             }
             if share["shi1_type"] & STYPE_TEMPORARY:
