@@ -24,7 +24,7 @@ def proto_args(parser, parents):
     cgroup.add_argument("--db-hash", action="store_true", help="dump local database hashes")
 
     cgroup = mssql_parser.add_argument_group("Command Execution")
-    cgroup.add_argument("--exec-method", choices={"mssqlexec", "oleexec", "clrexec", "jobexec"}, default="mssqlexec", help="method to execute the command. Ignored if in MSSQL mode", action=DefaultTrackingAction)
+    cgroup.add_argument("--exec-method", choices={"mssqlexec", "oleexec", "clrexec", "jobexec"}, default="mssqlexec", help="%ethod to execute the command", action=DefaultTrackingAction)
     cgroup.add_argument("--clr-assembly", default=f"{path.join(DATA_PATH, 'mssql_clr/default_cmd_assembly.dll')}", help="Path to the .NET assembly to execute via clrexec. If not provided, uses the built-in assembly.", action=DefaultTrackingAction)
     cgroup.add_argument("--clr-classname", default="StoredProcedures", help="CLR class name in the assembly (default: StoredProcedures)")
     cgroup.add_argument("--clr-method", default="ExecuteCommand", help="CLR method name in the assembly (default: ExecuteCommand)")
