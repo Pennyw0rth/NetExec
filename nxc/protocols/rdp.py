@@ -33,10 +33,6 @@ from asysocks.unicomm.common.target import UniTarget, UniProto
 
 class rdp(connection):
     def __init__(self, args, db, host):
-        self.domain = None
-        self.server_os = None
-        self.iosettings = RDPIOSettings()
-        self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
             SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
@@ -47,6 +43,8 @@ class rdp(connection):
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
+        self.iosettings = RDPIOSettings()
+        self.iosettings.clipboard_use_pyperclip = False
         width, height = args.res.upper().split("X")
         height = int(height)
         width = int(width)
@@ -57,6 +55,7 @@ class rdp(connection):
         self.iosettings.video_bpp_max = 32
         # screenshots read the desktop buffer, so don't PNG-encode every update put on ext_out_queue
         self.iosettings.video_out_format = VIDEO_FORMAT.PIL
+
         self.domain = None
         self.server_os = None
         self.url = None
