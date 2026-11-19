@@ -2,6 +2,7 @@ from impacket.ldap import ldap, ldaptypes
 from impacket.ldap.ldap import LDAPSearchError
 from impacket.ldap.ldapasn1 import SDFlagsControl
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.sccm import SCCMClient
 from nxc.parsers.ldap_results import parse_result_attributes
 
 SAM_USER_OBJECT = 0x30000000
@@ -21,7 +22,7 @@ class NXCModule:
     """
 
     name = "sccm"
-    description = "Find a SCCM infrastructure in the Active Directory"
+    description = "Find SCCM infrastructure and optionally retrieve HTTP NAA policies"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
@@ -34,16 +35,49 @@ class NXCModule:
         self.user_objects = []
         self.computer_objects = []
         self.group_objects = {}
+        self.computer_name = None
+        self.computer_pass = ""
+        self.computer_hash = ""
+        self.management_point = None
+        self.sleep = 5
 
     def options(self, context, module_options):
         """
         BASE_DN            The base domain name for the LDAP query
         REC_RESOLVE        Resolve members of groups recursively. Default: False
+        COMPUTER_NAME (CN) Existing machine account. Enables HTTP NAA policy collection
+        COMPUTER_PASS (CP) Machine account password (mutually exclusive with COMPUTER_HASH)
+        COMPUTER_HASH (CH) Machine account NT hash or LM:NT hashes
+        MP                 Optional management point hostname or HTTP(S) URL. Default: LDAP discovery
+        SLEEP              Seconds to wait after client registration. Default: 5
         """
         if module_options and "BASE_DN" in module_options:
             self.base_dn = module_options["BASE_DN"]
         if module_options and "REC_RESOLVE" in module_options:
             self.recursive_resolve = bool(module_options["REC_RESOLVE"])
+
+        self.computer_name = module_options.get("COMPUTER_NAME") or module_options.get("CN")
+        self.computer_pass = module_options.get("COMPUTER_PASS") or module_options.get("CP") or ""
+        self.computer_hash = module_options.get("COMPUTER_HASH") or module_options.get("CH") or ""
+        self.management_point = module_options.get("MP")
+        has_pass = "COMPUTER_PASS" in module_options or "CP" in module_options
+        has_hash = "COMPUTER_HASH" in module_options or "CH" in module_options
+        if has_pass and has_hash:
+            context.log.fail("COMPUTER_PASS/CP and COMPUTER_HASH/CH are mutually exclusive")
+            return False
+        if self.computer_name and not (has_pass or has_hash):
+            context.log.fail("COMPUTER_NAME/CN requires COMPUTER_PASS/CP or COMPUTER_HASH/CH")
+            return False
+        if not self.computer_name and (has_pass or has_hash or "MP" in module_options or "SLEEP" in module_options):
+            context.log.fail("HTTP policy collection requires COMPUTER_NAME/CN")
+            return False
+        try:
+            self.sleep = int(module_options.get("SLEEP", 5))
+            if self.sleep < 0:
+                raise ValueError("negative delay")
+        except ValueError as e:
+            context.log.fail(f"SLEEP must be a non-negative integer: {e}")
+            return False
 
     def on_login(self, context, connection):
         """On a successful LDAP login we perform a search for all PKI Enrollment Server or Certificate Templates Names."""
@@ -121,6 +155,23 @@ class NXCModule:
                         context.log.highlight(f"  {child['sAMAccountName']} -> Computer")
                     elif int(child["sAMAccountType"]) == SAM_GROUP_OBJECT:
                         context.log.highlight(f"  {child['sAMAccountName']} -> Group")
+
+        if self.computer_name:
+            self.get_naa_policies(context, connection)
+
+    def get_naa_policies(self, context, connection):
+        management_points = {mp["dNSHostName"] for site in self.sccm_sites.values() for mp in site["ManagementPoints"]}
+        if self.management_point:
+            management_points = {self.management_point}
+        if not management_points:
+            context.log.fail("No management point found. Specify MP to request NAA policies")
+            return
+        for management_point in sorted(management_points):
+            try:
+                SCCMClient(context.log, management_point, connection.domain, self.computer_name, self.computer_pass, self.computer_hash, self.sleep).run()
+            except Exception as e:
+                context.log.fail(f"HTTP policy collection failed on {management_point}: {e}")
+                context.log.debug("SCCM HTTP error", exc_info=True)
 
     def get_sccm_named_objects(self, context, connection):
         """Enumerate users/groups/computers with "SCCM" in their name"""
