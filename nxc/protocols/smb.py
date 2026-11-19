@@ -64,6 +64,7 @@ from nxc.config import process_secret, host_info_colors, check_guest_account, di
 from nxc.connection import connection, sem, requires_admin
 from nxc.helpers.rpc import dcom_FirewallChecker
 from nxc.helpers.misc import gen_random_string, validate_ntlm
+from nxc.helpers.klist import Klist
 from nxc.logger import NXCAdapter
 from nxc.paths import NXC_PATH
 from nxc.protocols.smb.kerberos import kerberos_login_with_S4U, kerberos_altservice, get_realm_from_ticket
@@ -218,7 +219,7 @@ class smb(connection):
         self.remoteName = self.host
         if not self.no_ntlm:
             # Try to get hostname with getServerDNSHostName as getServerName is truncated to 15 chars
-            dns_hostname = sanitize_dns(self.conn.getServerDNSHostName() or self.conn.getServerName(), self.logger)
+            dns_hostname = sanitize_dns(self.conn.getServerDNSHostName() or self.conn.getServerName(), self.logger).upper()
             if dns_hostname and "." in dns_hostname:
                 self.hostname = dns_hostname.split(".", 1)[0]
             else:
@@ -1370,6 +1371,14 @@ class smb(connection):
                 self.logger.highlight(row)
 
     @requires_admin
+    def klist(self):
+        Klist(self).display()
+
+    @requires_admin
+    def klist_dump(self):
+        Klist(self).dump(self.args.klist_dump)
+
+    @requires_admin
     def tasklist(self):
         # Formats a row to be printed on screen
         def format_row(procInfo, pSid):
@@ -2369,7 +2378,8 @@ class smb(connection):
     @requires_admin
     def lsa(self, quiet=False):
         try:
-            self.enable_remoteops(regsecret=(self.args.lsa == "regdump"))
+            # --dpapi calls lsa() without --lsa, so it gets the default regdump mode too
+            self.enable_remoteops(regsecret=(self.args.lsa != "secdump"))
 
             def add_lsa_secret(secret):
                 add_lsa_secret.secrets += 1
@@ -2397,7 +2407,7 @@ class smb(connection):
             add_lsa_secret.secrets = 0
 
             if self.remote_ops and self.bootkey:
-                if self.args.lsa == "regdump":
+                if self.args.lsa != "secdump":
                     LSA = RegSecretsLSASecrets(
                         self.bootkey,
                         self.remote_ops,

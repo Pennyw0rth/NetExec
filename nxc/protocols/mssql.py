@@ -209,7 +209,7 @@ class mssql(connection):
             username = ccache.credentials[0].header["client"].prettyPrint().decode().split("@")[0]
             self.username = username
 
-        used_ccache = " from ccache" if useCache else f"{process_secret(kerb_pass)}"
+        used_ccache = " from ccache" if useCache else f":{process_secret(kerb_pass)}"
         try:
             res = self.conn.kerberosLogin(
                 None,
@@ -235,7 +235,7 @@ class mssql(connection):
             return False
         except Exception:
             error_msg = self.handle_mssql_reply()
-            self.logger.fail(f"{self.domain}\\{self.username}:{used_ccache} {error_msg if error_msg else ''}")
+            self.logger.fail(f"{self.domain}\\{self.username}{used_ccache} {error_msg if error_msg else ''}")
             return False
 
     @reconnect_mssql

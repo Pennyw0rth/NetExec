@@ -62,7 +62,7 @@ class LDAPResolution:
             else:
                 nxc_logger.error(f"Error getting ldap info {e}")
 
-        machine_name = sanitize_dns(machine_name, nxc_logger)
+        machine_name = sanitize_dns(machine_name, nxc_logger).upper()
         target_domain = sanitize_dns(target_domain, nxc_logger)
         target = sanitize_dns(target, nxc_logger)
         nxc_logger.debug(f"Target: {machine_name}.{target_domain}; target_domain: {target_domain}; base_dn: {base_dn}")

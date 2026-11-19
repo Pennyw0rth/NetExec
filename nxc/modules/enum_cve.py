@@ -16,12 +16,6 @@ class NXCModule:
     supported_protocols = ["smb"]
     category = CATEGORY.ENUMERATION
 
-    def __init__(self, context=None, module_options=None):
-        context = context
-        self.module_options = module_options
-        self.cve = "all"
-        self.exploitation_details = False
-
     def options(self, context, module_options):
         """
         Be aware that these checks solely rely on the OS version and UBR reported in the registry,
@@ -37,23 +31,22 @@ class NXCModule:
         - CVE-2026-54121 (Certighost)
         - CVE-2026-27912 (ResetNightmare)
         - CVE-2026-102217 (PetitPotam WebDAV coercion)
+        - CVE-2026-118737 (Unsigned NTLM over HTTP)
+        - KB5126646 (LDAP Signing Bypass, no CVE assigned)
 
-        CVE             Filter for specific CVE number (default: All)
+        CVE             Filter for a specific CVE/KB identifier from the list above (default: All)
         EXPLOITATION    Also provide sources for exploitation details (default: False)
         """
-        self.listener = None
-        if "CVE" in module_options:
-            self.cve = module_options["CVE"].lower()
-        if "EXPLOITATION" in module_options:
-            self.exploitation_details = module_options["EXPLOITATION"].lower() in ["true", "1", "yes"]
+        self.cve = module_options.get("CVE", "all").lower()
+        if self.cve != "all" and self.cve not in [cve.lower() for cve in self.CVE_PATCHES]:
+            context.log.fail(f"Unknown CVE '{module_options['CVE']}', supported identifiers: {', '.join(self.CVE_PATCHES)}")
+            return False
+        self.exploitation_details = module_options.get("EXPLOITATION", "false").lower() in ["true", "1", "yes"]
 
-    def is_vulnerable(self, major, minor, build, ubr, msrc):
-        key = (major, minor, build)
-        min_patched_ubr = msrc.get(key)
+    def is_vulnerable(self, os_key, ubr, msrc):
+        min_patched_ubr = msrc.get(os_key)
         if min_patched_ubr is None:
             return None  # Unknown product
-        if ubr is None:
-            return None
         return ubr < min_patched_ubr
 
     def on_login(self, context, connection):
@@ -86,12 +79,22 @@ class NXCModule:
             return
 
         # Check each CVE
+        os_version = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}"
+        os_key = (connection.server_os_major, connection.server_os_minor, connection.server_os_build)
+        if not any(os_key in entry["patches"] for entry in self.CVE_PATCHES.values()):
+            context.log.info(f"Build {os_version} is not listed in any check, cannot determine vulnerability status")
+            return
+
         for cve in self.CVE_PATCHES:
             if self.cve == "all" or self.cve.lower() == cve.lower():
                 if self.CVE_PATCHES[cve].get("dc_only") and not connection.is_host_dc():
                     context.log.info(f"Skipping {self.CVE_PATCHES[cve]['alias']} - only applicable to Domain Controllers")
                     continue
-                if self.is_vulnerable(connection.server_os_major, connection.server_os_minor, connection.server_os_build, ubr, self.CVE_PATCHES[cve]["patches"]):
+                vulnerable = self.is_vulnerable(os_key, ubr, self.CVE_PATCHES[cve]["patches"])
+                if vulnerable is None:
+                    context.log.info(f"Cannot check {self.CVE_PATCHES[cve]['alias']}: no patched UBR known for build {os_version}")
+                    continue
+                if vulnerable:
                     if connection.conn.isSigningRequired() and "signing_message" in self.CVE_PATCHES[cve]:  # Special conditional message for some CVEs
                         context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['signing_message']}")
                     else:
@@ -99,7 +102,7 @@ class NXCModule:
                     if self.exploitation_details:
                         context.log.highlight(f"Exploitation details: {self.CVE_PATCHES[cve]['exploitation']}")
                 else:
-                    context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR {ubr} >= {self.CVE_PATCHES[cve]['patches'].get((connection.server_os_major, connection.server_os_minor, connection.server_os_build), 'unknown')})")
+                    context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR {ubr} >= {self.CVE_PATCHES[cve]['patches'][os_key]})")
 
     # patches: key = (major, minor, build), value = minimum patched UBR
     CVE_PATCHES = {
@@ -241,5 +244,40 @@ class NXCModule:
             },
             "message": "PetitPotam (EFSRPC) can coerce to a WebDAV listener, the HTTP authentication can be relayed to LDAP/LDAPS",
             "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-118737
+        # https://support.microsoft.com/en-us/servicing/os/windows/docs/2026/11/kb5135557-ntlm-signing-security-improvements
+        "CVE-2026-118737": {
+            "alias": "Unsigned NTLM over HTTP",
+            "patches": {
+                (10, 0, 14393): 9688,     # Windows Server 2016 / Win10 1607
+                (10, 0, 17763): 9487,     # Windows Server 2019 / Win10 1809
+                (10, 0, 19044): 7846,     # Windows 10 21H2
+                (10, 0, 19045): 7846,     # Windows 10 22H2
+                (10, 0, 20348): 5870,     # Windows Server 2022
+                (10, 0, 22631): 7711,     # Windows 11 23H2
+                (10, 0, 26100): 33730,    # Windows Server 2025 (Win11 24H2 ships the same build patched at 9911)
+                (10, 0, 26200): 9911,     # Windows 11 25H2
+                (10, 0, 26300): 9911,     # Windows 11 26H2
+                (10, 0, 28000): 3501,     # Windows 11 26H1
+            },
+            "message": "HTTP authentication coerced from this host does not negotiate NTLM signing and can be relayed to LDAP",
+            "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
+        },
+        # https://support.microsoft.com/en-us/servicing/os/azure-marketplace/windows-server/2026/windows-server-images-for-october-2026
+        "KB5126646": {
+            "alias": "LDAP Signing Bypass",
+            "dc_only": True,
+            "patches": {
+                (6, 2, 9200): 26434,      # Windows Server 2012
+                (6, 3, 9600): 23470,      # Windows Server 2012 R2
+                (10, 0, 14393): 9612,     # Windows Server 2016
+                (10, 0, 17763): 9376,     # Windows Server 2019
+                (10, 0, 20348): 5756,     # Windows Server 2022
+                (10, 0, 25398): 2331,     # Windows Server 2022 23H2 (EOL)
+                (10, 0, 26100): 33648,    # Windows Server 2025
+            },
+            "message": "SMB-to-LDAP NTLM relay is possible even when LDAP signature is required",
+            "exploitation": "https://specterops.io/blog/2026/10/23/ldap-signing-bypass-ntlm-relay/",
         },
     }
