@@ -10,6 +10,7 @@ from nxc.connection import connection, highlight
 from nxc.logger import NXCAdapter
 from paramiko.ssh_exception import (
     AuthenticationException,
+    IncompatiblePeer,
     NoValidConnectionsError,
     SSHException,
 )
@@ -138,6 +139,11 @@ class ssh(connection):
                 self.logger.error(f"Internal Paramiko error for {username}:{process_secret(password)}, {e}")
             elif is_key_type_rejected(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
+            elif isinstance(e, IncompatiblePeer):
+                # Raised when the peer offers no kex or host key algorithm in
+                # common. The credential is not the problem, and a traceback per
+                # host buries the reason, so report it as a peer mismatch.
+                self.logger.error(f"Incompatible SSH peer for {username}:{process_secret(password)}, {e}")
             else:
                 self.logger.exception(e)
         except ValueError as e:
