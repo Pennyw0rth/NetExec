@@ -58,6 +58,9 @@ class mssql(connection):
         self.dpapi_system_key = None
         self.no_da = None
 
+        self.is_sql_server_agent_running = False
+        self.sql_server_agent_running_as = ""
+
         self._dpapi_triage = None
 
         connection.__init__(self, args, db, host)
@@ -389,11 +392,13 @@ class mssql(connection):
                     continue
             elif method == "jobexec":
                 try:
-                    exec_method = JOBEXEC(self)
-                    # SQL agent is not running, as such we just return and avoid command execution
-                    if exec_method.is_sql_server_agent_running is False:
-                        return None
-                    self.logger.debug("JOBEXEC execution method instantiated")
+                    # First we need to k whether the SQL server agent is running
+                    self.check_if_sql_agent_server_is_running()
+                    if self.is_sql_server_agent_running is True:
+                        exec_method = JOBEXEC(self)
+                        self.logger.debug("JOBEXEC execution method instantiated")
+                    else:
+                        self.logger.fail("SQL Server agent is not running, cannot use jobexec")
                     break
                 except Exception as e:
                     self.logger.fail(f"Couldn't instantiate JOBEXEC method: {e!s}")
@@ -667,6 +672,13 @@ class mssql(connection):
             return
 
     def sql_agent(self):
+        self.check_if_sql_agent_server_is_running()
+        if self.is_sql_server_agent_running is False:
+            self.logger.fail("SQL Server Agent not running.")
+        else:
+            self.logger.highlight(f"SQL server agent running as {self.sql_server_agent_running_as}")
+
+    def check_if_sql_agent_server_is_running(self):
         check_sql_agent_server_req = """
         SELECT
             status_desc,
@@ -679,11 +691,12 @@ class mssql(connection):
         self.logger.debug(f"Running {check_sql_agent_server_req}")
         rows = self.conn.sql_query(check_sql_agent_server_req)
         if self.conn.lastError:
-            self.logger.fail(f"Error executing jobexec: {self.conn.lastError}")
+            self.logger.fail(f"Couldn't check if SQL server agent is running: {self.conn.lastError}")
         if not rows or rows[0]["status"] != 4:
-            self.logger.fail("SQL Server Agent not running.")
+            self.is_sql_server_agent_running = False
         else:
-            self.logger.highlight(f"SQL server agent running as {rows[0]['service_account']}")
+            self.is_sql_server_agent_running = True
+            self.sql_server_agent_running_as = rows[0]["service_account"]
 
     @requires_admin
     def sam(self):

@@ -29,6 +29,7 @@ def proto_args(parser, parents):
     cgroup.add_argument("--clr-classname", default="StoredProcedures", help="CLR class name in the assembly (default: StoredProcedures)")
     cgroup.add_argument("--clr-method", default="ExecuteCommand", help="CLR method name in the assembly (default: ExecuteCommand)")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
+    cgroup.add_argument("--get-output-tries", help="Number of times jobexec tries to get results", type=int, default=1)
     xgroup = cgroup.add_mutually_exclusive_group()
     xgroup.add_argument("-x", metavar="COMMAND", dest="execute", nargs="?", const=True, help="execute the specified command")
     xgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", nargs="?", const=True, help="execute the specified PowerShell command")
