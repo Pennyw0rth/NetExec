@@ -6,13 +6,12 @@ from psycopg import OperationalError
 from nxc.connection import connection, highlight
 from nxc.logger import NXCAdapter
 from nxc.config import process_secret
-from nxc.protocols.postgres.proto_args import DEFAULT_CREDS
 
 
 class postgres(connection):
     def __init__(self, args, db, host):
         self.protocol = "POSTGRES"
-        self.remote_version = "Unknown"
+        self.remote_version = "PostgreSQL"
         self.admin_privs = False
         self.postgres = False
         super().__init__(args, db, host)
@@ -28,8 +27,9 @@ class postgres(connection):
     def proto_flow(self):
         self.proto_logger()
         if self.create_conn_obj():
-            logged_in = self.login_default_creds() if self.args.default_creds else self.login()
-            if logged_in:
+            self.enum_host_info()
+            self.print_host_info()
+            if self.login():
                 if self.args.module:
                     self.load_modules()
                     self.logger.debug("Calling modules")
@@ -37,16 +37,36 @@ class postgres(connection):
                 else:
                     self.call_cmd_args()
 
-    def login_default_creds(self):
+    def print_host_info(self):
+        self.logger.display(self.remote_version)
 
-        self.logger.debug(f"Trying {len(DEFAULT_CREDS)} built-in default credential pair(s)")
-        owned = False
-        for username, password in DEFAULT_CREDS:
-            if self.try_credentials(None, username, owned, password, "plaintext", None):
-                owned = True
-                if not self.args.continue_on_success:
-                    return True
-        return owned
+    def enum_host_info(self):
+        host_id = self.db.add_host(self.host, self.port, self.remote_version)
+        if host_id is None:
+            hosts = self.db.get_hosts(self.host)
+            host_id = hosts[0].id if hosts else None
+        elif isinstance(host_id, list):
+            host_id = host_id[0]
+
+        cred_id = self.db.add_credential("plaintext", self.username, self.password)
+
+        if host_id and cred_id:
+            self.db.add_loggedin_relation(cred_id, host_id)
+            if self.admin_privs:
+                self.db.add_admin_user(cred_id, host_id)
+
+
+    def check_if_admin(self):
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SHOW server_version")
+            self.remote_version = cur.fetchone()[0]
+            cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+            row = cur.fetchone()
+            self.admin_privs = bool(row[0]) if row else False
+        except Exception as e:
+            self.logger.fail(f"Error: {e}")
+
 
     def create_conn_obj(self):
         try:
@@ -55,7 +75,6 @@ class postgres(connection):
             response = s.recv(1)
             if response in (b"S", b"N"):
                 self.postgres = True
-                self.logger.display("PostgreSQL")
             s.close()
             return True
         except OSError:
@@ -73,33 +92,13 @@ class postgres(connection):
                 dbname=self.args.database,
                 connect_timeout=self.args.postgres_timeout,
             )
-            cur = self.conn.cursor()
-            cur.execute("SHOW server_version")
-            self.remote_version = cur.fetchone()[0]
-            cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
-            row = cur.fetchone()
-            self.admin_privs = bool(row[0]) if row else False
+            self.check_if_admin()
         except OperationalError as e:
             self.logger.fail(f"{username}:{process_secret(password)} {e}")
             return False
         except Exception as e:
             self.logger.fail(f"{username}:{process_secret(password)} Error: {e}")
             return False
-
-        host_id = self.db.add_host(self.host, self.port, self.remote_version)
-        if host_id is None:
-            hosts = self.db.get_hosts(self.host)
-            host_id = hosts[0].id if hosts else None
-        elif isinstance(host_id, list):
-            host_id = host_id[0]
-
-        cred_id = self.db.add_credential("plaintext", username, password)
-
-        if host_id and cred_id:
-            self.db.add_loggedin_relation(cred_id, host_id)
-            if self.admin_privs:
-                self.db.add_admin_user(cred_id, host_id)
-
         self.logger.success(
             f"{username}:{process_secret(password)} {self.mark_pwned()} "
             f"{highlight(f'PostgreSQL {self.remote_version}')}"
@@ -125,23 +124,10 @@ class postgres(connection):
                     data = f.read()
 
                 with self.conn.cursor() as curr:
-                    oid = curr.execute(
-                        "SELECT lo_from_bytea(0, %s)",
-                        (data,)
-                    ).fetchone()[0]
-
-                    curr.execute(
-                        "SELECT lo_export(%s, %s)",
-                        (oid, remote_path)
-                    )
-
-                    curr.execute(
-                        "SELECT lo_unlink(%s)",
-                        (oid,)
-                    )
-
+                    oid = curr.execute("SELECT lo_from_bytea(0, %s)",(data,)).fetchone()[0]
+                    curr.execute("SELECT lo_export(%s, %s)",(oid, remote_path))
+                    curr.execute( "SELECT lo_unlink(%s)",(oid,))
                     self.conn.commit()
-
                 self.logger.success(f"[+] Uploaded: {local_path} -> {remote_path}")
         except Exception as e:
             self.logger.fail(f"Error: {e}")
