@@ -29,7 +29,7 @@ class CLREXEC:
         self.mssql.backup_and_enable("clr enabled")
         self.mssql.backup_and_disable("clr strict security")
 
-        self._cleanup_stale()
+        self.cleanup_stale()
 
         trust_query = f"""
         DECLARE @hash VARBINARY(64);
@@ -40,8 +40,8 @@ class CLREXEC:
         self.mssql_conn.sql_query(trust_query)
         if self.mssql_conn.lastError:
             self.logger.fail(f"Error trusting assembly: {self.mssql_conn.lastError}")
-            self._cleanup()
-            self._restore_all()
+            self.cleanup()
+            self.restore_all()
             return ""
 
         # This try/except is mandatory because we have to make sure what we added is deleted
@@ -80,8 +80,8 @@ class CLREXEC:
         except Exception:
             pass
         finally:
-            self._cleanup()
-            self._restore_all()
+            self.cleanup()
+            self.restore_all()
         return output
 
     def _cleanup_stale(self):
@@ -133,7 +133,7 @@ class CLREXEC:
         if self.mssql_conn.lastError:
             self.logger.error(f"Removing the assembly and the procedure failed, artifacts may remain: {self.mssql_conn.lastError}")
 
-    def _restore_all(self):
+    def restore_all(self):
         self.mssql.restore("clr strict security")
         self.mssql.restore("clr enabled")
         self.mssql.restore("advanced options")
