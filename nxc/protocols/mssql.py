@@ -51,7 +51,6 @@ class mssql(connection):
         self.lmhash = ""
         self.nthash = ""
         self.no_ntlm = False
-        self.args = args
         self.backuped_options = {}
         self.encryption = None
         self.edition = ""
