@@ -1,4 +1,6 @@
-from nxc.helpers.args import DisplayDefaultsNotNone
+from os import path
+from nxc.paths import DATA_PATH
+from nxc.helpers.args import DisplayDefaultsNotNone, DefaultTrackingAction
 
 
 def proto_args(parser, parents):
@@ -22,10 +24,15 @@ def proto_args(parser, parents):
     cgroup.add_argument("--db-hash", action="store_true", help="dump local database hashes")
 
     cgroup = mssql_parser.add_argument_group("Command Execution")
+    cgroup.add_argument("--exec-method", choices={"mssqlexec", "oleexec", "clrexec", "jobexec"}, default="mssqlexec", help="%ethod to execute the command", action=DefaultTrackingAction)
+    cgroup.add_argument("--clr-assembly", default=f"{path.join(DATA_PATH, 'mssql_clr/default_cmd_assembly.dll')}", help="Path to the .NET assembly to execute via clrexec. If not provided, uses the built-in assembly.", action=DefaultTrackingAction)
+    cgroup.add_argument("--clr-classname", default="StoredProcedures", help="CLR class name in the assembly (default: StoredProcedures)")
+    cgroup.add_argument("--clr-method", default="ExecuteCommand", help="CLR method name in the assembly (default: ExecuteCommand)")
     cgroup.add_argument("--no-output", action="store_true", help="do not retrieve command output")
+    cgroup.add_argument("--get-output-tries", help="Number of times jobexec tries to get results", type=int, default=1)
     xgroup = cgroup.add_mutually_exclusive_group()
-    xgroup.add_argument("-x", metavar="COMMAND", dest="execute", help="execute the specified command")
-    xgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", help="execute the specified PowerShell command")
+    xgroup.add_argument("-x", metavar="COMMAND", dest="execute", nargs="?", const=True, help="execute the specified command")
+    xgroup.add_argument("-X", metavar="PS_COMMAND", dest="ps_execute", nargs="?", const=True, help="execute the specified PowerShell command")
 
     psgroup = mssql_parser.add_argument_group("Powershell Options")
     psgroup.add_argument("--force-ps32", action="store_true", default=False, help="Force the PowerShell command to run in a 32-bit process via a job; WARNING: depends on the job completing quickly, so you may have to increase the timeout")
@@ -40,5 +47,6 @@ def proto_args(parser, parents):
 
     mapping_enum_group = mssql_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--rid-brute", nargs="?", type=int, const=4000, metavar="MAX_RID", help="enumerate users by bruteforcing RIDs")
+    mapping_enum_group.add_argument("--sql-agent", action="store_true", default=False, help="Checks if the SQL server agent is running and with which account")
     mapping_enum_group.add_argument("--list-backups", action="store_true", help="dump database backups path")
     return parser
