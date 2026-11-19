@@ -246,7 +246,7 @@ class database(BaseDB):
         add_links = []
 
         creds_q = select(self.CredentialsTable)
-        if cred_id:  # noqa: SIM108
+        if cred_id:
             creds_q = creds_q.filter(self.CredentialsTable.c.id == cred_id)
         else:
             creds_q = creds_q.filter(

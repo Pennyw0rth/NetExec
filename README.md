@@ -65,3 +65,4 @@ Awesome code contributors of NetExec:
 [![](https://github.com/XiaoliChan.png?size=50)](https://github.com/XiaoliChan)
 [![](https://github.com/termanix.png?size=50)](https://github.com/termanix)
 [![](https://github.com/Dfte.png?size=50)](https://github.com/Dfte)
+[![](https://github.com/azoxlpf.png?size=50)](https://github.com/azoxlpf)

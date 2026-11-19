@@ -2,12 +2,14 @@
 import json
 import socket
 from os import makedirs
+from os.path import join
 from certipy.commands.find import Find
 from certipy.lib.target import Target, DnsResolver
 from certipy.lib.formatting import pretty_print
 from datetime import datetime
 
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
 
 
@@ -34,7 +36,7 @@ class NXCModule:
         """
         self.vuln = True
         self.enabled = False
-        self.output_path = f"{NXC_PATH}/modules/certipy-find"
+        self.output_path = join(NXC_PATH, "modules", "certipy-find")
         self.json = False
         self.csv = False
         self.text = False
@@ -75,9 +77,12 @@ class NXCModule:
             username=connection.username,
             password=connection.password,
             remote_name=connection.remoteName,
+            hashes=f"{connection.lmhash}:{connection.nthash}",
             lmhash=connection.lmhash,
             nthash=connection.nthash,
             do_kerberos=connection.kerberos,
+            aes=connection.aesKey,
+            dc_ip=connection.kdcHost,
             target_ip=connection.host,
             ldap_port=connection.port,
             ldap_scheme="ldaps" if connection.port == 636 else "ldap",
@@ -116,9 +121,9 @@ class NXCModule:
         if self.json or self.csv or self.text:
             makedirs(self.output_path, exist_ok=True)
 
-        filename = f"certipy_{connection.hostname}_{connection.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}".replace(":", "-")
+        filename = sanitize_path_component(f"certipy_{connection.hostname}_{connection.host}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}", max_bytes=220)
         if self.json:
-            with open(f"{self.output_path}/{filename}.json", "w") as f:
+            with open(join(self.output_path, f"{filename}.json"), "w") as f:
                 json.dump(
                     output,
                     f,
@@ -128,10 +133,10 @@ class NXCModule:
         if self.csv:
             template_output = finder.get_template_output_for_csv(output)
             ca_output = finder.get_ca_output_for_csv(output)
-            with open(f"{self.output_path}/{filename}-templates.csv", "w") as f:
+            with open(join(self.output_path, f"{filename}-templates.csv"), "w") as f:
                 f.write(template_output)
-            with open(f"{self.output_path}/{filename}-cas.csv", "w") as f:
+            with open(join(self.output_path, f"{filename}-cas.csv"), "w") as f:
                 f.write(ca_output)
         if self.text:
-            with open(f"{self.output_path}/{filename}.txt", "w") as f:
+            with open(join(self.output_path, f"{filename}.txt"), "w") as f:
                 pretty_print(output, print_func=lambda x: f.write(x + "\n"))

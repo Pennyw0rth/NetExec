@@ -2,7 +2,7 @@
 #  Dirk-jan Mollema (@_dirkjan)
 #  dlive (@D1iv3)
 #
-# Refernece:
+# Reference:
 #  - https://dirkjanm.io/exploiting-CVE-2019-1040-relay-vulnerabilities-for-rce-and-domain-admin/
 #  - https://github.com/fox-it/cve-2019-1040-scanner
 #  - https://github.com/Dliv3/cve-2019-1040-scanner

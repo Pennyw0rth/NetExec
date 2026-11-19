@@ -1,10 +1,12 @@
 import re
-from impacket.dcerpc.v5 import samr, tsch, transport
+from types import SimpleNamespace
+from impacket.dcerpc.v5 import samr, tsch
 from impacket.dcerpc.v5 import tsts as TSTS
-from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 from contextlib import suppress
 import traceback
 from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
 
 
 class NXCModule:
@@ -19,11 +21,46 @@ class NXCModule:
     category = CATEGORY.ENUMERATION
 
     def options(self, context, module_options):
-        """There are no module options."""
+        """
+        ALTUSER     Alternative domain user to enumerate admin groups with
+        ALTPASS     Password for ALTUSER
+        ALTDOMAIN   Domain FQDN of the alternative credentials
+        ALTDC       DC IP
+
+        When alternative credentials are supplied, Domain and Enterprise Admins are enumerated over SAMR against the DC using those credentials, rather than the local administrator session (which cannot enumerate these groups).
+        """
+        self.altuser = module_options.get("ALTUSER")
+        self.altpass = module_options.get("ALTPASS")
+        self.altdomain = module_options.get("ALTDOMAIN")
+        self.altdc = module_options.get("ALTDC")
+
+        alt_creds = [self.altuser, self.altpass, self.altdomain]
+        if any(alt_creds) and not all(alt_creds):
+            context.log.fail("ALTUSER, ALTPASS, and ALTDOMAIN must be specified together")
+            return False
 
     def on_admin_login(self, context, connection):
         try:
-            admin_users = self.enumerate_admin_users(context, connection)
+            if self.altuser and self.altpass and self.altdomain:
+                context.log.info(f"Using alternative domain credentials: {self.altdomain}\\{self.altuser}")
+                alt_connection = SimpleNamespace(
+                    username=self.altuser,
+                    password=self.altpass,
+                    domain=self.altdomain,
+                    lmhash="",
+                    nthash="",
+                    aesKey=None,
+                    kerberos=False,
+                    kdcHost=self.altdc,
+                    conn=None,
+                    host=self.altdc,
+                    remoteName=self.altdc,
+                    port=445,
+                )
+                admin_users = self.enumerate_admin_users(context, alt_connection)
+            else:
+                admin_users = self.enumerate_admin_users(context, connection)
+
             if not admin_users:
                 context.log.fail("No admin users found.")
                 return
@@ -39,36 +76,19 @@ class NXCModule:
             context.log.fail(str(e))
             context.log.debug(traceback.format_exc())
 
-    def get_dce_rpc(self, target, string_binding, dce_binding, connection):
-        # Create a DCE/RPC transport object with the specified string binding
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.setRemoteHost(target)
-        rpctransport.set_credentials(
-            connection.username,
-            connection.password,
-            connection.domain,
-            connection.lmhash,
-            connection.nthash,
-            aesKey=connection.aesKey,
+    def get_dce_rpc(self, named_pipe, dce_binding, connection, target_ip=None, auth_level=None):
+        return NXCRPCConnection(connection).connect(
+            named_pipe,
+            dce_binding,
+            target_ip=target_ip,
+            auth_level=auth_level or RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
         )
-        rpctransport.set_kerberos(connection.kerberos, connection.kdcHost)
-
-        # Connect to the DCE/RPC endpoint
-        dce = rpctransport.get_dce_rpc()
-        if connection.kerberos:
-            dce.set_auth_type(RPC_C_AUTHN_GSS_NEGOTIATE)
-        dce.set_credentials(*rpctransport.get_credentials())
-        dce.connect()
-        dce.set_auth_level(RPC_C_AUTHN_LEVEL_PKT_PRIVACY)
-        dce.bind(dce_binding)
-        return dce
 
     def enumerate_admin_users(self, context, connection):
         admin_users = []
 
         try:
-            string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
-            dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
+            dce = self.get_dce_rpc(r"\samr", samr.MSRPC_UUID_SAMR, connection, target_ip=connection.kdcHost)
         except Exception as e:
             context.log.fail(f"Failed to connect to SAMR: {e}")
             context.log.debug(traceback.format_exc())
@@ -164,19 +184,23 @@ class NXCModule:
         context.log.debug(f"Enumerated {len(processes)} processes on {connection.host}")
 
         for process in processes:
-            context.log.debug(f"ImageName: {process['ImageName']}, UniqueProcessId: {process['SessionId']}, pSid: {process['pSid']}")
+            info = process.getProcessInfo()
+            image_name = info["ImageName"].getValue()
+            pid = info["UniqueProcessId"]
+            session_id = info["SessionId"]
+            psid = process.getSid()
+            context.log.debug(f"ImageName: {image_name}, UniqueProcessId: {pid}, SessionId: {session_id}, pSid: {psid}")
+
             # Check if process SID matches any admin user SID
             for user in admin_users:
-                if process["pSid"] == user["sid"]:
+                if psid == user["sid"]:
                     user["in_tasks"] = True
-                    context.log.info(f"Matched process {process['ImageName']} with user {user['username']}")
+                    context.log.info(f"Matched process {image_name} with user {user['username']}")
 
     def check_scheduled_tasks(self, context, connection, admin_users):
         """Checks scheduled tasks over rpc."""
         try:
-            target = connection.remoteName if connection.kerberos else connection.host
-            stringbinding = f"ncacn_np:{target}[\\pipe\\atsvc]"
-            dce = self.get_dce_rpc(target, stringbinding, tsch.MSRPC_UUID_TSCHS, connection)
+            dce = self.get_dce_rpc(r"\atsvc", tsch.MSRPC_UUID_TSCHS, connection)
 
             # Also extract non admins where we can get the password
             self.non_admins = []
@@ -200,8 +224,7 @@ class NXCModule:
                         non_admin_sids.add(sid.group(1))
 
             if non_admin_sids:
-                string_binding = fr"ncacn_np:{connection.kdcHost}[\pipe\samr]"
-                dce = self.get_dce_rpc(connection.kdcHost, string_binding, samr.MSRPC_UUID_SAMR, connection)
+                dce = self.get_dce_rpc(r"\samr", samr.MSRPC_UUID_SAMR, connection, target_ip=connection.kdcHost)
 
                 # Get Domain Handle
                 server_handle = samr.hSamrConnect2(dce)["ServerHandle"]

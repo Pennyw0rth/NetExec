@@ -7,6 +7,12 @@ protocol_dict = {
     "ssh": {"ports": [22], "services": ["ssh"]},
     "winrm": {"ports": [5986, 5985], "services": ["www", "https?"]},
     "http": {"ports": [80, 443, 8443, 8008, 8080, 8081], "services": ["www", "https?"]},
+    "rdp": {"ports": [3389], "services": ["msrdp", "rdp", "ms-wbt-server"]},
+    "vnc": {"ports": [5900, 5901, 5902, 5903], "services": ["vnc", "rfb"]},
+    "ftp": {"ports": [21], "services": ["ftp"]},
+    "ldap": {"ports": [389, 636], "services": ["ldap"]},
+    "wmi": {"ports": [135], "services": ["epmap"]},
+    "nfs": {"ports": [2049], "services": ["rpc-nfs", "nfs"]},
 }
 
 
@@ -23,12 +29,11 @@ def parse_nessus_file(nessus_file, protocol):
             if ip in targets:
                 return True
 
-            port = item["ReportItem"]["port"]
+            # Nessus stores the port as a string, the lookup table uses ints
+            port = int(item["ReportItem"]["port"])
             svc_name = item["ReportItem"]["svc_name"]
 
-            if port in protocol_dict[protocol]["ports"]:
-                targets.append(ip)
-            if svc_name in protocol_dict[protocol]["services"]:
+            if port in protocol_dict[protocol]["ports"] or svc_name in protocol_dict[protocol]["services"]:
                 targets.append(ip)
 
             return True

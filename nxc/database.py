@@ -1,5 +1,6 @@
 import configparser
 import ipaddress
+import platform
 import shutil
 import sys
 from os import mkdir
@@ -170,11 +171,23 @@ class BaseDB:
 
                 return reflected_table
             except (NoInspectionAvailable, NoSuchTableError, ValueError) as e:
+                commands_platform = {
+                    "Windows": [
+                        f"cmd /c copy {self.db_path} %USERPROFILE%\\nxc_{self.protocol.lower()}.bak",
+                        f"del {self.db_path}"
+                    ],
+                    "Linux": [
+                        f"cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak",
+                        f"rm -f {self.db_path}"
+                    ]
+                }
+                copy_command = commands_platform["Windows"][0] if platform.system() == "Windows" else commands_platform["Linux"][0]
+                delete_command = commands_platform["Windows"][1] if platform.system() == "Windows" else commands_platform["Linux"][1]
                 nxc_logger.fail(f"Schema mismatch detected for table '{table.__tablename__}' in protocol '{self.protocol}'")
                 nxc_logger.debug(e)
                 nxc_logger.fail("This is probably because a newer version of nxc is being run on an old DB schema.")
-                nxc_logger.fail(f"Optionally save the old DB data (`cp {self.db_path} ~/nxc_{self.protocol.lower()}.bak`)")
-                nxc_logger.fail(f"Then remove the {self.protocol} DB (`rm -f {self.db_path}`) and run nxc to initialize the new DB")
+                nxc_logger.fail(f"Optionally save the old DB data (`{copy_command}`)")
+                nxc_logger.fail(f"Then remove the {self.protocol} DB (`{delete_command}`) and run nxc to initialize the new DB")
                 sys.exit()
 
     def shutdown_db(self):
@@ -191,7 +204,10 @@ class BaseDB:
             self.db_execute(table.delete())
 
     def db_execute(self, *args):
-        self.lock.acquire()
-        res = self.sess.execute(*args)
-        self.lock.release()
-        return res
+        with self.lock:
+            res = self.sess.execute(*args)
+            return res.freeze()() if res.returns_rows else res
+
+    def get_keys(self, key_id=None, cred_id=None):
+        """Return an empty list by default. Protocols that support keys (e.g. SSH) override this."""
+        return []

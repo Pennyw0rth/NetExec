@@ -181,7 +181,8 @@ class NXCAdapter(logging.LoggerAdapter):
 
         if not os.path.isfile(output_file):
             try:
-                open(output_file, "x")  # noqa: SIM115
+                with open(output_file, "x"):
+                    pass
             except FileNotFoundError:
                 print(f"{colored('[-]', 'red', attrs=['bold'])} Log file path does not exist: {os.path.dirname(output_file)}")
                 exit(1)

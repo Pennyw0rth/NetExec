@@ -1,0 +1,283 @@
+from impacket.dcerpc.v5 import rrp
+from impacket.dcerpc.v5.rpcrt import DCERPCException
+from impacket.smbconnection import SessionError
+from nxc.helpers.misc import CATEGORY
+from nxc.helpers.rpc import NXCRPCConnection
+from impacket.nmb import NetBIOSError
+
+
+class NXCModule:
+    """
+    Initial module by: Mauriceter
+    Additional authors: azoxlpf, Defte, YOLOP0wn, pol4ir, NeffIsBack
+    """
+    name = "enum_cve"
+    description = "Enumerate common (useful) CVEs by querying the registry for the OS version and UBR."
+    supported_protocols = ["smb"]
+    category = CATEGORY.ENUMERATION
+
+    def options(self, context, module_options):
+        """
+        Be aware that these checks solely rely on the OS version and UBR reported in the registry,
+        and do not check for the actual presence of the vulnerable components or mitigations.
+        Test the attack yourself to verify the host is actually vulnerable.
+
+        Currently supported CVEs:
+        - CVE-2025-33073 (NTLM Reflection)
+        - CVE-2025-58726 (Ghost SPN)
+        - CVE-2025-54918 (NTLM MIC Bypass)
+        - CVE-2025-53779 (BadSuccessor)
+        - CVE-2024-49019 (EKUwu / ESC15)
+        - CVE-2026-54121 (Certighost)
+        - CVE-2026-27912 (ResetNightmare)
+        - CVE-2026-102217 (PetitPotam WebDAV coercion)
+        - CVE-2026-118737 (Unsigned NTLM over HTTP)
+        - KB5126646 (LDAP Signing Bypass, no CVE assigned)
+
+        CVE             Filter for a specific CVE/KB identifier from the list above (default: All)
+        EXPLOITATION    Also provide sources for exploitation details (default: False)
+        """
+        self.cve = module_options.get("CVE", "all").lower()
+        if self.cve != "all" and self.cve not in [cve.lower() for cve in self.CVE_PATCHES]:
+            context.log.fail(f"Unknown CVE '{module_options['CVE']}', supported identifiers: {', '.join(self.CVE_PATCHES)}")
+            return False
+        self.exploitation_details = module_options.get("EXPLOITATION", "false").lower() in ["true", "1", "yes"]
+
+    def is_vulnerable(self, os_key, ubr, msrc):
+        min_patched_ubr = msrc.get(os_key)
+        if min_patched_ubr is None:
+            return None  # Unknown product
+        return ubr < min_patched_ubr
+
+    def on_login(self, context, connection):
+        connection.trigger_winreg()
+
+        try:
+            # Connect to RemoteRegistry to read UBR from registry
+            dce = NXCRPCConnection(connection).connect(r"\winreg", rrp.MSRPC_UUID_RRP)
+            # Reading UBR from registry
+            hRootKey = rrp.hOpenLocalMachine(dce)["phKey"]
+            hKey = rrp.hBaseRegOpenKey(dce, hRootKey, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")["phkResult"]
+            ubr = rrp.hBaseRegQueryValue(dce, hKey, "UBR")[1]
+            dce.disconnect()
+            if not ubr:
+                context.log.info("Could not determine OS version from registry")
+                return
+            else:
+                context.log.debug(f"OS version from registry: {connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}.{ubr}")
+        except DCERPCException as e:
+            context.log.fail(f"DCERPC error: {e}")
+            return
+        except SessionError as e:
+            if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e):
+                context.log.info(f"RemoteRegistry is probably deactivated: {e}")
+            else:
+                context.log.fail(f"Unexpected error: {e}")
+            return
+        except (BrokenPipeError, ConnectionResetError, NetBIOSError, OSError) as e:
+            context.log.fail(f"DCERPC transport error: {e.__class__.__name__}: {e}")
+            return
+
+        # Check each CVE
+        os_version = f"{connection.server_os_major}.{connection.server_os_minor}.{connection.server_os_build}"
+        os_key = (connection.server_os_major, connection.server_os_minor, connection.server_os_build)
+        if not any(os_key in entry["patches"] for entry in self.CVE_PATCHES.values()):
+            context.log.info(f"Build {os_version} is not listed in any check, cannot determine vulnerability status")
+            return
+
+        for cve in self.CVE_PATCHES:
+            if self.cve == "all" or self.cve.lower() == cve.lower():
+                if self.CVE_PATCHES[cve].get("dc_only") and not connection.is_host_dc():
+                    context.log.info(f"Skipping {self.CVE_PATCHES[cve]['alias']} - only applicable to Domain Controllers")
+                    continue
+                vulnerable = self.is_vulnerable(os_key, ubr, self.CVE_PATCHES[cve]["patches"])
+                if vulnerable is None:
+                    context.log.info(f"Cannot check {self.CVE_PATCHES[cve]['alias']}: no patched UBR known for build {os_version}")
+                    continue
+                if vulnerable:
+                    if connection.conn.isSigningRequired() and "signing_message" in self.CVE_PATCHES[cve]:  # Special conditional message for some CVEs
+                        context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['signing_message']}")
+                    else:
+                        context.log.highlight(f"{cve.upper()} - {self.CVE_PATCHES[cve]['alias']} - {self.CVE_PATCHES[cve]['message']}")
+                    if self.exploitation_details:
+                        context.log.highlight(f"Exploitation details: {self.CVE_PATCHES[cve]['exploitation']}")
+                else:
+                    context.log.info(f"Not vulnerable to {self.CVE_PATCHES[cve]['alias']} (UBR {ubr} >= {self.CVE_PATCHES[cve]['patches'][os_key]})")
+
+    # patches: key = (major, minor, build), value = minimum patched UBR
+    CVE_PATCHES = {
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-33073
+        "CVE-2025-33073": {
+            "alias": "NTLM reflection",
+            "patches": {
+                (10, 0, 10240): 21034,    # Windows 10 1507
+                (10, 0, 14393): 8148,     # Windows Server 2016 / Win10 1607
+                (10, 0, 17763): 7434,     # Windows Server 2019 / Win10 1809
+                (10, 0, 19044): 5965,     # Windows 10 21H2
+                (10, 0, 20348): 3807,     # Windows Server 2022
+                (10, 0, 22621): 5472,     # Windows 11 22H2
+                (10, 0, 25398): 1665,     # Windows Server 2022 23H2
+                (10, 0, 26100): 4270,     # Windows Server 2025 / Win11 24H2
+            },
+            "message": "Relay possible from SMB to any protocol",
+            "signing_message": "can relay SMB to other protocols except SMB",
+            "exploitation": "https://www.synacktiv.com/en/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-58726
+        "CVE-2025-58726": {
+            "alias": "Ghost SPN",
+            "patches": {
+                (6, 0, 6003): 23571,      # Windows Server 2008 SP2
+                (6, 1, 7601): 27974,      # Windows Server 2008 R2 SP1
+                (6, 2, 9200): 25722,      # Windows Server 2012
+                (6, 3, 9600): 22824,      # Windows Server 2012 R2
+                (10, 0, 10240): 21161,    # Windows 10 1507
+                (10, 0, 14393): 8519,     # Windows Server 2016 / Win10 1607
+                (10, 0, 17763): 7919,     # Windows Server 2019 / Win10 1809
+                (10, 0, 19044): 6456,     # Windows 10 21H2
+                (10, 0, 20348): 4294,     # Windows Server 2022
+                (10, 0, 22621): 6060,     # Windows 11 22H2
+                (10, 0, 25398): 1913,     # Windows Server 2022 23H2
+                (10, 0, 26100): 6899,     # Windows Server 2025 / Win11 24H2
+                (10, 0, 26200): 6899,     # Windows 11 25H2
+            },
+            "message": "Relay possible from SMB using Ghost SPN for Kerberos reflection",
+            "signing_message": "Relay possible from SMB using Ghost SPN (non HOST/CIFS) for Kerberos reflection to other protocols except SMB",
+            "exploitation": "https://www.semperis.com/blog/exploiting-ghost-spns-and-kerberos-reflection-for-smb-server-privilege-elevation/",
+        },
+
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-54918
+        # https://decoder.cloud/2025/11/24/reflecting-your-authentication-when-windows-ends-up-talking-to-itself/
+        "CVE-2025-54918": {
+            "alias": "NTLM MIC Bypass",
+            "dc_only": True,
+            "patches": {
+                (6, 0, 6003): 23529,      # Windows Server 2008 SP2
+                (6, 1, 7601): 27929,      # Windows Server 2008 R2 SP1
+                (6, 2, 9200): 25675,      # Windows Server 2012
+                (6, 3, 9600): 22774,      # Windows Server 2012 R2
+                (10, 0, 10240): 21128,    # Windows 10 1507
+                (10, 0, 14393): 8422,     # Windows Server 2016
+                (10, 0, 17763): 7792,     # Windows Server 2019 / Win10 1809
+                (10, 0, 19044): 6332,     # Windows 10 21H2
+                (10, 0, 20348): 4171,     # Windows Server 2022
+                (10, 0, 22621): 5909,     # Windows 11 22H2
+                (10, 0, 22631): 5909,     # Windows 11 23H2
+                (10, 0, 26100): 6508,     # Windows Server 2025 / Win11 24H2
+            },
+            "message": "Note that without CVE-2025-33073 only Windows Server 2025 is exploitable",
+            "exploitation": "https://yousofnahya.medium.com/hands-on-exploitation-of-cve-2025-54918-cf376ebb40e1",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-53779
+        "CVE-2025-53779": {
+            "alias": "BadSuccessor",
+            "dc_only": True,
+            "patches": {
+                (10, 0, 26100): 4851,     # Windows Server 2025 / Win11 24H2
+            },
+            "message": "Escalation to Domain Admin possible via dMSA Kerberos abuse",
+            "exploitation": "https://www.akamai.com/blog/security-research/abusing-dmsa-for-privilege-escalation-in-active-directory",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2024-49019
+        "CVE-2024-49019": {
+            "alias": "ESC15 / EKUwu",
+            "patches": {
+                (6, 0, 6003): 22966,      # Windows Server 2008 SP2
+                (6, 1, 7601): 27415,      # Windows Server 2008 R2 SP1
+                (6, 2, 9200): 25165,      # Windows Server 2012
+                (6, 3, 9600): 22267,      # Windows Server 2012 R2
+                (10, 0, 14393): 7515,     # Windows Server 2016
+                (10, 0, 17763): 6532,     # Windows Server 2019 / Win10 1809
+                (10, 0, 20348): 2849,     # Windows Server 2022
+                (10, 0, 25398): 1251,     # Windows Server 2022 23H2
+                (10, 0, 26100): 2314,     # Windows Server 2025 / Win11 24H2
+            },
+            "message": "If host is an AD CS / CA server, it may be vulnerable to ESC15",
+            "exploitation": "https://trustedsec.com/blog/ekuwu-not-just-another-ad-cs-esc",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-54121
+        "CVE-2026-54121": {
+            "alias": "Certighost",
+            "patches": {
+                (6, 2, 9200): 26226,      # Windows Server 2012
+                (6, 3, 9600): 23291,      # Windows Server 2012 R2
+                (10, 0, 14393): 9339,     # Windows Server 2016
+                (10, 0, 17763): 9020,     # Windows Server 2019
+                (10, 0, 20348): 5386,     # Windows Server 2022
+                (10, 0, 26100): 33158,    # Windows Server 2025
+            },
+            "message": "If host is an AD CS / CA server, it may be vulnerable to Certighost",
+            "exploitation": "https://gist.github.com/H0j3n/a5ef2609b5f2944ac2390a191a534c26",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-27912
+        "CVE-2026-27912": {
+            "alias": "ResetNightmare",
+            "dc_only": True,
+            "patches": {
+                (6, 2, 9200): 26026,      # Windows Server 2012
+                (6, 3, 9600): 23132,      # Windows Server 2012 R2
+                (10, 0, 14393): 9060,     # Windows Server 2016
+                (10, 0, 17763): 8644,     # Windows Server 2019
+                (10, 0, 20348): 5020,     # Windows Server 2022
+                (10, 0, 25398): 2274,     # Windows Server 2022 23H2
+                (10, 0, 26100): 32690,    # Windows Server 2025
+            },
+            "message": "Password reset of any account possible via Kerberos change password abuse",
+            "exploitation": "https://www.semperis.com/blog/identity-crisis-novel-vulnerabilities-leading-to-kerberos-downgrade-dos-and-full-domain-takeover/",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-102217
+        "CVE-2026-102217": {
+            "alias": "PetitPotam WebDAV coercion",
+            "patches": {
+                (6, 2, 9200): 26434,      # Windows Server 2012
+                (6, 3, 9600): 23470,      # Windows Server 2012 R2
+                (10, 0, 14393): 9612,     # Windows Server 2016
+                (10, 0, 17763): 9376,     # Windows Server 2019
+                (10, 0, 19044): 7807,     # Windows 10 21H2
+                (10, 0, 19045): 7807,     # Windows 10 22H2
+                (10, 0, 20348): 5761,     # Windows Server 2022
+                (10, 0, 22631): 7652,     # Windows 11 23H2
+                (10, 0, 26100): 33650,    # Windows Server 2025 (Win11 24H2 ships the same build patched at 9711)
+                (10, 0, 26200): 9711,     # Windows 11 25H2
+                (10, 0, 26300): 9711,     # Windows 11 26H2
+                (10, 0, 28000): 3231,     # Windows 11 26H1
+            },
+            "message": "PetitPotam (EFSRPC) can coerce to a WebDAV listener, the HTTP authentication can be relayed to LDAP/LDAPS",
+            "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
+        },
+        # https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-118737
+        # https://support.microsoft.com/en-us/servicing/os/windows/docs/2026/11/kb5135557-ntlm-signing-security-improvements
+        "CVE-2026-118737": {
+            "alias": "Unsigned NTLM over HTTP",
+            "patches": {
+                (10, 0, 14393): 9688,     # Windows Server 2016 / Win10 1607
+                (10, 0, 17763): 9487,     # Windows Server 2019 / Win10 1809
+                (10, 0, 19044): 7846,     # Windows 10 21H2
+                (10, 0, 19045): 7846,     # Windows 10 22H2
+                (10, 0, 20348): 5870,     # Windows Server 2022
+                (10, 0, 22631): 7711,     # Windows 11 23H2
+                (10, 0, 26100): 33730,    # Windows Server 2025 (Win11 24H2 ships the same build patched at 9911)
+                (10, 0, 26200): 9911,     # Windows 11 25H2
+                (10, 0, 26300): 9911,     # Windows 11 26H2
+                (10, 0, 28000): 3501,     # Windows 11 26H1
+            },
+            "message": "HTTP authentication coerced from this host does not negotiate NTLM signing and can be relayed to LDAP",
+            "exploitation": "https://www.thehacker.recipes/ad/movement/mitm-and-coerced-authentications/webclient",
+        },
+        # https://support.microsoft.com/en-us/servicing/os/azure-marketplace/windows-server/2026/windows-server-images-for-october-2026
+        "KB5126646": {
+            "alias": "LDAP Signing Bypass",
+            "dc_only": True,
+            "patches": {
+                (6, 2, 9200): 26434,      # Windows Server 2012
+                (6, 3, 9600): 23470,      # Windows Server 2012 R2
+                (10, 0, 14393): 9612,     # Windows Server 2016
+                (10, 0, 17763): 9376,     # Windows Server 2019
+                (10, 0, 20348): 5756,     # Windows Server 2022
+                (10, 0, 25398): 2331,     # Windows Server 2022 23H2 (EOL)
+                (10, 0, 26100): 33648,    # Windows Server 2025
+            },
+            "message": "SMB-to-LDAP NTLM relay is possible even when LDAP signature is required",
+            "exploitation": "https://specterops.io/blog/2026/10/23/ldap-signing-bypass-ntlm-relay/",
+        },
+    }

