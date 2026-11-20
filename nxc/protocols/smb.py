@@ -28,7 +28,11 @@ from impacket.examples.regsecrets import (
 )
 from impacket.nmb import NetBIOSError, NetBIOSTimeout
 from impacket.dcerpc.v5 import lsat, lsad, scmr, rrp, srvs, wkst
-from impacket.dcerpc.v5.srvs import STYPE_DISKTREE, STYPE_MASK
+from impacket.dcerpc.v5.srvs import (
+    STYPE_DISKTREE, STYPE_PRINTQ, STYPE_DEVICE, STYPE_IPC,
+    STYPE_CLUSTER_FS, STYPE_CLUSTER_SOFS, STYPE_CLUSTER_DFS,
+    STYPE_SPECIAL, STYPE_TEMPORARY, STYPE_MASK,
+)
 from impacket.dcerpc.v5.rpcrt import DCERPCException
 from impacket.dcerpc.v5.transport import DCERPCTransportFactory
 from impacket.dcerpc.v5.rpcrt import RPC_C_AUTHN_GSS_NEGOTIATE
@@ -1576,6 +1580,15 @@ class smb(connection):
             (WRITE_DAC, "WRITE (ACL)"),
             (WRITE_OWNER, "WRITE (ACL)"),
         ]
+        SMB_SHARE_TYPES = {
+            STYPE_DISKTREE: "DISKTREE",
+            STYPE_PRINTQ: "PRINTQ",
+            STYPE_DEVICE: "DEVICE",
+            STYPE_IPC: "IPC",
+            STYPE_CLUSTER_FS: "CLUSTER_FS",
+            STYPE_CLUSTER_SOFS: "CLUSTER_SOFS",
+            STYPE_CLUSTER_DFS: "CLUSTER_DFS",
+        }
 
         try:
             self.logger.debug(f"domain: {self.domain}")
@@ -1616,20 +1629,19 @@ class smb(connection):
                 self.logger.debug(f"Skipping excluded share: {share_name}")
                 continue
 
-            # Mask off STYPE_SPECIAL/STYPE_TEMPORARY flags; only the base type
-            # (DISKTREE/PRINTQ/DEVICE/IPC) determines whether write checks apply.
+            # Keep the base type for write checks and display cluster types and the temporary flag.
             share_remark = share["shi1_remark"].rstrip("\x00")
             share_info = {
                 "name": share_name,
                 "remark": share_remark,
                 "type": share["shi1_type"] & STYPE_MASK,
+                "type_name": SMB_SHARE_TYPES.get(share["shi1_type"] & ~(STYPE_SPECIAL | STYPE_TEMPORARY), "UNKNOWN"),
                 "access": [],
             }
-            read = False
-            write = False
+            if share["shi1_type"] & STYPE_TEMPORARY:
+                share_info["type_name"] += ",TEMPORARY"
             try:
                 self.conn.listPath(share_name, "*")
-                read = True
                 share_info["access"].append("READ")
             except SessionError as e:
                 error = get_error_string(e)
@@ -1689,7 +1701,6 @@ class smb(connection):
 
                 # If we either can create a file or a directory we add the write privs to the output. Agreed on in https://github.com/Pennyw0rth/NetExec/pull/404
                 if write_dir or write_file:
-                    write = True
                     share_info["access"].append("WRITE")
             else:
                 # ACL-based write check (default) — opens share root with FILE_OPEN +
@@ -1731,35 +1742,29 @@ class smb(connection):
                 if "WRITE" in write_labels:
                     write_labels = ["WRITE"]
 
-                for lbl in write_labels:
-                    share_info["access"].append(lbl)
-                    if not write:
-                        write = True
+                share_info["access"].extend(write_labels)
 
             permissions.append(share_info)
-
-            if share_name != "IPC$":
-                try:
-                    # TODO: check if this already exists in DB before adding
-                    self.db.add_share(self.hostname, user_id, share_name, share_remark, read, write)
-                except Exception as e:
-                    error = get_error_string(e)
-                    self.logger.debug(f"Error adding share: {error}")
 
         if self.args.filter_shares:
             self.logger.display("[REMOVED] Use the --shares read,write options instead.")
 
         self.logger.display("Enumerated shares")
-        self.logger.highlight(f"{'Share':<15} {'Permissions':<22} {'Remark'}")
-        self.logger.highlight(f"{'-----':<15} {'-----------':<22} {'------'}")
+        self.logger.highlight(f"{'Share':<15} {'Permissions':<15} {'Type':<10} {'Remark'}")
+        self.logger.highlight(f"{'-----':<15} {'-----------':<15} {'----':<10} {'------'}")
 
         for share in permissions:
+            if share["name"] != "IPC$":
+                try:
+                    self.db.add_share(self.hostname, user_id, share["name"], share["remark"], "READ" in share["access"], any(access.startswith("WRITE") for access in share["access"]), share["type_name"])
+                except Exception as e:
+                    self.logger.debug(f"Error adding share: {get_error_string(e)}")
             name = share["name"]
             remark = share["remark"]
             perms = ",".join(share["access"])
             if self.args.shares and self.args.shares.lower() not in perms.lower():
                 continue
-            self.logger.highlight(f"{name:<15} {perms:<22} {remark}")
+            self.logger.highlight(f"{name:<15} {perms:<15} {share['type_name']:<10} {remark}")
         return permissions
 
     def dir(self):

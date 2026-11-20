@@ -117,7 +117,7 @@ class navigator(DatabaseNavigator):
         print_table(data, title="Hosts")
 
     def display_shares(self, shares):
-        data = [["ShareID", "host", "Name", "Remark", "Read Access", "Write Access"]]
+        data = [["ShareID", "host", "Name", "Read Access", "Write Access", "Type", "Remark"]]
 
         for share in shares:
             share_id = share[0]
@@ -132,9 +132,10 @@ class navigator(DatabaseNavigator):
                     share_id,
                     host_id,
                     name,
-                    remark,
                     f"{len(users_r_access)} User(s)",
                     f"{len(users_w_access)} Users",
+                    share.type,
+                    remark,
                 ]
             )
         print_table(data)
@@ -163,7 +164,7 @@ class navigator(DatabaseNavigator):
                 users_r_access = self.db.get_users_with_share_access(host_id=host_id, share_name=name, permissions="r")
                 users_w_access = self.db.get_users_with_share_access(host_id=host_id, share_name=name, permissions="w")
 
-                data = [["ShareID", "Name", "Remark"], [share_id, name, remark]]
+                data = [["ShareID", "Name", "Type", "Remark"], [share_id, name, share.type, remark]]
                 print_table(data, title="Share")
                 host = self.db.get_hosts(filter_term=host_id)[0]
                 data = [
