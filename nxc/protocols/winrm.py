@@ -253,12 +253,12 @@ class winrm(connection):
                 self.logger.fail(f"{self.domain}\\{self.username}:{process_secret(self.nthash)} {e!s}")
             return False
 
-    def execute(self, payload=None, get_output=False, shell_type="cmd"):
+    def execute(self, payload=None, get_output=False, shell_type="cmd", codec=None):
         if not payload:
             payload = self.args.execute
 
         try:
-            result = self.conn.execute_cmd(payload, encoding=self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
+            result = self.conn.execute_cmd(payload, encoding=codec or self.args.codec) if shell_type == "cmd" else self.conn.execute_ps(payload)
         except Exception as e:
             # Reference: https://github.com/diyan/pywinrm/issues/275
             if hasattr(e, "code") and e.code == 5:

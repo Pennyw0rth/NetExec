@@ -3,6 +3,7 @@ import random
 from datetime import datetime, timedelta
 from textwrap import dedent
 from time import sleep
+from xml.sax.saxutils import escape
 
 from impacket.dcerpc.v5 import tsch
 from impacket.dcerpc.v5.dtypes import NULL
@@ -89,7 +90,7 @@ class TSCH_EXEC:
         ]
         cmd_path = random.choice(random_cmd_path)
         random_cmd_arg = ["/c", "/C", "/Q /c", "/F:ON /c", "/T:fg /c", "/T:fg /Q /C", "/F:ON /Q /C"]
-        full_command = f"{random.choice(random_cmd_arg)} {command}"
+        full_command = f"{random.choice(random_cmd_arg)} {escape(command)}"
 
         xml = f"""<?xml version="1.0" encoding="UTF-16"?>
         <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
