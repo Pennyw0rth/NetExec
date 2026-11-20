@@ -6,8 +6,10 @@ import sys
 from os import mkdir
 from os.path import exists
 from os.path import join as path_join
+from functools import wraps
+from inspect import isfunction
 from pathlib import Path
-from threading import Lock
+from threading import RLock
 
 from sqlalchemy import Table, create_engine, MetaData, func
 from sqlalchemy.exc import (
@@ -137,6 +139,21 @@ def format_host_query(q, filter_term, HostsTable):
 
 
 class BaseDB:
+    def __init_subclass__(cls, **kwargs):
+        """Run every add_* method under the DB lock, so concurrent threads cannot interleave its select-then-insert into duplicate rows"""
+        super().__init_subclass__(**kwargs)
+        for name, method in list(vars(cls).items()):
+            if name.startswith("add_") and isfunction(method):
+                setattr(cls, name, BaseDB.locked(method))
+
+    @staticmethod
+    def locked(method):
+        @wraps(method)
+        def wrapper(self, *args, **kwargs):
+            with self.lock:
+                return method(self, *args, **kwargs)
+        return wrapper
+
     def __init__(self, db_engine):
         self.db_engine = db_engine
         self.db_path = self.db_engine.url.database
@@ -147,7 +164,7 @@ class BaseDB:
 
         session = scoped_session(session_factory)
         self.sess = session()
-        self.lock = Lock()
+        self.lock = RLock()
 
     def reflect_tables(self):
         raise NotImplementedError("Reflect tables not implemented")
