@@ -24,19 +24,6 @@ class postgres(connection):
             "hostname": self.hostname,
         })
 
-    def proto_flow(self):
-        self.proto_logger()
-        if self.create_conn_obj():
-            self.enum_host_info()
-            self.print_host_info()
-            if self.login():
-                if self.args.module:
-                    self.load_modules()
-                    self.logger.debug("Calling modules")
-                    self.call_modules()
-                else:
-                    self.call_cmd_args()
-
     def print_host_info(self):
         self.logger.display(self.remote_version)
 
