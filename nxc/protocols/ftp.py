@@ -27,8 +27,18 @@ class ftp(connection):
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
         self.logger.debug(f"Welcome result: {welcome}")
+        # A multiline reply is "NNN-first line", zero or more continuation lines
+        # that carry no code at all, then "NNN last line" (RFC 959 4.2), so only
+        # the opening and closing lines have a code to strip. Splitting every
+        # line on "220" raised IndexError on the continuation ones and left the
+        # "-" separator in the banner when it did not.
+        banner = []
         for line in welcome.splitlines():
-            self.welcome_banner += line.split("220", 1)[1].strip()  # strip out the extra space in the front
+            if len(line) >= 3 and line[:3].isdigit() and (len(line) == 3 or line[3] in "- "):
+                line = line[4:]
+            if line.strip():
+                banner.append(line.strip())
+        self.welcome_banner = " ".join(banner)
         self.logger.debug(f"Remote version: {self.welcome_banner}")
 
     def print_host_info(self):
