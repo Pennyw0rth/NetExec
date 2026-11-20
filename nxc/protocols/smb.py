@@ -2454,6 +2454,13 @@ class smb(connection):
 
         def add_hash(secret_type, secret, host_id):
             nonlocal printed_kerb_keys_banner, printed_trust_keys_banner
+            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+
+            if self.args.userntds and not is_trust_key:
+                account = secret.split(":")[0].split("\\")[-1].split("_history")[0]
+                if account.lower() != self.args.userntds.split("\\")[-1].lower():
+                    return
+
             if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
                 self.logger.display("Kerberos keys:")
                 printed_kerb_keys_banner = True
@@ -2465,7 +2472,7 @@ class smb(connection):
                 add_hash.nt_lm_secrets += 1
 
             is_enabled_account = secret.endswith(" (status=Enabled)")
-            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+            raw_secret = secret
             for status in (" (status=Enabled)", " (status=Disabled)", " (status=N/A)"):
                 secret = secret.removesuffix(status)
 
@@ -2474,6 +2481,8 @@ class smb(connection):
                     self.logger.display("Trust keys:")
                     printed_trust_keys_banner = True
                 self.logger.highlight(secret)
+                if secret_type == NTDSHashes.SECRET_TYPE.NTDS and not is_trust_key:
+                    add_hash.kept_ntds.append(raw_secret)
 
             # Filter out computer accounts, history hashes and kerberos keys for adding to db
             if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
@@ -2499,6 +2508,7 @@ class smb(connection):
         add_hash.nt_lm_secrets = 0
         add_hash.kerb_secrets = 0
         add_hash.added_to_db = 0
+        add_hash.kept_ntds = []
 
         if self.args.ntds == "vss":
             use_vss_method = True
@@ -2538,14 +2548,19 @@ class smb(connection):
                 self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
             NTDS.dump()
             ntds_outfile = f"{self.output_filename}.ntds"
+            # impacket writes every account to the file regardless of --user/--enabled, so rewrite it with the kept lines
+            if not self.args.just_trust_keys and (self.args.userntds or self.args.enabled):
+                with open(ntds_outfile, "w") as f:
+                    f.writelines(line + "\n" for line in add_hash.kept_ntds)
             if self.args.just_trust_keys:
                 self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}.trustkeys")
             else:
                 self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
                 if self.args.kerberos_keys:
                     self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+                if not self.args.enabled and not self.args.userntds:
+                    self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                    self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
         except Exception as e:
             # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
             # We don't store the resume file if this error happened, since this error is related to lack
