@@ -32,8 +32,8 @@ class Klist:
         self.bias_minutes = 0
 
     def run(self, command):
-        # klist prints non-ASCII names, and a NBSP before ':' on French Windows, in the target's OEM codepage; force UTF-8 on both ends so parsing is locale-independent
-        return self.connection.execute(f"chcp 65001 > nul & {command}", True, codec="utf-8")
+        # klist prints in the target's OEM codepage: switch it to UTF-8 (quoted so smbexec's echo keeps & and >)
+        return self.connection.execute(f'cmd /c "chcp 65001 > nul & {command}"', True, codec="utf-8")
 
     def display(self):
         tgts = self.load_tgts()
