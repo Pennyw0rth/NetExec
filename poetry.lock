@@ -2,24 +2,24 @@
 
 [[package]]
 name = "aardwolf"
-version = "0.2.16"
+version = "0.2.17"
 description = "Asynchronous RDP protocol implementation"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
 files = [
-    {file = "aardwolf-0.2.16-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:fbde3046d4cdd3a5596dfcc988965b85527632cee46db2522961893d101fcbc7"},
-    {file = "aardwolf-0.2.16-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:69bedfad4b68b855a9d0df928c78eb0bbdc642c22f9845778c9df77a8fe9c259"},
-    {file = "aardwolf-0.2.16-cp311-abi3-win_amd64.whl", hash = "sha256:b4d6032110ee238cf11c1f5efa86636462d7dc2e972b8464e949da82df58f3a6"},
-    {file = "aardwolf-0.2.16.tar.gz", hash = "sha256:52cba79817af963108dcd39e82513deec742387f2fab01a9138abe56f94e7ad2"},
+    {file = "aardwolf-0.2.17-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:24387eaa8a730e9317c5141b8e9fa41324e4a8ee2d21267d62af4b933c7195bf"},
+    {file = "aardwolf-0.2.17-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:8a2fc66cb4c32ff5ede8f9a157e4b7f6f62ca34ca86a2b8443879ac963f34642"},
+    {file = "aardwolf-0.2.17-cp311-abi3-win_amd64.whl", hash = "sha256:4bb4f16f2acc3292a507197a35923a89763f7a173538c46d089e242b8f106910"},
+    {file = "aardwolf-0.2.17.tar.gz", hash = "sha256:42ee9e8d457e11b2bb8dc1400268c39c5898cc7b1fa9c3735a43ee2ee28505e0"},
 ]
 
 [package.dependencies]
 arc4 = ">=0.3.0"
 asn1crypto = "*"
 asn1tools = "*"
-asyauth = ">=0.0.16"
-asysocks = ">=0.2.9"
+asyauth = ">=0.0.25"
+asysocks = ">=0.2.11"
 colorama = "*"
 Pillow = ">=9.0.0"
 pyperclip = ">=1.8.2"
@@ -193,32 +193,32 @@ shell = ["prompt_toolkit"]
 
 [[package]]
 name = "asyauth"
-version = "0.0.23"
+version = "0.0.25"
 description = "Unified authentication library"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "asyauth-0.0.23-py3-none-any.whl", hash = "sha256:bbca62d10c4b0d2585103791d7451adda325c3d654114253638456fe84d39b0e"},
-    {file = "asyauth-0.0.23.tar.gz", hash = "sha256:36f0384ddb2b625a10333363cafe190d6e9c9ed17fd07b3e2887641a3cc626f0"},
+    {file = "asyauth-0.0.25-py3-none-any.whl", hash = "sha256:c3d8b98d9ec5895a4aebd3d3bb10d52440c210c43f65cbb3a3dc04b5b6522f32"},
+    {file = "asyauth-0.0.25.tar.gz", hash = "sha256:6326599e7951bdf9fd1dfee20811dbbef41f5fdd591dbccb8d8af6d4edc36775"},
 ]
 
 [package.dependencies]
 asn1crypto = ">=1.3.0"
-asysocks = ">=0.2.18"
-minikerberos = ">=0.4.9"
+asysocks = ">=0.2.19"
+minikerberos = ">=0.4.12"
 unicrypto = ">=0.0.12"
 
 [[package]]
 name = "asysocks"
-version = "0.2.18"
+version = "0.2.19"
 description = ""
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "asysocks-0.2.18-py3-none-any.whl", hash = "sha256:a881536456d922a9fde44031aba262bc34ee39a9d14749ded1e8a4820602a37d"},
-    {file = "asysocks-0.2.18.tar.gz", hash = "sha256:cc6196e82c8adc8b3ce2321dddf635500c760316da4b7cca321b532cbb3dfdf5"},
+    {file = "asysocks-0.2.19-py3-none-any.whl", hash = "sha256:be34dd128287371cad5ff6332314034d54d587ba58a0c7dd8be2787138c29d28"},
+    {file = "asysocks-0.2.19.tar.gz", hash = "sha256:c8ffa154ad7ca46aaa06c1f86f347bc20f3b8c696186b08fc4193791212b2bec"},
 ]
 
 [package.dependencies]
@@ -1509,19 +1509,19 @@ files = [
 
 [[package]]
 name = "minikerberos"
-version = "0.4.9"
+version = "0.4.12"
 description = "Kerberos manipulation library in pure Python"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "minikerberos-0.4.9-py3-none-any.whl", hash = "sha256:3c3a422541bc66719bd495f89cb6f9e149fba8f1499b9f550aa88cd9aa532ffa"},
-    {file = "minikerberos-0.4.9.tar.gz", hash = "sha256:095a980a1976adff48c3de1f73d75efe9b39da7214dc7c891a2363240716a9e7"},
+    {file = "minikerberos-0.4.12-py3-none-any.whl", hash = "sha256:4a8b0ce5ccd28e858e72124dc5764168da230b9af0b400406b6a7788cf7fa82e"},
+    {file = "minikerberos-0.4.12.tar.gz", hash = "sha256:607498d430042d6ba53f390a5a11e0a29cb1d3744bbb130ef2e7bf2f5e86b06c"},
 ]
 
 [package.dependencies]
 asn1crypto = ">=1.5.1"
-asysocks = ">=0.2.18"
+asysocks = ">=0.2.19"
 oscrypto = ">=1.3.0"
 six = "*"
 tqdm = "*"
@@ -2841,4 +2841,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "6ba2529d5c77bb8a64abe738ec3117d903a34de437bdd5eea0b7f0830a9ec0f9"
+content-hash = "a2b53674107a5f115a8daf45f5523aca0bfe2a0475bcb41d34f7a4f79f8c8e03"

@@ -6,6 +6,7 @@ def proto_args(parser, parents):
     rdp_parser.add_argument("-H", "--hash", metavar="HASH", dest="hash", nargs="+", default=[], help="NTLM hash(es) or file(s) containing NTLM hashes")
     rdp_parser.add_argument("--port", type=int, default=3389, help="RDP port")
     rdp_parser.add_argument("--rdp-timeout", type=int, default=5, help="RDP timeout on socket connection")
+    rdp_parser.add_argument("--rdp-logon-timeout", type=int, default=15, help="Time to wait for the logon confirmation of a server without NLA/CredSSP, raise it if a first logon is slow")
     rdp_parser.add_argument("--nla-screenshot", action="store_true", help="Screenshot RDP login prompt if NLA is disabled")
 
     dgroup = rdp_parser.add_mutually_exclusive_group()
