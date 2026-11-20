@@ -55,7 +55,6 @@ class postgres(connection):
             if self.admin_privs:
                 self.db.add_admin_user(cred_id, host_id)
 
-
     def check_if_admin(self):
         try:
             cur = self.conn.cursor()
@@ -66,7 +65,6 @@ class postgres(connection):
             self.admin_privs = bool(row[0]) if row else False
         except Exception as e:
             self.logger.fail(f"Error: {e}")
-
 
     def create_conn_obj(self):
         try:
@@ -124,9 +122,9 @@ class postgres(connection):
                     data = f.read()
 
                 with self.conn.cursor() as curr:
-                    oid = curr.execute("SELECT lo_from_bytea(0, %s)",(data,)).fetchone()[0]
-                    curr.execute("SELECT lo_export(%s, %s)",(oid, remote_path))
-                    curr.execute( "SELECT lo_unlink(%s)",(oid,))
+                    oid = curr.execute("SELECT lo_from_bytea(0, %s)", (data,)).fetchone()[0]
+                    curr.execute("SELECT lo_export(%s, %s)", (oid, remote_path))
+                    curr.execute("SELECT lo_unlink(%s)", (oid,))
                     self.conn.commit()
                 self.logger.success(f"[+] Uploaded: {local_path} -> {remote_path}")
         except Exception as e:
