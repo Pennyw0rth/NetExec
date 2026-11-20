@@ -33,99 +33,105 @@ class NXCModule:
             self.wdigest_check(context, connection.conn)
 
     def wdigest_enable(self, context, smbconnection):
-        remote_ops = RemoteOperations(smbconnection, False)
-        remote_ops.enableRegistry()
+        remote_ops = None
+        try:
+            remote_ops = RemoteOperations(smbconnection, False)
+            remote_ops.enableRegistry()
 
-        if remote_ops._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
+            if remote_ops._RemoteOperations__rrp:
+                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                reg_handle = ans["phKey"]
 
-            ans = rrp.hBaseRegOpenKey(
-                remote_ops._RemoteOperations__rrp,
-                reg_handle,
-                "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest",
-            )
-            key_handle = ans["phkResult"]
-
-            rrp.hBaseRegSetValue(
-                remote_ops._RemoteOperations__rrp,
-                key_handle,
-                "UseLogonCredential\x00",
-                rrp.REG_DWORD,
-                1,
-            )
-
-            rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
-
-            if int(data) == 1:
-                context.log.success("UseLogonCredential registry key created successfully")
-
-        with contextlib.suppress(Exception):
-            remote_ops.finish()
-
-    def wdigest_disable(self, context, smbconnection):
-        remote_ops = RemoteOperations(smbconnection, False)
-        remote_ops.enableRegistry()
-
-        if remote_ops._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-
-            ans = rrp.hBaseRegOpenKey(
-                remote_ops._RemoteOperations__rrp,
-                reg_handle,
-                "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest",
-            )
-            keyHandle = ans["phkResult"]
-
-            try:
-                rrp.hBaseRegDeleteValue(
+                ans = rrp.hBaseRegOpenKey(
                     remote_ops._RemoteOperations__rrp,
-                    keyHandle,
-                    "UseLogonCredential\x00",
+                    reg_handle,
+                    "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest",
                 )
-            except Exception:
-                context.log.success("UseLogonCredential registry key not present")
+                key_handle = ans["phkResult"]
 
+                rrp.hBaseRegSetValue(
+                    remote_ops._RemoteOperations__rrp,
+                    key_handle,
+                    "UseLogonCredential\x00",
+                    rrp.REG_DWORD,
+                    1,
+                )
+
+                rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
+
+                if int(data) == 1:
+                    context.log.success("UseLogonCredential registry key created successfully")
+        finally:
+            if remote_ops is not None:
                 with contextlib.suppress(Exception):
                     remote_ops.finish()
 
-                return
+    def wdigest_disable(self, context, smbconnection):
+        remote_ops = None
+        try:
+            remote_ops = RemoteOperations(smbconnection, False)
+            remote_ops.enableRegistry()
 
-            try:
-                # Check to make sure the reg key is actually deleted
-                rtype, data = rrp.hBaseRegQueryValue(
+            if remote_ops._RemoteOperations__rrp:
+                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                reg_handle = ans["phKey"]
+
+                ans = rrp.hBaseRegOpenKey(
                     remote_ops._RemoteOperations__rrp,
-                    keyHandle,
-                    "UseLogonCredential\x00",
+                    reg_handle,
+                    "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest",
                 )
-            except DCERPCException:
-                context.log.success("UseLogonCredential registry key deleted successfully")
+                keyHandle = ans["phkResult"]
 
+                try:
+                    rrp.hBaseRegDeleteValue(
+                        remote_ops._RemoteOperations__rrp,
+                        keyHandle,
+                        "UseLogonCredential\x00",
+                    )
+                except Exception:
+                    context.log.success("UseLogonCredential registry key not present")
+                    return
+
+                try:
+                    # Query again only to confirm the value is gone; it raises if the key was deleted
+                    rrp.hBaseRegQueryValue(
+                        remote_ops._RemoteOperations__rrp,
+                        keyHandle,
+                        "UseLogonCredential\x00",
+                    )
+                except DCERPCException:
+                    context.log.success("UseLogonCredential registry key deleted successfully")
+        finally:
+            if remote_ops is not None:
                 with contextlib.suppress(Exception):
                     remote_ops.finish()
 
     def wdigest_check(self, context, smbconnection):
-        remote_ops = RemoteOperations(smbconnection, False)
-        remote_ops.enableRegistry()
+        remote_ops = None
+        try:
+            remote_ops = RemoteOperations(smbconnection, False)
+            remote_ops.enableRegistry()
 
-        if remote_ops._RemoteOperations__rrp:
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
+            if remote_ops._RemoteOperations__rrp:
+                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                reg_handle = ans["phKey"]
 
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest")
-            key_handle = ans["phkResult"]
+                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest")
+                key_handle = ans["phkResult"]
 
-            try:
-                rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
-                if int(data) == 1:
-                    context.log.success("UseLogonCredential registry key is enabled")
-                else:
-                    context.log.fail(f"Unexpected registry value for UseLogonCredential: {data}")
-            except DCERPCException as d:
-                if "winreg.HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest" in str(d):
-                    context.log.fail("UseLogonCredential registry key is disabled (registry key not found)")
-                else:
-                    context.log.fail("UseLogonCredential registry key not present")
-            with contextlib.suppress(Exception):
-                remote_ops.finish()
+                try:
+                    rtype, data = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseLogonCredential\x00")
+                    if int(data) == 1:
+                        context.log.success("UseLogonCredential registry key is enabled")
+                    else:
+                        context.log.fail(f"Unexpected registry value for UseLogonCredential: {data}")
+                except DCERPCException as e:
+                    if "winreg.HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest" in str(e):
+                        context.log.fail("UseLogonCredential registry key is disabled (registry key not found)")
+                    else:
+                        context.log.fail("UseLogonCredential registry key not present")
+        finally:
+            if remote_ops is not None:
+                with contextlib.suppress(Exception):
+                    remote_ops.finish()

