@@ -27,8 +27,7 @@ class ftp(connection):
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
         self.logger.debug(f"Welcome result: {welcome}")
-        for line in welcome.splitlines():
-            self.welcome_banner += line.split("220", 1)[1].strip()  # strip out the extra space in the front
+        self.welcome_banner = " - ".join(line.removeprefix("220").lstrip() for line in welcome.splitlines())
         self.logger.debug(f"Remote version: {self.welcome_banner}")
 
     def print_host_info(self):

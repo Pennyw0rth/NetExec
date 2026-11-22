@@ -101,7 +101,7 @@ class vnc(connection):
             credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.PASS)
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
             asyncio.run(self.connect_vnc(True))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # asyncio.TimeoutError is only an alias of the builtin from 3.11 on,
             # and the project supports 3.10, so catch it by its asyncio name.
             self.logger.debug(f"Timed out after {self.args.vnc_timeout}s connecting to {self.host}:{self.port}")
@@ -145,7 +145,7 @@ class vnc(connection):
             )
             return True
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Reporting an unresponsive server as a rejected password would be wrong:
             # nothing was authenticated, so say what actually happened.
             self.logger.fail(f"{password} - Connection timed out after {self.args.vnc_timeout}s")

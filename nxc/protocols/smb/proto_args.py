@@ -11,6 +11,7 @@ def proto_args(parser, parents):
     smb_parser.add_argument("--generate-st", type=str, dest="generate_st", help="Store a Service Ticket in the specified file. Use with --delegate to save the S4U ST, or without --delegate (together with --spn) to request a regular ST for the given SPN")
     self_delegate_arg = smb_parser.add_argument("--self", dest="no_s4u2proxy", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Only do S4U2Self, no S4U2Proxy (use with delegate)")
     u2u_arg = smb_parser.add_argument("--u2u", action=get_conditional_action(_StoreTrueAction), make_required=[], help="Use User-to-User (U2U) authentication with S4U2Self")
+    smb_parser.add_argument("--unpac", action="store_true", help="UnPAC the hash: recover the NT hash from the PAC of the PKINIT TGT (requires a certificate)")
 
     dgroup = smb_parser.add_mutually_exclusive_group()
     dgroup.add_argument("-d", "--domain", metavar="DOMAIN", dest="domain", type=str, help="domain to authenticate to")
@@ -51,6 +52,8 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
     cred_gathering_group.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
     cred_gathering_group.add_argument("--list-snapshots", nargs="?", dest="list_snapshots", const="ADMIN$", help="Lists the VSS snapshots (default: %(const)s)")
+    cred_gathering_group.add_argument("--klist", action="store_true", help="Enumerate Kerberos sessions on the target")
+    cred_gathering_group.add_argument("--klist-dump", nargs="*", type=int, metavar="NUM", dest="klist_dump", help="Dump TGTs as ccache files: no value dumps all, or give session number(s) from --klist, e.g. --klist-dump 1 3")
 
     mapping_enum_group = smb_parser.add_argument_group("Mapping/Enumeration")
     shares_arg = mapping_enum_group.add_argument("--shares", type=str, nargs="?", const="", help="Enumerate shares and access, filter on specified argument (read ; write ; read,write)")

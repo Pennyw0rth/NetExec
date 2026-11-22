@@ -20,6 +20,8 @@ def proto_args(parser, parents):
     cgroup.add_argument("--dpapi", choices={"cookies", "nosystem"}, nargs="*", help="dump DPAPI secrets from target systems, can dump cookies if you add 'cookies', will not dump SYSTEM dpapi if you add nosystem")
     cgroup.add_argument("--mkfile", action="store", help="DPAPI option. File with masterkeys in form of {GUID}:SHA1")
     cgroup.add_argument("--pvk", action="store", help="DPAPI option. File with domain backupkey")
+    cgroup.add_argument("--klist", action="store_true", help="Enumerate Kerberos sessions on the target")
+    cgroup.add_argument("--klist-dump", nargs="*", type=int, metavar="NUM", dest="klist_dump", help="Dump TGTs as ccache files: no value dumps all, or give session number(s) from --klist, e.g. --klist-dump 1 3")
 
     mapping_enum_group = winrm_parser.add_argument_group("Mapping/Enumeration")
     mapping_enum_group.add_argument("--dir", nargs="?", type=str, const="", help="List the content of a path (default path: '%(const)s')")
