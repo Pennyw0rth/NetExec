@@ -337,7 +337,7 @@ class NXCModule:
             """
         result = self.query_and_get_output(exec_as + query)
         self.revert_context(exec_as)
-        return result
+        return [db["DATABASENAME"] for db in result]
 
     def check_dbowner_privesc(self, exec_as=""):
         """
@@ -370,9 +370,9 @@ class NXCModule:
             None
         """
         self.query_and_get_output(exec_as)
-        self.query_and_get_output(f"use {database};")
+        self.query_and_get_output(f"use [{database}];")
 
-        query = """CREATE PROCEDURE sp_elevate_me
+        query = f"""CREATE PROCEDURE sp_elevate_me
             WITH EXECUTE AS OWNER
             as
             begin
