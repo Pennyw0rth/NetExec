@@ -7,6 +7,7 @@
 
 # Coding style
 
+- Where appropriate, link to existing documentation that defines the implemented logic (e.g., Microsoft docs or RFCs); keep each reference to a link and at most a few words.
 - Assume ordinary LDAP searches and LDAP response parsing do not raise exceptions; do not wrap them in `try`/`except`.
 - Always bind caught exceptions as `e`, not `error` or another name.
 - Do not prefix function or method names with underscores; preserve required Python special methods such as `__init__`.
