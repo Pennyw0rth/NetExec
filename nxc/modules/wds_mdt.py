@@ -130,7 +130,10 @@ class NXCModule:
             self.save_file(share, path, content)
 
             try:
-                self.report_findings(self.parse_ini(content, f"{share}\\{path}") if path.lower().endswith(".ini") else self.parse_xml(content, f"{share}\\{path}"))
+                if path.lower().endswith(".ini"):
+                    self.report_findings(self.parse_ini(content, f"{share}\\{path}"))
+                elif path.lower().endswith(".xml"):
+                    self.report_findings(self.parse_xml(content, f"{share}\\{path}"))
             except (ConfigError, ET.ParseError, ValueError, LookupError) as e:
                 self.context.log.fail(f"Failed to parse {share}\\{path}: {e}")
 
