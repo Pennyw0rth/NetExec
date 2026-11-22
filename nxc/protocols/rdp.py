@@ -38,11 +38,13 @@ class rdp(connection):
             SUPP_PROTOCOLS.RDP,
         ]
         self.protoflags = [
-            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
+            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
+        self.selected_proto = None
+        self.login_proto = None
         self.iosettings = RDPIOSettings()
         self.iosettings.clipboard_use_pyperclip = False
         width, height = args.res.upper().split("X")
@@ -107,8 +109,11 @@ class rdp(connection):
 
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
-        if self.domain is None:
-            self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+        if self.server_os is None:
+            if self.selected_proto == SUPP_PROTOCOLS.RDP:
+                self.logger.display(f"Standard RDP Security only, no server info available ({nla})")
+            else:
+                self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
             try:
@@ -123,7 +128,7 @@ class rdp(connection):
         their NTLM challenge still names the host for enum_host_info(). That call returns False when the host doesn't answer.
         """
         if credentials is None:
-            self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
+            self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True, autologon=False)  # old servers only offer ciphers OpenSSL rejects at its default security level; no autologon with the dummy credentials
             self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
             for proto in reversed(self.protoflags):
                 try:
@@ -135,16 +140,27 @@ class rdp(connection):
                     if "TCPSocket" in str(e):
                         return False
                     if "Reason:" not in str(e):
+                        self.selected_proto = proto
                         break  # CredSSP ran, enum_host_info() reads the NTLM challenge
+                else:
+                    self.selected_proto = proto  # accepted: without CredSSP the dummy credentials cannot fail here
+                    break
                 finally:
                     self.disconnect()
+
+            if self.selected_proto is None:
+                self.logger.debug("Server rejected every protocol we offered")
+            elif self.selected_proto in (SUPP_PROTOCOLS.RDP, SUPP_PROTOCOLS.SSL):
+                self.login_proto = self.selected_proto
             return True
 
         iosettings = self.iosettings.clone_for_connection()
-        # the fingerprint, the NLA probe and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type
-        iosettings.supported_protocols = supported_protocols
+        # the fingerprint, the NLA probe and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type, unless the server has no CredSSP and only takes the protocol the fingerprint found
+        iosettings.supported_protocols = self.login_proto if supported_protocols is None else supported_protocols
         self.conn = RDPConnection(iosettings=iosettings, target=self.target, credentials=credentials)
-        _, err = self.runner.run(asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout))
+        self.conn.autologon_timeout = self.args.rdp_logon_timeout
+        # Without CredSSP, connect() also waits up to autologon_timeout for the server to confirm the logon
+        _, err = self.runner.run(asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout + (self.conn.autologon_timeout if self.login_proto is not None else 0)))
         if err is not None:
             raise err
         self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
@@ -172,6 +188,8 @@ class rdp(connection):
         if self.args.domain:
             self.domain = self.args.domain
         if self.args.local_auth:
+            self.domain = self.hostname
+        if self.domain is None:
             self.domain = self.hostname
 
         if not self.kdcHost and self.domain:
@@ -203,6 +221,8 @@ class rdp(connection):
 
         That PDU never comes when access is authorized but the logon is refused (restricted admin).
         """
+        if self.login_proto is not None and self.auth.stype != asyauthSecret.PASSWORD:  # without CredSSP aardwolf sends the secret as the autologon password, so a hash, key or ccache only fails (+2 badPwdCount)
+            raise ValueError("no CredSSP on this server, only a password can log on")
         self.disconnect()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
         self.create_conn_obj(self.auth)
         try:
