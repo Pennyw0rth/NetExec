@@ -35,6 +35,7 @@ dependencies = [
     "paramiko>=3.3.1",
     "pefile (>=2024.8.26,<2025.0.0)",
     "pyasn1-modules>=0.3.0",
+    "pybit7z==1.3.0",
     "pylnk3>=0.4.3",
     "pypsrp>=0.8.1",
     "pypykatz>=0.6.8",
