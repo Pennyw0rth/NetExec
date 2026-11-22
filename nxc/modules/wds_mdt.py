@@ -88,7 +88,7 @@ class NXCModule:
             return False
 
     def explore_wds(self, share):
-        self.context.log.success(f"Found share: {share}")
+        self.context.log.display(f"Found share: {share} (should be readable to any authenticated domain user)")
         downloaded = False
         for path in (r"Boot\x64\Images", r"Boot\x86\Images"):
             try:
@@ -112,7 +112,7 @@ class NXCModule:
             self.context.log.display(r"Check Deploy\Scripts\Bootstrap.ini and Deploy\Scripts\CustomSettings.ini.")
 
     def explore_mdt(self, share):
-        self.context.log.success(f"Found share: {share}")
+        self.context.log.display(f"Found share: {share} (should require admin access)")
         paths = [r"Control\Bootstrap.ini", r"Control\CustomSettings.ini"]
         try:
             paths.extend(self.connection.spider(share, folder="Control", pattern=["Unattend.xml"]))
