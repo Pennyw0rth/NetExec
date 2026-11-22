@@ -1,11 +1,12 @@
 from base64 import b64decode
 from configparser import ConfigParser, Error as ConfigError
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path, PureWindowsPath
 from stat import FILE_ATTRIBUTE_REPARSE_POINT, S_ISLNK
 from xml.etree import ElementTree as ET
 
-from pybit7z import BitArchiveReader, FormatWim, OverwriteMode, lib7zip_context
+from pybit7z import BitArchiveReader, FormatWim, lib7zip_context
 
 from nxc.helpers.misc import CATEGORY, decode_text
 from nxc.helpers.path import sanitize_path_component
@@ -19,7 +20,7 @@ class NXCModule:
     Inspect REMINST/REMOTEINSTALL and DeploymentShare$ for Bootstrap.ini,
     CustomSettings.ini, Unattend.xml, and candidate WinPE images.
     Download discovered files, skipping WIM images of 1 GiB or larger by default.
-    Extract WIM contents and scan embedded MDT INI and unattended XML files.
+    Extract matching MDT INI and unattended XML files from WIM images.
     Report deployment secrets and store complete Windows account credentials.
 
     Module by:
@@ -80,18 +81,17 @@ class NXCModule:
 
     def save_file(self, share, path, content=None):
         try:
-            local_path = self.output_path.joinpath(*(sanitize_path_component(part) for part in (self.connection.host, share, *PureWindowsPath(path.lstrip("\\/")).parts)))
+            local_path = self.output_path / sanitize_path_component(f"{self.connection.hostname}_{self.connection.host}_{PureWindowsPath(path).stem}_{datetime.now().strftime('%Y-%m-%d_%H%M%S_%f')}{PureWindowsPath(path).suffix}")
             local_path = local_path.resolve()
             if not local_path.is_relative_to(self.output_path):
                 raise ValueError("Output path escapes the module directory")
-
-            local_path.parent.mkdir(parents=True, exist_ok=True)
+            self.output_path.mkdir(parents=True, exist_ok=True)
             with local_path.open("wb") as output:
                 if content is None:
                     self.connection.conn.getFile(share, path, output.write)
                 else:
                     output.write(content)
-            self.context.log.success(f"Saved: {local_path}")
+            self.context.log.success(f"Saved {share}\\{path} to: {self.output_path}")
             return local_path
         except Exception as e:
             self.context.log.fail(f"Failed to save {share}\\{path}: {e}")
@@ -112,70 +112,32 @@ class NXCModule:
                     continue
                 self.context.log.success(f"Found WIM image: {share}\\{path}\\{entry.get_longname()} ({entry.get_filesize() / (1024 * 1024):.0f} MB)")
                 if not self.ignore_size_limit and entry.get_filesize() >= self.WIM_MAX_SIZE:
-                    self.context.log.display(f"Skipping {path}\\{entry.get_longname()} (1 GiB WIM download limit; use IGNORE_SIZE_LIMIT=TRUE to download)")
+                    self.context.log.display(f"Skipping {share}\\{path}\\{entry.get_longname()} (1 GiB WIM download limit; use IGNORE_SIZE_LIMIT=TRUE to download)")
                     continue
                 if local_path := self.save_file(share, f"{path}\\{entry.get_longname()}"):
-                    images.append(local_path)
+                    images.append((local_path, f"{path}\\{entry.get_longname()}"))
 
-        for path in images:
-            self.explore_wim(path)
+        for local_path, path in images:
+            self.explore_wim(local_path, share, path)
 
-    def wim_destination(self, entry, output_path):
-        if entry.attributes() & FILE_ATTRIBUTE_REPARSE_POINT or S_ISLNK(entry.attributes() >> 16):
-            self.context.log.debug(f"Skipping WIM link: {entry.path()}")
-            return None
-        path = output_path.joinpath(*(sanitize_path_component(part) for part in PureWindowsPath(entry.path()).parts))
-        path = path.resolve()
-        if not path.is_relative_to(output_path):
-            raise ValueError(f"WIM member escapes the extraction directory: {entry.path()}")
-        return path
-
-    def explore_wim(self, path):
-        files = {}
-        output_path = path.with_name(sanitize_path_component(f"{path.name}.extracted"))
-        output_path = output_path.resolve()
+    def explore_wim(self, path, share, remote_path):
         try:
-            if not output_path.is_relative_to(self.output_path):
-                raise ValueError("WIM extraction path escapes the module directory")
-            output_path.mkdir(parents=True, exist_ok=True)
-            self.context.log.display(f"Extracting WIM: {path.name}")
+            self.context.log.display(f"Extracting WIM: {share}\\{remote_path}")
             # https://msclock.github.io/pybit7z/api/#pybit7z.BitInputArchive.extract_to
             with lib7zip_context() as library:
                 archive = BitArchiveReader(library, str(path), FormatWim)
-                archive.set_overwrite_mode(OverwriteMode.Overwrite)
-                indices = []
-                renamed = {}
                 for index in range(archive.items_count()):
                     entry = archive.item_at(index)
-                    if member_path := self.wim_destination(entry, output_path):
-                        if Path(entry.native_path()) == member_path.relative_to(output_path):
-                            indices.append(index)
-                        elif entry.is_dir():
-                            member_path.mkdir(parents=True, exist_ok=True)
-                        else:
-                            renamed[index] = member_path
-                        if not entry.is_dir() and any(PureWindowsPath(entry.path()).match(pattern) for pattern in self.wim_patterns):
-                            files[member_path] = f"{path.relative_to(self.output_path)}/{entry.path()}"
-
-                if indices:
-                    archive.extract_to(str(output_path), indices)
-                # pybit7z 1.3.0's rename callback aborts; write sanitized names separately.
-                for index, member_path in renamed.items():
-                    member_path.parent.mkdir(parents=True, exist_ok=True)
-                    member_path.write_bytes(archive.extract_to(index))
-            self.context.log.success(f"Extracted WIM to: {output_path}")
+                    if entry.is_dir() or not any(PureWindowsPath(entry.path()).match(pattern) for pattern in self.wim_patterns):
+                        continue
+                    if entry.attributes() & FILE_ATTRIBUTE_REPARSE_POINT or S_ISLNK(entry.attributes() >> 16):
+                        self.context.log.debug(f"Skipping WIM link: {share}\\{remote_path}!\\{entry.path()}")
+                        continue
+                    content = archive.extract_to(index)
+                    self.save_file(share, f"{remote_path}!\\{entry.path()}", content)
+                    self.parse_file(content, f"{share}\\{remote_path}!\\{entry.path()}")
         except Exception as e:
-            self.context.log.fail(f"Failed to extract WIM {path}: {e}")
-            return
-
-        for member_path, member_name in files.items():
-            try:
-                member_path = member_path.resolve()
-                if not member_path.is_relative_to(output_path):
-                    raise ValueError("Extracted file escapes the extraction directory")
-                self.parse_file(member_path.read_bytes(), member_name)
-            except (OSError, ValueError) as e:
-                self.context.log.fail(f"Failed to read {member_name}: {e}")
+            self.context.log.fail(f"Failed to extract WIM {share}\\{remote_path}: {e}")
 
     def explore_mdt(self, share):
         self.context.log.display(f"Found share: {share} (should require admin access)")
