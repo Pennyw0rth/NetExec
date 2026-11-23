@@ -151,7 +151,7 @@ class ftp(connection):
         try:
             # Attempt to upload the file
             with open(local_file, "rb") as f:
-                self.conn.storbinary(f"STOR {remote_file}", f.read)
+                self.conn.storbinary(f"STOR {remote_file}", f)
         except error_perm as error_message:
             self.logger.fail(f"Failed to upload file. Response: ({error_message})")
             return False
