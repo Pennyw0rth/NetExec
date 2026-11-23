@@ -699,6 +699,30 @@ class wmi(connection):
             self.logger.highlight(f"{share['Name']:<15} {share['Description'] or ''}")
 
     @requires_admin
+    def interfaces(self):
+        self.logger.display("Starting network interface enumeration")
+        interfaces = self.query_values("SELECT InterfaceIndex, IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = True")
+        if not interfaces:
+            self.logger.fail("No network interfaces found")
+            return
+
+        adapters = {
+            adapter["InterfaceIndex"]: adapter
+            for adapter in self.query_values("SELECT InterfaceIndex, Speed FROM Win32_NetworkAdapter WHERE NetEnabled = True")
+        }
+        self.logger.success("Retrieved network interface data")
+        self.logger.highlight(f"Found {len(interfaces)} network interface(s)")
+        for index, interface in enumerate(sorted(interfaces, key=lambda item: item["InterfaceIndex"]), start=1):
+            self.logger.display(f"Interface {index} (Index: {interface['InterfaceIndex']}):")
+            adapter = adapters.get(interface["InterfaceIndex"])
+            if adapter and adapter["Speed"] is not None:
+                self.logger.display(f"  - Speed: {int(adapter['Speed']) / 1000000:.0f} Mbps")
+            self.logger.display("  - Addresses:")
+            for address in interface["IPAddress"] or []:
+                family = "IPv6" if ":" in address else "IPv4"
+                self.logger.display(f"      - {family}: {address}")
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:

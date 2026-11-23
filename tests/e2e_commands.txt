@@ -202,6 +202,7 @@ netexec smb TARGET_HOST -u TEST_USER_FILE -H tests/data/test_hashes.txt
 ##### WMI
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS # need an extra space after this command due to regex
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --shares
+netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --interfaces
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --list-snapshots
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS --wmi-namespace root/cimv2
 netexec wmi TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD KERBEROS -x whoami
