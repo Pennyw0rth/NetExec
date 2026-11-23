@@ -681,8 +681,25 @@ class wmi(connection):
         except Exception as e:
             self.logger.fail(e)
 
+    def query_values(self, wql, namespace="//./root/cimv2"):
+        records = self.wmi_query(wql=wql, namespace=namespace, print_results=False) or []
+        return [{name: value["value"] for name, value in record.items()} for record in records]
+
     @requires_admin
-    def wmi_query(self, wql=None, namespace=None, callback_func=None):
+    def shares(self):
+        shares = self.query_values("SELECT Name, Description FROM Win32_Share")
+        if not shares:
+            self.logger.fail("No shares found")
+            return
+
+        self.logger.display("Enumerated shares")
+        self.logger.highlight(f"{'Share':<15} {'Remark'}")
+        self.logger.highlight(f"{'-----':<15} {'------'}")
+        for share in sorted(shares, key=lambda item: item["Name"].casefold()):
+            self.logger.highlight(f"{share['Name']:<15} {share['Description'] or ''}")
+
+    @requires_admin
+    def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:
             wql = self.args.wmi_query.strip("\n")
@@ -705,8 +722,9 @@ class wmi(connection):
                         wmi_results = iEnumWbemClassObject.Next(0xFFFFFFFF, 1)[0]
                         record = wmi_results.getProperties()
                         records.append(record)
-                        for k, v in record.items():
-                            self.logger.highlight(f"{k} => {v['value']}")
+                        if print_results:
+                            for k, v in record.items():
+                                self.logger.highlight(f"{k} => {v['value']}")
                 else:
                     callback_func(iEnumWbemClassObject, records)
             except Exception as e:

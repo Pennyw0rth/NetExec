@@ -34,6 +34,7 @@ def proto_args(parser, parents):
     cred_gathering_group.add_argument("--user", dest="userntds", type=str, help="Dump selected user from DC (NTDS.dit)")
 
     egroup = wmi_parser.add_argument_group("Mapping/Enumeration")
+    egroup.add_argument("--shares", action="store_true", help="Enumerate shares")
     egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
     egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
