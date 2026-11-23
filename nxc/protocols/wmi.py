@@ -691,6 +691,11 @@ class wmi(connection):
     def escape_wql(value):
         return value.replace("\\", "\\\\").replace("'", "\\'")
 
+    @staticmethod
+    def parse_account_path(path):
+        match = re.search(r'Domain="([^"]+)",Name="([^"]+)"', path or "")
+        return match.groups() if match else None
+
     @requires_admin
     def shares(self):
         shares = self.query_values("SELECT Name, Description FROM Win32_Share")
@@ -777,6 +782,37 @@ class wmi(connection):
     def users_export(self):
         if self.args.users is None:
             return self.users()
+
+    @requires_admin
+    def local_groups(self):
+        self.logger.display("Enumerating with WMI protocol")
+        groups = self.query_values("SELECT Name, Domain, SID FROM Win32_Group WHERE LocalAccount = True")
+        if self.args.local_groups:
+            requested_group = self.args.local_groups.casefold()
+            groups = [
+                group for group in groups if group["Name"].casefold() == requested_group or f"{group['Domain']}\\{group['Name']}".casefold() == requested_group
+            ]
+        if not groups:
+            self.logger.fail("No matching groups found")
+            return
+
+        if not self.args.local_groups:
+            self.logger.success("Enumerated local groups")
+            for group in groups:
+                self.logger.highlight(f"{group['SID'].rsplit('-', 1)[-1]} - {group['Name']}")
+            return
+
+        group = groups[0]
+        self.logger.display(f"Querying group: {group['Name']}")
+        members = []
+        for association in self.query_values("SELECT GroupComponent, PartComponent FROM Win32_GroupUser"):
+            group_path = self.parse_account_path(association["GroupComponent"])
+            member_path = self.parse_account_path(association["PartComponent"])
+            if group_path == (group["Domain"], group["Name"]) and member_path:
+                members.append(member_path[1])
+        self.logger.success(f"Enumerated users of local groups: {group['Name']}")
+        for member in sorted(members, key=str.casefold):
+            self.logger.highlight(member)
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
