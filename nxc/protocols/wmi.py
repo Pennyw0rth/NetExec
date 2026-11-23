@@ -8,7 +8,7 @@ from io import StringIO
 import base64
 
 from nxc.helpers.negotiate_parser import parse_challenge
-from nxc.helpers.misc import sanitize_dns
+from nxc.helpers.misc import convert, sanitize_dns
 from nxc.helpers.path import sanitize_path_component
 from nxc.config import process_secret
 from nxc.connection import connection, requires_admin
@@ -813,6 +813,56 @@ class wmi(connection):
         self.logger.success(f"Enumerated users of local groups: {group['Name']}")
         for member in sorted(members, key=str.casefold):
             self.logger.highlight(member)
+
+    @requires_admin
+    def pass_pol(self):
+        settings = self.query_values(
+            "SELECT KeyName, Setting FROM RSOP_SecuritySettingNumeric",
+            "//./root/rsop/computer",
+        )
+        settings += self.query_values(
+            "SELECT KeyName, Setting FROM RSOP_SecuritySettingBoolean",
+            "//./root/rsop/computer",
+        )
+        settings = {setting["KeyName"]: setting["Setting"] for setting in settings}
+        if not settings:
+            self.logger.fail("No effective password policy settings found")
+            return
+
+        policy_domain = self.hostname
+        computer_system = self.query_values("SELECT DomainRole FROM Win32_ComputerSystem")
+        if computer_system and computer_system[0]["DomainRole"] >= 4:
+            accounts = self.query_values(f"SELECT Domain FROM Win32_UserAccount WHERE Name = '{self.escape_wql(self.username)}'")
+            if accounts:
+                policy_domain = accounts[0]["Domain"]
+        self.logger.success(f"Dumping password info for domain: {policy_domain}")
+        if "MinimumPasswordLength" in settings:
+            self.logger.highlight(f"Minimum password length: {settings['MinimumPasswordLength']}")
+        if "PasswordHistorySize" in settings:
+            self.logger.highlight(f"Password history length: {settings['PasswordHistorySize']}")
+        if "MaximumPasswordAge" in settings:
+            interval = -int(settings["MaximumPasswordAge"]) * 86400 * 10**7
+            self.logger.highlight(f"Maximum password age: {convert(interval & 0xFFFFFFFF, interval >> 32)}")
+        self.logger.highlight("")
+        for key, name in (
+            ("ClearTextPassword", "Domain Password Store Cleartext"),
+            ("PasswordComplexity", "Domain Password Complex"),
+        ):
+            if key in settings:
+                enabled = settings[key].casefold() == "true" if isinstance(settings[key], str) else bool(settings[key])
+                self.logger.highlight(f"{name}: {int(enabled)}")
+        self.logger.highlight("")
+        if "MinimumPasswordAge" in settings:
+            interval = -int(settings["MinimumPasswordAge"]) * 86400 * 10**7
+            self.logger.highlight(f"Minimum password age: {convert(interval & 0xFFFFFFFF, interval >> 32)}")
+        for key, name in (
+            ("ResetLockoutCount", "Reset Account Lockout Counter"),
+            ("LockoutDuration", "Locked Account Duration"),
+        ):
+            if key in settings:
+                self.logger.highlight(f"{name}: {convert(0, -int(settings[key]) * 60 * 10**7, lockout=True)}")
+        if "LockoutBadCount" in settings:
+            self.logger.highlight(f"Account Lockout Threshold: {settings['LockoutBadCount']}")
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
