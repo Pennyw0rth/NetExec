@@ -884,6 +884,37 @@ class wmi(connection):
             self.logger.highlight(f"{domain}\\{username}")
 
     @requires_admin
+    def services(self):
+        services = self.query_values("SELECT Name, DisplayName, State, StartMode, StartName, ProcessId, PathName FROM Win32_Service")
+        if self.args.services:
+            pattern = self.args.services.casefold()
+            services = [
+                service
+                for service in services
+                if any(pattern in str(service[field] or "").casefold() for field in ("Name", "DisplayName", "StartName", "PathName"))
+            ]
+        if not services:
+            self.logger.fail("No matching services found")
+            return
+
+        services.sort(key=lambda service: service["Name"].casefold())
+        name_width = max(len("Name"), max(len(service["Name"]) for service in services))
+        state_width = max(len("State"), max(len(service["State"] or "") for service in services))
+        mode_width = max(
+            len("Start Mode"),
+            max(len(service["StartMode"] or "") for service in services),
+        )
+        account_width = max(len("Account"), max(len(service["StartName"] or "") for service in services))
+        self.logger.success(f"Enumerated {len(services)} services")
+        self.logger.highlight(f"{'Name':<{name_width}}  {'State':<{state_width}}  {'Start Mode':<{mode_width}}  {'PID':>6}  {'Account':<{account_width}}  Path")
+        self.logger.highlight(f"{'-' * name_width}  {'-' * state_width}  {'-' * mode_width}  {'-' * 6}  {'-' * account_width}  {'-' * 4}")
+        for service in services:
+            self.logger.highlight(
+                f"{service['Name']:<{name_width}}  {service['State'] or '':<{state_width}}  {service['StartMode'] or '':<{mode_width}}  "
+                f"{service['ProcessId'] or 0:>6}  {service['StartName'] or '':<{account_width}}  {service['PathName'] or ''}"
+            )
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:

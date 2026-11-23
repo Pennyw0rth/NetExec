@@ -42,6 +42,7 @@ def proto_args(parser, parents):
     egroup.add_argument("--local-groups", nargs="?", const="", metavar="GROUP", help="Enumerate local groups, if a group is specified then its members are enumerated")
     egroup.add_argument("--pass-pol", action="store_true", help="Enumerate the effective password policy")
     egroup.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, optionally filtering by regex")
+    egroup.add_argument("--services", nargs="?", const="", metavar="FILTER", help="Enumerate services, optionally filtering by name, display name, account, or path")
     egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
     egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 
