@@ -723,6 +723,17 @@ class wmi(connection):
                 self.logger.display(f"      - {family}: {address}")
 
     @requires_admin
+    def disks(self):
+        disks = self.query_values("SELECT DeviceID FROM Win32_LogicalDisk WHERE DriveType = 3")
+        if not disks:
+            self.logger.fail("No fixed disks found")
+            return
+
+        self.logger.display("Enumerated disks:")
+        for disk in disks:
+            self.logger.highlight(disk["DeviceID"])
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:
