@@ -865,6 +865,25 @@ class wmi(connection):
             self.logger.highlight(f"Account Lockout Threshold: {settings['LockoutBadCount']}")
 
     @requires_admin
+    def loggedon_users(self):
+        users = {
+            account for record in self.query_values("SELECT Antecedent FROM Win32_LoggedOnUser") if (account := self.parse_account_path(record["Antecedent"]))
+        }
+        if self.args.loggedon_users:
+            try:
+                pattern = re.compile(self.args.loggedon_users, re.IGNORECASE)
+            except re.error as e:
+                self.logger.fail(f"Invalid user filter: {e}")
+                return
+            users = {account for account in users if pattern.search(account[1])}
+        if not users:
+            self.logger.fail("No logged on users found")
+            return
+
+        for domain, username in sorted(users):
+            self.logger.highlight(f"{domain}\\{username}")
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:
