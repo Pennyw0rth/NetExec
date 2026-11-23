@@ -37,6 +37,7 @@ def proto_args(parser, parents):
     egroup.add_argument("--shares", action="store_true", help="Enumerate shares")
     egroup.add_argument("--interfaces", action="store_true", help="Enumerate network interfaces")
     egroup.add_argument("--disks", action="store_true", help="Enumerate disks")
+    egroup.add_argument("--users", nargs="*", metavar="USER", help="Enumerate users, if a user is specified then only its information is queried")
     egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
     egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 

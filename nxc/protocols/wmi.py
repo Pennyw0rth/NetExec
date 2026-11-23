@@ -685,6 +685,10 @@ class wmi(connection):
         records = self.wmi_query(wql=wql, namespace=namespace, print_results=False) or []
         return [{name: value["value"] for name, value in record.items()} for record in records]
 
+    @staticmethod
+    def escape_wql(value):
+        return value.replace("\\", "\\\\").replace("'", "\\'")
+
     @requires_admin
     def shares(self):
         shares = self.query_values("SELECT Name, Description FROM Win32_Share")
@@ -732,6 +736,32 @@ class wmi(connection):
         self.logger.display("Enumerated disks:")
         for disk in disks:
             self.logger.highlight(disk["DeviceID"])
+
+    @requires_admin
+    def users(self):
+        requested = {user.casefold() for user in self.args.users or []}
+        computer_system = self.query_values("SELECT DomainRole FROM Win32_ComputerSystem")
+        domain_controller = bool(computer_system and computer_system[0]["DomainRole"] >= 4)
+        wql = "SELECT Name, Domain, Description FROM Win32_UserAccount"
+        if requested:
+            names = {user.rsplit("\\", 1)[-1] for user in self.args.users}
+            wql += " WHERE " + " OR ".join(f"Name = '{self.escape_wql(name)}'" for name in names)
+        users = self.query_values(wql)
+        if domain_controller:
+            users = [user for user in users if user["Domain"].casefold() != self.hostname.casefold()]
+        else:
+            users = [user for user in users if user["Domain"].casefold() == self.hostname.casefold()]
+        if requested:
+            users = [user for user in users if user["Name"].casefold() in requested or f"{user['Domain']}\\{user['Name']}".casefold() in requested]
+        if not users:
+            self.logger.fail("No matching users found")
+            return []
+
+        self.logger.highlight(f"{'-Username-':<30}{'-Description-':<60}")
+        for user in users:
+            self.logger.highlight(f"{user['Name']:<30}{user['Description'] or ''} ")
+        self.logger.display(f"Enumerated {len(users)} local users: {users[0]['Domain']}")
+        return users
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
