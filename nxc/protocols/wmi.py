@@ -1057,6 +1057,45 @@ class wmi(connection):
             )
 
     @requires_admin
+    def taskkill(self):
+        if self.args.taskkill.isdigit():
+            wql = f"SELECT * FROM Win32_Process WHERE ProcessId = {int(self.args.taskkill)}"
+        else:
+            wql = f"SELECT * FROM Win32_Process WHERE Name = '{self.escape_wql(self.args.taskkill)}'"
+
+        try:
+            results = self.get_namespace("//./root/cimv2").ExecQuery(wql)
+        except Exception as e:
+            self.logger.fail(f"Execute WQL error: {e}")
+            return
+
+        found = False
+        while True:
+            try:
+                process = results.Next(0xFFFFFFFF, 1)[0]
+            except Exception as e:
+                if "S_FALSE" in str(e):
+                    break
+                self.logger.fail(f"Error enumerating processes: {e}")
+                return
+
+            found = True
+            properties = process.getProperties()
+            process_id = properties["ProcessId"]["value"]
+            try:
+                result = process.Terminate(0).ReturnValue
+            except Exception as e:
+                self.logger.fail(f"Failed to terminate PID {process_id}: {e}")
+                continue
+            if result == 0:
+                self.logger.highlight(f"Terminated PID {process_id} ({properties['Name']['value']})")
+            else:
+                self.logger.fail(f"Failed to terminate PID {process_id}: WMI returned {result}")
+
+        if not found:
+            self.logger.fail(f"Could not find process {self.args.taskkill}")
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:
