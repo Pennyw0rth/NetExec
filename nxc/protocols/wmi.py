@@ -2,12 +2,14 @@ import os
 import re
 import struct
 import binascii
+from pathlib import Path
 from Cryptodome.Hash import MD4
 from io import StringIO
 import base64
 
 from nxc.helpers.negotiate_parser import parse_challenge
 from nxc.helpers.misc import sanitize_dns
+from nxc.helpers.path import sanitize_path_component
 from nxc.config import process_secret
 from nxc.connection import connection, requires_admin
 from nxc.helpers.rpc import dcom_FirewallChecker
@@ -761,7 +763,20 @@ class wmi(connection):
         for user in users:
             self.logger.highlight(f"{user['Name']:<30}{user['Description'] or ''} ")
         self.logger.display(f"Enumerated {len(users)} local users: {users[0]['Domain']}")
+        if self.args.users_export:
+            output_path = Path(self.args.users_export)
+            components = output_path.parts[1:] if output_path.anchor else output_path.parts
+            if not components or any(component != sanitize_path_component(component) for component in components):
+                self.logger.fail(f"Invalid users export path: {output_path}")
+                return users
+            self.logger.display(f"Writing {len(users)} local users to {output_path}")
+            with output_path.open("w", encoding="utf-8") as output_file:
+                output_file.writelines(f"{user['Name']}\n" for user in users)
         return users
+
+    def users_export(self):
+        if self.args.users is None:
+            return self.users()
 
     @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
