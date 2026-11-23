@@ -1011,6 +1011,52 @@ class wmi(connection):
             )
 
     @requires_admin
+    def tasklist(self):
+        processes = self.query_values("SELECT Name, ProcessId, SessionId, WorkingSetSize FROM Win32_Process")
+        if self.args.tasklist is not True:
+            processes = [process for process in processes if self.args.tasklist.casefold() in process["Name"].casefold()]
+        if not processes:
+            self.logger.fail(f"Didn't find process {self.args.tasklist}")
+            return
+
+        accounts = {}
+        for account_class in ("Win32_UserAccount", "Win32_SystemAccount"):
+            for account in self.query_values(f"SELECT SID, Domain, Name FROM {account_class}"):
+                accounts[account["Domain"].casefold(), account["Name"].casefold()] = account["SID"]
+        session_sids = {}
+        for association in self.query_values("SELECT Antecedent, Dependent FROM Win32_LoggedOnUser"):
+            account = self.parse_account_path(association["Antecedent"])
+            logon_id = re.search(r'LogonId="([^"]+)"', association["Dependent"] or "")
+            if account and logon_id:
+                session_sids[logon_id.group(1)] = accounts.get((account[0].casefold(), account[1].casefold()), "")
+        process_sids = {}
+        for association in self.query_values("SELECT Antecedent, Dependent FROM Win32_SessionProcess"):
+            logon_id = re.search(r'LogonId="([^"]+)"', association["Antecedent"] or "")
+            process_id = re.search(r'Handle="([^"]+)"', association["Dependent"] or "")
+            if logon_id and process_id and session_sids.get(logon_id.group(1)):
+                process_sids[process_id.group(1)] = session_sids[logon_id.group(1)]
+        for process in processes:
+            process["SID"] = process_sids.get(str(process["ProcessId"]), "")
+
+        self.logger.success("Enumerated processes")
+        name_width = max(len("Image Name"), max(len(process["Name"]) for process in processes))
+        sid_width = max(len("SID"), max(len(process["SID"]) for process in processes))
+        template = f"{{: <{name_width}}} {{: <8}} {{: <11}} {{: <{sid_width}}} {{: >12}}"
+        self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
+        self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+        for process in processes:
+            memory = int(process["WorkingSetSize"] or 0) // 1000
+            self.logger.highlight(
+                template.format(
+                    process["Name"],
+                    process["ProcessId"],
+                    process["SessionId"],
+                    process["SID"],
+                    f"{memory:,} K",
+                )
+            )
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:
