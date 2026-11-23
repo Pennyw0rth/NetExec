@@ -398,6 +398,13 @@ netexec nfs TARGET_HOST -u "" -p "" --enum-shares
 netexec nfs TARGET_HOST -u "" -p "" --get-file /NFStest/test/test.txt ../test.txt
 netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
 netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
+<<<<<<< HEAD
 ##### POSTGRES
 netexec postgres TARGET_HOST -u "" -p "" --get-file /etc/passwd ../passwd
 netexec postgres TARGET_HOST -u "" -p "" --put-file /tmp/local_file.txt /tmp/file.txt
+=======
+##### PSQL
+netexec psql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
+netexec psql TARGET_HOST -u "" -p "" --get-file /etc/passwd ../passwd
+netexec psql TARGET_HOST -u "" -p "" --put-file /tmp/local_file.txt /tmp/file.txt
+>>>>>>> 5cb17af6 (refactor: rename postgres to psql)
