@@ -915,6 +915,56 @@ class wmi(connection):
             )
 
     @requires_admin
+    def netstat(self):
+        connections = self.query_values(
+            "SELECT LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess FROM MSFT_NetTCPConnection WHERE State = 2 OR State = 5",
+            "//./root/StandardCimv2",
+        )
+        if not connections:
+            self.logger.fail("No listening or established TCP connections found")
+            return
+
+        processes = {process["ProcessId"]: process["Name"] for process in self.query_values("SELECT Name, ProcessId FROM Win32_Process")}
+        states = {2: "LISTEN", 5: "ESTABLISHED"}
+        for tcp_connection in connections:
+            local_address = f"[{tcp_connection['LocalAddress']}]" if ":" in tcp_connection["LocalAddress"] else tcp_connection["LocalAddress"]
+            remote_address = f"[{tcp_connection['RemoteAddress']}]" if ":" in tcp_connection["RemoteAddress"] else tcp_connection["RemoteAddress"]
+            tcp_connection["LocalEndpoint"] = f"{local_address}:{tcp_connection['LocalPort']}"
+            tcp_connection["RemoteEndpoint"] = f"{remote_address}:{tcp_connection['RemotePort']}"
+            tcp_connection["StateName"] = states.get(tcp_connection["State"], str(tcp_connection["State"]))
+            tcp_connection["ProcessName"] = processes.get(tcp_connection["OwningProcess"], "")
+
+        connections.sort(
+            key=lambda tcp_connection: (
+                tcp_connection["State"],
+                tcp_connection["LocalAddress"],
+                tcp_connection["LocalPort"],
+            )
+        )
+        local_width = max(
+            len("Local Address"),
+            max(len(tcp_connection["LocalEndpoint"]) for tcp_connection in connections),
+        )
+        remote_width = max(
+            len("Remote Address"),
+            max(len(tcp_connection["RemoteEndpoint"]) for tcp_connection in connections),
+        )
+        state_width = max(
+            len("State"),
+            max(len(tcp_connection["StateName"]) for tcp_connection in connections),
+        )
+        self.logger.success(f"Enumerated {len(connections)} TCP connections")
+        self.logger.highlight(
+            f"{'Proto':<5}  {'Local Address':<{local_width}}  {'Remote Address':<{remote_width}}  {'State':<{state_width}}  {'PID':>6}  Process"
+        )
+        self.logger.highlight(f"{'-' * 5}  {'-' * local_width}  {'-' * remote_width}  {'-' * state_width}  {'-' * 6}  {'-' * 7}")
+        for tcp_connection in connections:
+            self.logger.highlight(
+                f"{'TCP':<5}  {tcp_connection['LocalEndpoint']:<{local_width}}  {tcp_connection['RemoteEndpoint']:<{remote_width}}  "
+                f"{tcp_connection['StateName']:<{state_width}}  {tcp_connection['OwningProcess']:>6}  {tcp_connection['ProcessName']}"
+            )
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:
