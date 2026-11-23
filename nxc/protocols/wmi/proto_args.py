@@ -44,6 +44,7 @@ def proto_args(parser, parents):
     egroup.add_argument("--loggedon-users", nargs="?", const="", help="Enumerate logged on users, optionally filtering by regex")
     egroup.add_argument("--services", nargs="?", const="", metavar="FILTER", help="Enumerate services, optionally filtering by name, display name, account, or path")
     egroup.add_argument("--netstat", action="store_true", help="Enumerate listening and established TCP connections")
+    egroup.add_argument("--scheduled-tasks", nargs="?", const="", metavar="FILTER", help="Enumerate scheduled tasks, optionally filtering by name or path")
     egroup.add_argument("--wmi-query", metavar="QUERY", dest="wmi_query", type=str, help="Issues the specified WMI query")
     egroup.add_argument("--wmi-namespace", metavar="NAMESPACE", type=str, default="root\\cimv2", help="WMI Namespace (default: %(default)s)")
 

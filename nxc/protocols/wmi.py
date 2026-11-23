@@ -965,6 +965,52 @@ class wmi(connection):
             )
 
     @requires_admin
+    def scheduled_tasks(self):
+        tasks = self.query_values(
+            "SELECT TaskName, TaskPath, State, Actions, Principal FROM MSFT_ScheduledTask",
+            "//./root/Microsoft/Windows/TaskScheduler",
+        )
+        for task in tasks:
+            task["FullName"] = f"{task['TaskPath']}{task['TaskName']}"
+        if self.args.scheduled_tasks:
+            pattern = self.args.scheduled_tasks.casefold()
+            tasks = [task for task in tasks if pattern in task["FullName"].casefold()]
+        if not tasks:
+            self.logger.fail("No matching scheduled tasks found")
+            return
+
+        states = {0: "Unknown", 1: "Disabled", 2: "Queued", 3: "Ready", 4: "Running"}
+        for task in tasks:
+            principal = task["Principal"]["ObjectBlock"]
+            principal.parseObject()
+            properties = principal.ctCurrent["values"]
+            task["PrincipalName"] = next(
+                (properties[name]["value"] for name in ("UserId", "GroupId", "DisplayName") if properties.get(name, {}).get("value")),
+                "",
+            )
+            actions = []
+            for action in task["Actions"] or []:
+                action = action["ObjectBlock"]
+                action.parseObject()
+                properties = action.ctCurrent["values"]
+                command = " ".join(str(properties[name]["value"]) for name in ("Execute", "Arguments") if properties.get(name, {}).get("value"))
+                actions.append(command or action.ctCurrent["name"].split(" : ", 1)[0].removeprefix("MSFT_Task").removesuffix("Action"))
+            task["Action"] = "; ".join(actions)
+            task["StateName"] = states.get(task["State"], str(task["State"]))
+
+        tasks.sort(key=lambda task: task["FullName"].casefold())
+        name_width = max(len("Task"), max(len(task["FullName"]) for task in tasks))
+        state_width = max(len("State"), max(len(task["StateName"]) for task in tasks))
+        principal_width = max(len("Principal"), max(len(task["PrincipalName"]) for task in tasks))
+        self.logger.success(f"Enumerated {len(tasks)} scheduled tasks")
+        self.logger.highlight(f"{'Task':<{name_width}}  {'State':<{state_width}}  {'Principal':<{principal_width}}  Action")
+        self.logger.highlight(f"{'-' * name_width}  {'-' * state_width}  {'-' * principal_width}  {'-' * 6}")
+        for task in tasks:
+            self.logger.highlight(
+                f"{task['FullName']:<{name_width}}  {task['StateName']:<{state_width}}  {task['PrincipalName']:<{principal_width}}  {task['Action']}"
+            )
+
+    @requires_admin
     def wmi_query(self, wql=None, namespace=None, callback_func=None, print_results=True):
         records = []
         if not wql:
