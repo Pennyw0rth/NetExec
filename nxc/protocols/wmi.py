@@ -866,6 +866,14 @@ class wmi(connection):
 
     @requires_admin
     def loggedon_users(self):
+        pattern = None
+        if self.args.loggedon_users:
+            try:
+                pattern = re.compile(self.args.loggedon_users, re.IGNORECASE)
+            except re.error as e:
+                self.logger.fail(f"Invalid user filter: {e}")
+                return
+
         sessions = {
             str(session["LogonId"]): session
             for session in self.query_values("SELECT LogonId, LogonType, AuthenticationPackage FROM Win32_LogonSession")
@@ -888,31 +896,31 @@ class wmi(connection):
         users = {}
         for association in self.query_values("SELECT Antecedent, Dependent FROM Win32_LoggedOnUser"):
             account = self.parse_account_path(association["Antecedent"])
-            logon_id = re.search(r'LogonId="([^"]+)"', association["Dependent"] or "")
-            if not account or not logon_id or logon_id.group(1) not in sessions:
+            if not account or (pattern and not pattern.search(account[1])):
                 continue
-            session = sessions[logon_id.group(1)]
-            user = users.setdefault(account, {"LogonTypes": set(), "AuthenticationPackages": set()})
+            logon_id = re.search(r'LogonId="([^"]+)"', association["Dependent"] or "")
+            session = sessions.get(logon_id.group(1)) if logon_id else None
+            if not session:
+                continue
+            user = users.setdefault(account, {"logon_types": set(), "authentication_packages": set()})
             logon_type = int(session["LogonType"])
-            user["LogonTypes"].add((logon_type, f"{logon_types.get(logon_type, 'Unknown')} ({logon_type})"))
-            if session["AuthenticationPackage"]:
-                user["AuthenticationPackages"].add(session["AuthenticationPackage"])
-        if self.args.loggedon_users:
-            try:
-                pattern = re.compile(self.args.loggedon_users, re.IGNORECASE)
-            except re.error as e:
-                self.logger.fail(f"Invalid user filter: {e}")
-                return
-            users = {account: details for account, details in users.items() if pattern.search(account[1])}
+            user["logon_types"].add(logon_type)
+            authentication_package = session["AuthenticationPackage"]
+            if authentication_package:
+                user["authentication_packages"].add(authentication_package)
         if not users:
             self.logger.fail("No logged on users found")
             return
 
         self.logger.success(f"Enumerated {len(users)} logged on users")
         for (domain, username), details in sorted(users.items()):
+            type_names = ", ".join(
+                f"{logon_types.get(logon_type, 'Unknown')} ({logon_type})" for logon_type in sorted(details["logon_types"])
+            )
+            package_names = ", ".join(sorted(details["authentication_packages"], key=str.casefold))
             self.logger.highlight(f"{domain}\\{username}")
-            self.logger.highlight(f"  Logon Types: {', '.join(name for _, name in sorted(details['LogonTypes']))}")
-            self.logger.highlight(f"  Authentication Packages: {', '.join(sorted(details['AuthenticationPackages'], key=str.casefold))}")
+            self.logger.highlight(f"  Logon Types: {type_names}")
+            self.logger.highlight(f"  Authentication Packages: {package_names}")
 
     @requires_admin
     def services(self):
@@ -958,8 +966,12 @@ class wmi(connection):
         processes = {process["ProcessId"]: process["Name"] for process in self.query_values("SELECT Name, ProcessId FROM Win32_Process")}
         states = {2: "LISTEN", 5: "ESTABLISHED"}
         for tcp_connection in connections:
-            local_address = f"[{tcp_connection['LocalAddress']}]" if ":" in tcp_connection["LocalAddress"] else tcp_connection["LocalAddress"]
-            remote_address = f"[{tcp_connection['RemoteAddress']}]" if ":" in tcp_connection["RemoteAddress"] else tcp_connection["RemoteAddress"]
+            local_address = tcp_connection["LocalAddress"]
+            remote_address = tcp_connection["RemoteAddress"]
+            if ":" in local_address:
+                local_address = f"[{local_address}]"
+            if ":" in remote_address:
+                remote_address = f"[{remote_address}]"
             tcp_connection["LocalEndpoint"] = f"{local_address}:{tcp_connection['LocalPort']}"
             tcp_connection["RemoteEndpoint"] = f"{remote_address}:{tcp_connection['RemotePort']}"
             tcp_connection["StateName"] = states.get(tcp_connection["State"], str(tcp_connection["State"]))
@@ -1014,18 +1026,27 @@ class wmi(connection):
         for task in tasks:
             principal = task["Principal"]["ObjectBlock"]
             principal.parseObject()
-            properties = principal.ctCurrent["values"]
-            task["PrincipalName"] = next(
-                (properties[name]["value"] for name in ("UserId", "GroupId", "DisplayName") if properties.get(name, {}).get("value")),
-                "",
-            )
+            principal_values = principal.ctCurrent["values"]
+            task["PrincipalName"] = ""
+            for name in ("UserId", "GroupId", "DisplayName"):
+                if principal_values.get(name, {}).get("value"):
+                    task["PrincipalName"] = principal_values[name]["value"]
+                    break
             actions = []
-            for action in task["Actions"] or []:
-                action = action["ObjectBlock"]
+            for action_data in task["Actions"] or []:
+                action = action_data["ObjectBlock"]
                 action.parseObject()
-                properties = action.ctCurrent["values"]
-                command = " ".join(str(properties[name]["value"]) for name in ("Execute", "Arguments") if properties.get(name, {}).get("value"))
-                actions.append(command or action.ctCurrent["name"].split(" : ", 1)[0].removeprefix("MSFT_Task").removesuffix("Action"))
+                action_values = action.ctCurrent["values"]
+                command = " ".join(
+                    str(action_values[name]["value"])
+                    for name in ("Execute", "Arguments")
+                    if action_values.get(name, {}).get("value")
+                )
+                if command:
+                    actions.append(command)
+                else:
+                    action_type = action.ctCurrent["name"].split(" : ", 1)[0]
+                    actions.append(action_type.removeprefix("MSFT_Task").removesuffix("Action"))
             task["Action"] = "; ".join(actions)
             task["StateName"] = states.get(task["State"], str(task["State"]))
 
@@ -1050,41 +1071,32 @@ class wmi(connection):
             self.logger.fail(f"Didn't find process {self.args.tasklist}")
             return
 
-        accounts = {}
-        for account_class in ("Win32_UserAccount", "Win32_SystemAccount"):
-            for account in self.query_values(f"SELECT SID, Domain, Name FROM {account_class}"):
-                accounts[account["Domain"].casefold(), account["Name"].casefold()] = account["SID"]
-        session_sids = {}
+        session_users = {}
         for association in self.query_values("SELECT Antecedent, Dependent FROM Win32_LoggedOnUser"):
             account = self.parse_account_path(association["Antecedent"])
             logon_id = re.search(r'LogonId="([^"]+)"', association["Dependent"] or "")
             if account and logon_id:
-                session_sids[logon_id.group(1)] = accounts.get((account[0].casefold(), account[1].casefold()), "")
-        process_sids = {}
+                session_users[logon_id.group(1)] = f"{account[0]}\\{account[1]}"
+        process_users = {}
         for association in self.query_values("SELECT Antecedent, Dependent FROM Win32_SessionProcess"):
             logon_id = re.search(r'LogonId="([^"]+)"', association["Antecedent"] or "")
             process_id = re.search(r'Handle="([^"]+)"', association["Dependent"] or "")
-            if logon_id and process_id and session_sids.get(logon_id.group(1)):
-                process_sids[process_id.group(1)] = session_sids[logon_id.group(1)]
+            if logon_id and process_id and session_users.get(logon_id.group(1)):
+                process_users[process_id.group(1)] = session_users[logon_id.group(1)]
         for process in processes:
-            process["SID"] = process_sids.get(str(process["ProcessId"]), "")
+            process["User"] = process_users.get(str(process["ProcessId"]), "")
 
         self.logger.success("Enumerated processes")
         name_width = max(len("Image Name"), max(len(process["Name"]) for process in processes))
-        sid_width = max(len("SID"), max(len(process["SID"]) for process in processes))
-        template = f"{{: <{name_width}}} {{: <8}} {{: <11}} {{: <{sid_width}}} {{: >12}}"
-        self.logger.highlight(template.format("Image Name", "PID", "Session#", "SID", "Mem Usage"))
-        self.logger.highlight(template.replace(": ", ":=").format("", "", "", "", ""))
+        user_width = max(len("User"), max(len(process["User"]) for process in processes))
+        self.logger.highlight(f"{'Image Name':<{name_width}} {'PID':<8} {'Session#':<11} {'User':<{user_width}} {'Mem Usage':>12}")
+        self.logger.highlight(f"{'=' * name_width} {'=' * 8} {'=' * 11} {'=' * user_width} {'=' * 12}")
         for process in processes:
             memory = int(process["WorkingSetSize"] or 0) // 1000
+            memory_usage = f"{memory:,} K"
             self.logger.highlight(
-                template.format(
-                    process["Name"],
-                    process["ProcessId"],
-                    process["SessionId"],
-                    process["SID"],
-                    f"{memory:,} K",
-                )
+                f"{process['Name']:<{name_width}} {process['ProcessId']:<8} {process['SessionId']:<11} "
+                f"{process['User']:<{user_width}} {memory_usage:>12}"
             )
 
     @requires_admin
