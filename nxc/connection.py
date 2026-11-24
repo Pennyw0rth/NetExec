@@ -225,7 +225,7 @@ class connection:
             self.output_filename = os.path.join(base_log_dir, filename_pattern)
 
             self.print_host_info()
-            if self.login() or (self.username == "" and self.password == "" and self.protocol != "mssql" and not self.certificate_auth):   # a failed certificate auth is not a null session
+            if self.login() or (self.username == "" and self.password == "" and self.protocol not in ("mssql", "psql") and not self.certificate_auth):   # a failed certificate auth is not a null session
                 self.logger.debug("Calling command arguments")
                 self.call_cmd_args()
                 if self.args.module:

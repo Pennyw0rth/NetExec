@@ -8,7 +8,6 @@ from nxc.database import BaseDB, format_host_query
 from nxc.logger import nxc_logger
 from nxc.paths import CONFIG_PATH
 
-# we can't import config.py due to a circular dependency, so we have to create redundant code unfortunately
 nxc_config = configparser.ConfigParser()
 nxc_config.read(CONFIG_PATH)
 nxc_workspace = nxc_config.get("nxc", "workspace", fallback="default")
@@ -190,7 +189,7 @@ class database(BaseDB):
         q = select(self.CredentialsTable).filter(self.CredentialsTable.c.id == credential_id)
         return len(self.db_execute(q).all()) > 0
 
-    def get_hosts(self, filter_term=None):
+    def get_hosts(self, filter_term=""):
         q = select(self.HostsTable)
         q = format_host_query(q, filter_term, self.HostsTable)
         return self.db_execute(q).all()
@@ -206,6 +205,14 @@ class database(BaseDB):
             loggedin_relations = [{"credid": credential_id, "hostid": host_id}]
             self.db_execute(Insert(self.LoggedinRelationsTable), loggedin_relations)
 
+    def get_loggedin_relations(self, cred_id=None, host_id=None):
+        q = select(self.LoggedinRelationsTable)
+        if cred_id:
+            q = q.filter(self.LoggedinRelationsTable.c.credid == cred_id)
+        if host_id:
+            q = q.filter(self.LoggedinRelationsTable.c.hostid == host_id)
+        return self.db_execute(q).all()
+
     def add_admin_user(self, credential_id, host_id):
         q = select(self.AdminRelationsTable).filter(
             self.AdminRelationsTable.c.credid == credential_id,
@@ -214,3 +221,17 @@ class database(BaseDB):
         results = self.db_execute(q).all()
         if not results:
             self.db_execute(Insert(self.AdminRelationsTable), [{"credid": credential_id, "hostid": host_id}])
+
+    def get_admin_relations(self, cred_id=None, host_id=None):
+        q = select(self.AdminRelationsTable)
+        if cred_id:
+            q = q.filter(self.AdminRelationsTable.c.credid == cred_id)
+        if host_id:
+            q = q.filter(self.AdminRelationsTable.c.hostid == host_id)
+        return self.db_execute(q).all()
+
+    def remove_admin_relation(self, user_ids):
+        """Removes admin (superuser) relations for the given credential IDs."""
+        for cred_id in user_ids:
+            q = delete(self.AdminRelationsTable).filter(self.AdminRelationsTable.c.credid == cred_id)
+            self.db_execute(q)
