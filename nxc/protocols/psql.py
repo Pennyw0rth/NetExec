@@ -126,16 +126,13 @@ class psql(connection):
             s = socket.create_connection((self.host, self.port), timeout=self.args.psql_timeout)
             s.sendall(SSL_REQUEST)
             response = s.recv(1)
+            s.close()
             if response in (b"S", b"N"):
                 self.ssl = response == b"S"
                 self.postgres = True
-            s.close()
+                self.protocol_version = self.probe_protocol_version()
         except OSError:
             return False
-
-        if self.postgres:
-            self.protocol_version = self.probe_protocol_version()
-
         return self.postgres
 
     def plaintext_login(self, username, password):
