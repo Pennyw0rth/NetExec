@@ -9,6 +9,7 @@ from psycopg import OperationalError
 from nxc.connection import connection, highlight
 from nxc.logger import NXCAdapter
 from nxc.config import process_secret
+import contextlib
 
 SSL_REQUEST = b"\x00\x00\x00\x08\x04\xd2\x16\x2f"
 PROTOCOL_VERSION_3_0 = (3 << 16) | 0
@@ -116,10 +117,8 @@ class psql(connection):
             return None
         finally:
             if s is not None:
-                try:
+                with contextlib.suppress(OSError):
                     s.close()
-                except OSError:
-                    pass
 
     def create_conn_obj(self):
         try:
