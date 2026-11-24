@@ -15,7 +15,7 @@ PROTOCOL_VERSION_3_0 = (3 << 16) | 0
 PROBE_MINOR_VERSION = 9999
 
 
-def _read_exact(sock, n):
+def read_exact(sock, n):
     buf = b""
     while len(buf) < n:
         chunk = sock.recv(n - len(buf))
@@ -25,7 +25,7 @@ def _read_exact(sock, n):
     return buf
 
 
-def _startup_packet(user, database, protocol_version=PROTOCOL_VERSION_3_0):
+def startup_packet(user, database, protocol_version=PROTOCOL_VERSION_3_0):
     params = b"user\x00" + user.encode() + b"\x00" + b"database\x00" + database.encode() + b"\x00\x00"
     body = struct.pack("!I", protocol_version) + params
     return struct.pack("!I", len(body) + 4) + body
@@ -50,7 +50,7 @@ class psql(connection):
         })
 
     @staticmethod
-    def _protocol_version_to_range(protocol_version):
+    def protocol_version_to_range(protocol_version):
         if not protocol_version:
             return None
         try:
@@ -85,14 +85,14 @@ class psql(connection):
             self.logger.fail(f"Error: {e}")
 
 
-    def _probe_protocol_version(self):
+    def probe_protocol_version(self):
         s = None
         try:
             s = socket.create_connection((self.host, self.port), timeout=self.args.psql_timeout)
 
             if self.ssl:
                 s.sendall(SSL_REQUEST)
-                if _read_exact(s, 1) != b"S":
+                if read_exact(s, 1) != b"S":
                     return None
                 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
                 ctx.check_hostname = False
@@ -103,9 +103,9 @@ class psql(connection):
             probe_version = (3 << 16) | PROBE_MINOR_VERSION
             s.sendall(_startup_packet(user, user, protocol_version=probe_version))
 
-            msg_type = _read_exact(s, 1)
-            length = struct.unpack("!I", _read_exact(s, 4))[0]
-            body = _read_exact(s, length - 4)
+            msg_type = read_exact(s, 1)
+            length = struct.unpack("!I", read_exact(s, 4))[0]
+            body = read_exact(s, length - 4)
 
             if msg_type == b"v":  # NegotiateProtocolVersion
                 raw_version = struct.unpack("!I", body[:4])[0]
