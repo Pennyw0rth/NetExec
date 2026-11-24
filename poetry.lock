@@ -1086,31 +1086,6 @@ reference = "HEAD"
 resolved_reference = "40b1eb7a0d25e1f378c5824c17a87be3fd44260a"
 
 [[package]]
-name = "importlib-metadata"
-version = "10.2.0"
-description = "Read metadata from Python packages"
-optional = false
-python-versions = ">=3.11"
-groups = ["main"]
-files = [
-    {file = "importlib_metadata-10.2.0-py3-none-any.whl", hash = "sha256:c7a4bf1c7479601f6b8e437cfc14f4f77028ba62a8f34ae95cd93d9774dfba51"},
-    {file = "importlib_metadata-10.2.0.tar.gz", hash = "sha256:9413a2029fd9ca5669d27f1386071bbfe3c7ebca0545692ec975088241fe1d79"},
-]
-
-[package.dependencies]
-lazy-importer = {version = ">=0.1", markers = "python_version < \"3.15\""}
-zipp = ">=3.20"
-
-[package.extras]
-check = ["pytest-checkdocs (>=2.14)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
-cover = ["pytest-cov"]
-doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
-enabler = ["pytest-enabler (>=3.4)"]
-perf = ["ipython"]
-test = ["packaging", "pyfakefs", "pytest (>=6,!=8.1.*)", "pytest-perf (>=0.17)"]
-type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
-
-[[package]]
 name = "iniconfig"
 version = "2.3.0"
 description = "brain-dead simple config-ini parsing"
@@ -1163,19 +1138,6 @@ MarkupSafe = ">=2.0"
 
 [package.extras]
 i18n = ["Babel (>=2.7)"]
-
-[[package]]
-name = "lazy-importer"
-version = "0.1.0"
-description = "A context manager for portable, opt-in lazy imports"
-optional = false
-python-versions = ">=3.11"
-groups = ["main"]
-markers = "python_version < \"3.15\""
-files = [
-    {file = "lazy_importer-0.1.0-py3-none-any.whl", hash = "sha256:bd93fab7bef18e842eea02b839410954d37889140dc64ca4d9680aec6880c739"},
-    {file = "lazy_importer-0.1.0.tar.gz", hash = "sha256:b2e296716ce015c0cd80e57b940e52727c5b934b34b8656d5ce06bdd0ee5fbdd"},
-]
 
 [[package]]
 name = "ldap3"
@@ -1894,186 +1856,6 @@ files = [
 
 [package.dependencies]
 pyasn1 = ">=0.6.1,<0.7.0"
-
-[[package]]
-name = "pybit7z"
-version = "1.3.0"
-description = "A wrapper based on bit7z."
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "pybit7z-1.3.0-cp310-cp310-macosx_10_15_universal2.whl", hash = "sha256:71a1e0d074305a06443997f46bdc68acc8390f94ea77127f23f3af6e38ac98cf"},
-    {file = "pybit7z-1.3.0-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:5f777385be8fc6075858309d5aec7de4c0c7c9d295361d02b5dc9a7e28c68d05"},
-    {file = "pybit7z-1.3.0-cp310-cp310-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:654ece204e3d099b9e874f3405428856dc5f21e2fd038bd3e480bdcf8bc342aa"},
-    {file = "pybit7z-1.3.0-cp310-cp310-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:b0b6a0ad2f50e7395e709428d8828e205d8174ec8307f6acb71e4fa1c685edec"},
-    {file = "pybit7z-1.3.0-cp310-cp310-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:cf9deca733e3f8b99d049fc7f44b87a736d77366cadacac9a4cb3264d201373c"},
-    {file = "pybit7z-1.3.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:f881218398d2b83a9f9bfb2463a2f307d3165122a36775be0365441cd056ebaf"},
-    {file = "pybit7z-1.3.0-cp310-cp310-manylinux_2_31_armv7l.whl", hash = "sha256:dcfa0f7d5a1ad5f2e64f4d7049a0d67ec41cd1869b87d0ad510befdc8c4dc53d"},
-    {file = "pybit7z-1.3.0-cp310-cp310-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:098e7b2c28c2535f5a9f0d485f13b5402764e1d1596c8c714be0f55965befc3c"},
-    {file = "pybit7z-1.3.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:f15518056da058beb1b2eee463a5704fec93bd436d6e290a72a84113bfed1355"},
-    {file = "pybit7z-1.3.0-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:25522d656d96d242951b5da543d92dd444701110ff9fca2419660b4cf375706b"},
-    {file = "pybit7z-1.3.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:9edceb23576b8badf259091cb072b986cdc2b2f76bbd12f866d87fdefc63f892"},
-    {file = "pybit7z-1.3.0-cp310-cp310-musllinux_1_2_ppc64le.whl", hash = "sha256:ff2d6b4301b058c5bf45c8eeac3541e82dd75b5f86a54e7f0a3121ebe59c1706"},
-    {file = "pybit7z-1.3.0-cp310-cp310-musllinux_1_2_riscv64.whl", hash = "sha256:04472f283cd3dee408ee4530d81d0e1d6f4cd5060d5f5ed98f8373e1b26b23b5"},
-    {file = "pybit7z-1.3.0-cp310-cp310-musllinux_1_2_s390x.whl", hash = "sha256:16ce12ff9469200245733a35a4010922bd05315718d8faf79c39d7dd62c064e2"},
-    {file = "pybit7z-1.3.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:ac6ffcaa2e8ef265766fe97ce1da5c879dd1180b30c7c88d3d40c200dad2ba64"},
-    {file = "pybit7z-1.3.0-cp310-cp310-win32.whl", hash = "sha256:51e0f6991ba847f28aa66d47b2f362c15750e602bb288f1bac64d5e7f4a0b0fc"},
-    {file = "pybit7z-1.3.0-cp310-cp310-win_amd64.whl", hash = "sha256:25b0ec126fc670aca4ae21871f36bc149c8ec303f787824a4597e083bc5ad7a0"},
-    {file = "pybit7z-1.3.0-cp310-cp310-win_arm64.whl", hash = "sha256:b8517d9bea38ed9b9e003fde3ce30efb3a16e61d72fa01425f6120364bdf5039"},
-    {file = "pybit7z-1.3.0-cp311-cp311-macosx_10_15_universal2.whl", hash = "sha256:0a7327e7c342525ab392523ce96297e4991f4c32cbfaed9d078f30ab2e8dbf2c"},
-    {file = "pybit7z-1.3.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:5c3dd62a6864077bd6548fa80d9af7d6f0b81fcbed712e9cc2065402213d0aca"},
-    {file = "pybit7z-1.3.0-cp311-cp311-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:cbc07d0ce9c73f83c22b900f422fab57f0629a9e25b2e853d17713273937cac1"},
-    {file = "pybit7z-1.3.0-cp311-cp311-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:bf773f22775c402cfb92f44f02aab49e7942fdc8e7d746d5727bd0a61a00de3f"},
-    {file = "pybit7z-1.3.0-cp311-cp311-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:3a011b7808c1563ba023dffe1e4c9720d45ae747facfb302e4e0800be1372f99"},
-    {file = "pybit7z-1.3.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e8596a3e2e17d12d7055e621772f92b212819fb75538d0bf1378dc8c408444f1"},
-    {file = "pybit7z-1.3.0-cp311-cp311-manylinux_2_31_armv7l.whl", hash = "sha256:5efa21c368fd66cc253738ee7b8631d95eee9224148b415ed45f476738618182"},
-    {file = "pybit7z-1.3.0-cp311-cp311-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:d0c151d563fab336725b58d9fe29295810e223e1ee0cbe234a239805d6642ce2"},
-    {file = "pybit7z-1.3.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:bb776c3fbff5009905f9f7da8a2a0bdaef66e1ff2b36615b4c0ae5d30634a236"},
-    {file = "pybit7z-1.3.0-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:56ef7f3aadef74de512cbae88585bc2fb51be98ba6e3f66049cc5517e801ed74"},
-    {file = "pybit7z-1.3.0-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:462d9eafaa2af4fd9e63308cf9cab619c708813f197ccb9a7cf3ee73e0fcc0b1"},
-    {file = "pybit7z-1.3.0-cp311-cp311-musllinux_1_2_ppc64le.whl", hash = "sha256:771f11a922a1ea0d0c164475cc73357612272878b11e71a42765154d0a0f89c4"},
-    {file = "pybit7z-1.3.0-cp311-cp311-musllinux_1_2_riscv64.whl", hash = "sha256:22f3fb6ab5e8b7fc3cde383aef50cde4037b7600888aba240666964f99711ece"},
-    {file = "pybit7z-1.3.0-cp311-cp311-musllinux_1_2_s390x.whl", hash = "sha256:745a99663fdc896d84daeef25a0f611443aebc1b52be1a5aee541c9851569f5b"},
-    {file = "pybit7z-1.3.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:e9bc5245e8f5562329e9980be134bbdd96024ce92e84148093b4893265957280"},
-    {file = "pybit7z-1.3.0-cp311-cp311-win32.whl", hash = "sha256:6b964192ae08c44770d9870673f461f05fcb3b4a6c486c24bbf813cdb128c65b"},
-    {file = "pybit7z-1.3.0-cp311-cp311-win_amd64.whl", hash = "sha256:92bf5973277935cace0ae1ef149bd3b3a3f97aac7bbf78a8732729b18abb80f9"},
-    {file = "pybit7z-1.3.0-cp311-cp311-win_arm64.whl", hash = "sha256:c7faedeb54b30cf7e7410d6ff8b259dbda7fb15cda80dc577fc9178756132b14"},
-    {file = "pybit7z-1.3.0-cp312-cp312-macosx_10_15_universal2.whl", hash = "sha256:7e86739487c35ccc90338648f1ea91ea999b2a67359ef30f028b51ec9c3be53c"},
-    {file = "pybit7z-1.3.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:a394bb2a552076d50b2ed74a33837e8f28d5a915077390d6d7022a64db2378b3"},
-    {file = "pybit7z-1.3.0-cp312-cp312-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:9a77e426f29c9a771898225a570e606b85e78f601e50acf03570fee0f1843842"},
-    {file = "pybit7z-1.3.0-cp312-cp312-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:312dcf9af224caad23a81d2f7a74f303fc38a522c1bf0633703043830c93fbc4"},
-    {file = "pybit7z-1.3.0-cp312-cp312-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:cad39658a2bae266388e9edea3d335ea4d8cbdf82cf37a89a7bd82bf20441cdb"},
-    {file = "pybit7z-1.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:2c786b9ed9a888c9e9718e669baeebcd49f2c9f4559f659e7f7f4e0860a3a49d"},
-    {file = "pybit7z-1.3.0-cp312-cp312-manylinux_2_31_armv7l.whl", hash = "sha256:6bc7c0caae42172e3da140439a0a9612d3d8acebb5a662ccf2c12a2a7058a33a"},
-    {file = "pybit7z-1.3.0-cp312-cp312-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:a50ac424788dbc135d280dfa7adecda9cfa49610cfbdff54f12b634f6ec36273"},
-    {file = "pybit7z-1.3.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:e0d0c6e5d42639ba4db83099403cf2909908a5f469f64c9d422fc99ed0607faf"},
-    {file = "pybit7z-1.3.0-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:57a5a8f83da4a61aa454782f6e43ea66e1067933be8fab6beeb4bb371ab8b8c4"},
-    {file = "pybit7z-1.3.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:aff76fc0a7815719a6a25e31999c56cf9653fbbcedcd4cb13ae0aa250983d071"},
-    {file = "pybit7z-1.3.0-cp312-cp312-musllinux_1_2_ppc64le.whl", hash = "sha256:74498fa1a4443f0fa9950ef6a5c9c2bfd6c733cbbb7681be844faf29016875f8"},
-    {file = "pybit7z-1.3.0-cp312-cp312-musllinux_1_2_riscv64.whl", hash = "sha256:a209317bd78eaf811bee73bcbd00371fb66280170589a0f0d554c3639df804c4"},
-    {file = "pybit7z-1.3.0-cp312-cp312-musllinux_1_2_s390x.whl", hash = "sha256:f50dd3c0b5ae2dd46a757e5bbdf47dedd0b118538d29ec14172cb929859b3053"},
-    {file = "pybit7z-1.3.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:9a4905ed3bea65f781c3f257b98e5d78e9eb50fce07d498bf02b19ad82ef858a"},
-    {file = "pybit7z-1.3.0-cp312-cp312-win32.whl", hash = "sha256:4274a366b506b1c6120fc0b8f42158b61417a731a148702e530a05cf20dba682"},
-    {file = "pybit7z-1.3.0-cp312-cp312-win_amd64.whl", hash = "sha256:dacd3d67ba0c2e6cfd583bc0beaf9bd5fa587610e0324e484d97c184b466607d"},
-    {file = "pybit7z-1.3.0-cp312-cp312-win_arm64.whl", hash = "sha256:f2d8c057669f52f70a2ddb0eff729605fe7caec564b00a4c90ef4ec283159a97"},
-    {file = "pybit7z-1.3.0-cp313-cp313-macosx_10_15_universal2.whl", hash = "sha256:d686a43515b35664cf49baa3be283ef13ced3b37811cd860c9b4d8dc3b91b2d0"},
-    {file = "pybit7z-1.3.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:bcdd19188a227bacb4c3415edbde47ae8426cd1171f2dad2b87c3bda6fea1559"},
-    {file = "pybit7z-1.3.0-cp313-cp313-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:a663b50d76569151a2732f3214245cef9a0f26c20a121fad9f3a30ba01c24415"},
-    {file = "pybit7z-1.3.0-cp313-cp313-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:a6900651cbbcd55324aeb8e152147cd08bf7f4d6fd2071ec445d71fd4f3bd440"},
-    {file = "pybit7z-1.3.0-cp313-cp313-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:5bdbee6338ecc9f6003aac91bedd9b64a063c589291db34d411fcbfd46f5695e"},
-    {file = "pybit7z-1.3.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:252351852635e4e682bbbc9f45319bb1fb5e007db034f66b919f67db0d27e72c"},
-    {file = "pybit7z-1.3.0-cp313-cp313-manylinux_2_31_armv7l.whl", hash = "sha256:ed829235e97da0bc938e35ec2205038a39c4d37a09dfd98632229e97834074e7"},
-    {file = "pybit7z-1.3.0-cp313-cp313-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:62b99d7b9c0c0c29cb41659b094465db90f71c477c57f3efc33bccc2a0cff264"},
-    {file = "pybit7z-1.3.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:bd395dc73f371585c274a51187165b312f81791a75cafa924c32522b665962eb"},
-    {file = "pybit7z-1.3.0-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:d2ac59ce54f11769574af68cc1fc649c581f56505498b8923eac556e93774695"},
-    {file = "pybit7z-1.3.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:82eddca356dc247a180e9303329bc4ed02cb42f481631005a7fb26aee8c49ffe"},
-    {file = "pybit7z-1.3.0-cp313-cp313-musllinux_1_2_ppc64le.whl", hash = "sha256:460cdc7e1258fa457b63a8938e3891efb4e127cf31127c9078494ba6711e9167"},
-    {file = "pybit7z-1.3.0-cp313-cp313-musllinux_1_2_riscv64.whl", hash = "sha256:a54b271262e2628aebebf67ff883ae1dd51bf888162a59caed747c44f4cb6417"},
-    {file = "pybit7z-1.3.0-cp313-cp313-musllinux_1_2_s390x.whl", hash = "sha256:c3e8d7a02bc1525e2b55aa5ab9b743e19308d47f691df38e09c4c756626dc296"},
-    {file = "pybit7z-1.3.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:4629362791c228e9fc0636e083168571b09876bb90926ccc266b93214dc200c9"},
-    {file = "pybit7z-1.3.0-cp313-cp313-win32.whl", hash = "sha256:a9d4f7b0dbbe68f799c885b7ae9cb77784e01c7d88235fcbd0fe78f288c559a3"},
-    {file = "pybit7z-1.3.0-cp313-cp313-win_amd64.whl", hash = "sha256:ce7b991c3f34f050cd157c09f4c7d80d18d031a4233b9d27452f05c334336748"},
-    {file = "pybit7z-1.3.0-cp313-cp313-win_arm64.whl", hash = "sha256:2955fb6c3b4a21f37611a75c57bf10c5997b51ca550dd7cbcad45c76bf22040b"},
-    {file = "pybit7z-1.3.0-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:522f74bf03b4629e7de9b29575938c02aae246d88a2ee60383c02811f250b751"},
-    {file = "pybit7z-1.3.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cf05a36944f6801de169e7e68a4b8248b653df306f1c8e23b9a23bd95ed025ef"},
-    {file = "pybit7z-1.3.0-cp314-cp314-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:fbc000b8407ae23c998e59d475632b0cfc8de44bd0f0ae66153339fbde326702"},
-    {file = "pybit7z-1.3.0-cp314-cp314-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:e8cad7bbd08847aa041c1f63e6d7c9e96fac374009bd7aa4cbfef3443b395ebf"},
-    {file = "pybit7z-1.3.0-cp314-cp314-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:1cd44514ef1294cd42e1115f1054ed53da98a8293cc06c64e427ab9ece506765"},
-    {file = "pybit7z-1.3.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:ab944909fc434fe8ba8669788e015518699d2685975a8d5f84bfb0c921528db8"},
-    {file = "pybit7z-1.3.0-cp314-cp314-manylinux_2_31_armv7l.whl", hash = "sha256:6d3457df545841045c84af789457c129db0abb9afdda7d83f9fb201e35689fe8"},
-    {file = "pybit7z-1.3.0-cp314-cp314-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:c451d950e37eb13a5ab85012108da23bb4f87a628c991dd952795b3cdc9608fa"},
-    {file = "pybit7z-1.3.0-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:ce5d710833f58ef161bea7253b1ba8e8c92b31cbf0d5922add444c9ccf02990c"},
-    {file = "pybit7z-1.3.0-cp314-cp314-musllinux_1_2_armv7l.whl", hash = "sha256:37761fd875d7cbdea501fc30dbc70e88117f2020ad8e4fe3e6515bb28a4f22d5"},
-    {file = "pybit7z-1.3.0-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:8889517300f90f601248814a7a27f88fcd3f9f0296187c735c74cbd6f83bdd73"},
-    {file = "pybit7z-1.3.0-cp314-cp314-musllinux_1_2_ppc64le.whl", hash = "sha256:24949c748502463914266aebb26c02719e9307a7cb4038e778bbfe71557d9eb6"},
-    {file = "pybit7z-1.3.0-cp314-cp314-musllinux_1_2_riscv64.whl", hash = "sha256:49d316c850184f019fe3fe59d221bfabfa12b0377df96d39cd4e6a157f184e3b"},
-    {file = "pybit7z-1.3.0-cp314-cp314-musllinux_1_2_s390x.whl", hash = "sha256:b2b296bb5d89595697ba70424cc443439e0533f94ec711966ad0b9cf0b24b757"},
-    {file = "pybit7z-1.3.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:72d6e5c41026abaddf5fb2209a1d6af72023f1bc9ab491d5f4ec0b6a33565f58"},
-    {file = "pybit7z-1.3.0-cp314-cp314-win32.whl", hash = "sha256:db62a2c9fcae4ae2ab86fcd25239c8d8bb8cd3888da19762bbb472156f077e5a"},
-    {file = "pybit7z-1.3.0-cp314-cp314-win_amd64.whl", hash = "sha256:7e022eea9069e104c6e5067fd4f23f32e7b2b505a798e2fa3c1512f96e075b89"},
-    {file = "pybit7z-1.3.0-cp314-cp314-win_arm64.whl", hash = "sha256:e92465837774501594d002e73d2558e31ed470c05b035e222fd95977ba85eec6"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-macosx_10_15_universal2.whl", hash = "sha256:e2ac2f725306c39bf9735641d387011f4193d1a2cc5f77abcbac4b5566309dfb"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:13bd677041187b31378f4ea1b06c8887c3c4d67b0815d1973c90ad86fabf386c"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:8217caef07138f83699f52bb83368be302377afe74c0b5576ba76b2788dabe58"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:1df8ed69b1a699b32c6b18eb1243a9169d6772abec6960759ba390b24761948b"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:8152f33d19cff1cbb1131834dcf01550e8b07d669872615df6f1deb8c4450add"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:6a63c59e7512b8e808fb0dbd4ae5a4f496be95dd8e5797c7fcc74ea6c4e8f690"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-manylinux_2_31_armv7l.whl", hash = "sha256:ce48a156d1d3691ade11b44a75f12a0847b110e6371c3d17e64ee655943127cf"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:6e2f67e31e7921098e021879028211b4320f5b947c1670af9bd8549c4d940591"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:a3042abd800616f77123f1adb30a9e13dd0b4eb4ede6602faea9e1d083e830da"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-musllinux_1_2_armv7l.whl", hash = "sha256:370a6dddbe915b77dda88209057ed415bcb5848e74268b12fd5981f427c48f7f"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-musllinux_1_2_i686.whl", hash = "sha256:780056d308d2bddea537f60028a47e734a0a1c5aa8fafe6dcaea6ab7741a2a77"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-musllinux_1_2_ppc64le.whl", hash = "sha256:7e0b2c0f713d7eb82044478aa2c5ad1ffaddb06c805d0822dd8272578126127d"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-musllinux_1_2_riscv64.whl", hash = "sha256:0699f82710ada66f47802b6868db53e0170261c58c018f859275fe576ba9aee8"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-musllinux_1_2_s390x.whl", hash = "sha256:04d83b285a329503bbda71491075cbee2c20eb60a07770e428cb94e74f35b02f"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:a8a267fb42b49e94d33ad4066282747f33b9c6f40d799f13eb4fe38d920c110b"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-win32.whl", hash = "sha256:cf21d97e5a246c0432086997d79d5f1e0404b7b0d129bbcd2f7cda79e28e8557"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-win_amd64.whl", hash = "sha256:5131bcf5db933b1af9db19d16905283d3cf1118b79060f081c2aa4f6e146e0ed"},
-    {file = "pybit7z-1.3.0-cp314-cp314t-win_arm64.whl", hash = "sha256:2d78fcf3bf712c32278c58ae8f2db2f48cbcb1f70951800519f586d44395517b"},
-    {file = "pybit7z-1.3.0-cp315-cp315-macosx_10_15_universal2.whl", hash = "sha256:6b039de387ce603ff332d53193f4044f99272c2909a2b98cbee260ac3ea3a8b0"},
-    {file = "pybit7z-1.3.0-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:0878bf4fa0b53fd0bf110a97ddd812739fe03284760181a4594f7b16d0aa74f9"},
-    {file = "pybit7z-1.3.0-cp315-cp315-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:192bf3129ccccb2971cfdfa116f664a9b7d290f2f899fb554efef0f4041a7a3f"},
-    {file = "pybit7z-1.3.0-cp315-cp315-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:1836cde0a2f1f592802d4827d658d2bff6a8dd7e31cbf93c370c0d58b4ea49e5"},
-    {file = "pybit7z-1.3.0-cp315-cp315-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:3df1e46692aaa0a4c586f9508093bc97a8f611fbc9844335527674a62ec256a8"},
-    {file = "pybit7z-1.3.0-cp315-cp315-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:50be8233d573f69595bcf0b627fbc37b1d87a67a557bb6c825da7c0450b7c1d6"},
-    {file = "pybit7z-1.3.0-cp315-cp315-manylinux_2_31_armv7l.whl", hash = "sha256:b6d1ec4cbc271cdcb75460790fd93837c616cdabb3c3f3b717cd75e58d9ed4aa"},
-    {file = "pybit7z-1.3.0-cp315-cp315-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:4b2f2eddf97a5671dd9ae87d8f6cd3fc3743e320c81df28e21caf3d72db1ec14"},
-    {file = "pybit7z-1.3.0-cp315-cp315-musllinux_1_2_aarch64.whl", hash = "sha256:60386265fefcfb6a91534942a4ed49bddaccd7b4c85305656f630c97d0c54956"},
-    {file = "pybit7z-1.3.0-cp315-cp315-musllinux_1_2_armv7l.whl", hash = "sha256:e8073d01c0c3f402eb9ceb126f1199ec98a3906d6c284a9fa3d5a30458d84205"},
-    {file = "pybit7z-1.3.0-cp315-cp315-musllinux_1_2_i686.whl", hash = "sha256:f41f644ba4e7faf3141446f1da59b07a0b1c59dd7a536738ca2faec0c91cb06b"},
-    {file = "pybit7z-1.3.0-cp315-cp315-musllinux_1_2_ppc64le.whl", hash = "sha256:3004b6fa78498b70959ff3af3c8c9ede54ab6ad88bf1ce6e225999965da4c414"},
-    {file = "pybit7z-1.3.0-cp315-cp315-musllinux_1_2_riscv64.whl", hash = "sha256:c671bdca8e8fe1711b405ed2d4fa8b8ecfbddd7fc4b8e24ccae072b845412d10"},
-    {file = "pybit7z-1.3.0-cp315-cp315-musllinux_1_2_s390x.whl", hash = "sha256:6b8ca9af4290dbe2a466d21427c2a67c4326bed423871bb76b825f652d346e11"},
-    {file = "pybit7z-1.3.0-cp315-cp315-musllinux_1_2_x86_64.whl", hash = "sha256:801859275b1e7726626b0c703e2ddfde22d86859ea51e187dc2d7113b097decb"},
-    {file = "pybit7z-1.3.0-cp315-cp315-win32.whl", hash = "sha256:f2e0a84b5df6107481e613792b3f910713e0873b9c1db58b0555e59a6767bbce"},
-    {file = "pybit7z-1.3.0-cp315-cp315-win_amd64.whl", hash = "sha256:138f1b7703cba072cede6144c76bb4e024273c9c34671047106a002fed37375c"},
-    {file = "pybit7z-1.3.0-cp315-cp315-win_arm64.whl", hash = "sha256:1b44e4a127e9082a72da47cdec074af3f4e4aee753d16719ad896ea1c7f835b9"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-macosx_10_15_universal2.whl", hash = "sha256:7f2a5be21accfdc94f7420e664b1eca1949cfc922637c50a473cec81c574a9a7"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:f84ce28ba885f96cdb5861bf071018e14d192f74328c767b4e9bf03b97e20dd4"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:cdd40d4319d4a4e2199bb21e6b7d58b46d4da163ba23c2214c01dc2861cf6c41"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:1c3f534f4e855f3d39552fffe16855784f2b5dbac94eef047ea414a2645f49dd"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:d52598bd6582e34bcfe20a40998c9071888023737a78eddfb95fbf8e04c2a324"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:0cc16a4ebda35c9f13908609558f8b932da41fe80faa39d1789521928b91ef6c"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-manylinux_2_31_armv7l.whl", hash = "sha256:76eda4b719f537cac157f0bcd598c85ff4d0c59679aa4c4b5f5dba54e08b04c9"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:82edc8dbed70a5b86a72811ce9682b2aa00877242ddc9e6c5975a89ec2be0fa9"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-musllinux_1_2_aarch64.whl", hash = "sha256:4898ff104314c6141ccbed1966c9cc60be4f414d66fa26deada57468f118134e"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-musllinux_1_2_armv7l.whl", hash = "sha256:abf5f931ce5cc3b13da3ccbdd9c25d06d80082b3c79dc55cccc8acc340c794c0"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-musllinux_1_2_i686.whl", hash = "sha256:317a995604521545c8ea47e4b64d0f0eb7003bc2eecc253c9d255905a9446315"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-musllinux_1_2_ppc64le.whl", hash = "sha256:6b2a998ad0b55c65157c58f42ea923b265d442ed249555501690efbc92a9038b"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-musllinux_1_2_riscv64.whl", hash = "sha256:de47e2a7824ff027b46260edba6d5efed2d6cdcbbe0638a6bdaf9b5e68d5bf6d"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-musllinux_1_2_s390x.whl", hash = "sha256:e4d79537a14c2d89c10e671834a42ce76fe92568efbe17bbe0d4049ad814cc41"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:83e473780cde8c710cfa69b78923717733e2a75f59bbdc2d3f582d93e8a8b3f7"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-win32.whl", hash = "sha256:3ef6e0ac5f6cc58a0e37539f3778b5a06d8cd9d28cf7ae207888eede317573c6"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-win_amd64.whl", hash = "sha256:7528721797a77fb2f95db0043d3c56dda7c14c824fda89da2fca5b39b76ac8d9"},
-    {file = "pybit7z-1.3.0-cp315-cp315t-win_arm64.whl", hash = "sha256:ac4a1e77d37d670b84bdf8cb27c73f6eaf5d0f02ef2f2e971d62d40dc680653a"},
-    {file = "pybit7z-1.3.0-cp39-cp39-macosx_10_15_universal2.whl", hash = "sha256:f4bc381c04bc261d0095892611e0163759f84ec0f7386d7ce2695ad92c739536"},
-    {file = "pybit7z-1.3.0-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:4440a906aac4d32fd6ca991174b4a6f92366a6c869fe5ae8a9b9451af7831476"},
-    {file = "pybit7z-1.3.0-cp39-cp39-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:040530fed66c37bab5e57ed0be2340115e0d652b1d95090366d7608d93f0a8ec"},
-    {file = "pybit7z-1.3.0-cp39-cp39-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:0aaeb7332b93f7f2be561253476afdbd82138d61cb2a7226e6ccd51cb4724aa7"},
-    {file = "pybit7z-1.3.0-cp39-cp39-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:0735f0e9c7fd9d67abf5a6f281b3cdf37bd1ec1259139f8ca30e1e96688ad9dc"},
-    {file = "pybit7z-1.3.0-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:02ac31f4bd638efec40d69df31b60cca2329ea1c627acd984e7df4e25e97de45"},
-    {file = "pybit7z-1.3.0-cp39-cp39-manylinux_2_31_armv7l.whl", hash = "sha256:e4bf5cc1edacb5573a4f059cb816afa8343e8264128e2652d90564290614a82e"},
-    {file = "pybit7z-1.3.0-cp39-cp39-manylinux_2_38_riscv64.manylinux_2_39_riscv64.whl", hash = "sha256:91a0d7cb9a8404be3731fd549391c44d3a40895c74ec1b9f570f827a35026bd9"},
-    {file = "pybit7z-1.3.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:727e3473f89ad90ffc767da29e46ff8f67a8640ec1096fedec5126f04b760196"},
-    {file = "pybit7z-1.3.0-cp39-cp39-musllinux_1_2_armv7l.whl", hash = "sha256:26dc8f8f5700c684f3140953edb0c6986caaccc1820af16f9d83712d46145eb2"},
-    {file = "pybit7z-1.3.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:6a282778700bd398f79ae2668d7468c3ce9c5cc4d4d26f214ac6d08ee68dcb3f"},
-    {file = "pybit7z-1.3.0-cp39-cp39-musllinux_1_2_ppc64le.whl", hash = "sha256:300eafb8e5eb165fa325c5fe21d8ecde68f5c97c2058bed29b72badd6f2bbe3e"},
-    {file = "pybit7z-1.3.0-cp39-cp39-musllinux_1_2_riscv64.whl", hash = "sha256:452ebf623b9903b96262c0f969f5804dd54ae7e1cf7db14ad856938778e08b6e"},
-    {file = "pybit7z-1.3.0-cp39-cp39-musllinux_1_2_s390x.whl", hash = "sha256:7f6c1e6163225f5a5c5b8fdbc51c037fe3d2a0dbd7b006ef3470f9f5058b3733"},
-    {file = "pybit7z-1.3.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:c45f5f2864381d694e0a6b32cc26943616e465b14de8f76618691bee48280848"},
-    {file = "pybit7z-1.3.0-cp39-cp39-win32.whl", hash = "sha256:d1aaaa0a3d0d84a9940c693828eb8cfd32cd1a0a9a4690e431085e6d9211ab3f"},
-    {file = "pybit7z-1.3.0-cp39-cp39-win_amd64.whl", hash = "sha256:2b10ce92c5aaabbfe4294ba77bc1cf737c2691fb6d7def6e3825e75a3c590291"},
-    {file = "pybit7z-1.3.0-cp39-cp39-win_arm64.whl", hash = "sha256:2d02db47d8072deb2f4ec9445362e4d1f1712ab4ade5836ec1aac602e120fe7f"},
-    {file = "pybit7z-1.3.0.tar.gz", hash = "sha256:d326183e0ed444c32f500b6ecf4eb37599818dc51f8dc724d920c869b18749fb"},
-]
-
-[package.dependencies]
-importlib_metadata = ">=1.4"
-
-[package.extras]
-docs = ["furo (>=2023.8.17)", "myst_parser (>=0.13)", "sphinx (>=7.0)", "sphinx_autodoc_typehints", "sphinx_copybutton"]
-test = ["pytest (>=6)", "pytest-cov (>=3)", "pytest-xdist (>=3.1)"]
 
 [[package]]
 name = "pycparser"
@@ -3027,6 +2809,18 @@ markupsafe = ">=2.1.1"
 watchdog = ["watchdog (>=2.3)"]
 
 [[package]]
+name = "wim-nxc"
+version = "0.1.0"
+description = "Pure-Python read-only reader for Windows Imaging (WIM) files, maintained for NetExec"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "wim_nxc-0.1.0-py3-none-any.whl", hash = "sha256:e5d5e16998025324d84564cc85a1fdb2a8cefe211e2946554384e39f84f25fd3"},
+    {file = "wim_nxc-0.1.0.tar.gz", hash = "sha256:b9dfcb4110ae1dda6206fa0b3be0c5a97d13faf06f20ce5cc05ee8c587076adb"},
+]
+
+[[package]]
 name = "winacl"
 version = "0.1.9"
 description = "ACL/ACE/Security Descriptor manipulation library in pure Python"
@@ -3056,27 +2850,7 @@ files = [
 [package.extras]
 test = ["pytest", "pytest-cov"]
 
-[[package]]
-name = "zipp"
-version = "4.1.2"
-description = "Backport of pathlib-compatible object wrapper for zip files"
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "zipp-4.1.2-py3-none-any.whl", hash = "sha256:b30cb6cd253122169c47de245ca24a86bac2a5d3802ba15bf7ba6414eb9e144d"},
-    {file = "zipp-4.1.2.tar.gz", hash = "sha256:cf474b90b07ea932637e17c6b9479de2b2882900b0d311bdaf4f5c000a15a97f"},
-]
-
-[package.extras]
-check = ["pytest-checkdocs (>=2.14)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
-cover = ["pytest-cov"]
-doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
-enabler = ["pytest-enabler (>=3.4)"]
-test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_itertools", "pytest (>=6,!=8.1.*)", "pytest-ignore-flaky"]
-type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
-
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "9762d22c9a343b3419918f1f8a231c0be062504a5e62f021477f7b9a5291ab0c"
+content-hash = "4c54295a190bd83bdc85cea183296af950cca72ff78ed37b530ead408d2f07da"

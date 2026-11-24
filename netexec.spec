@@ -99,6 +99,7 @@ a = Analysis(
         'pyasn1_modules.rfc5652',
         'unicrypto.backends.pycryptodomex',
         'sspilib.raw._text',
+        'wim_nxc',
      ],
      hookspath=['./nxc/.hooks'],
      runtime_hooks=[],

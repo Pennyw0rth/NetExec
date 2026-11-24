@@ -33,7 +33,6 @@ dependencies = [
     "paramiko>=3.3.1",
     "pefile (>=2024.8.26,<2025.0.0)",
     "pyasn1-modules>=0.3.0",
-    "pybit7z==1.3.0",
     "pylnk3>=0.4.3",
     "pypsrp>=0.8.1",
     "pypykatz>=0.6.8",
@@ -43,6 +42,7 @@ dependencies = [
     "sqlalchemy>=2.0.4",
     "termcolor>=2.4.0",
     "terminaltables3>=4.0.0",
+    "wim-nxc>=0.1.0",
     "xmltodict>=0.13.0",
     # Git Dependencies
     "impacket @ git+https://github.com/fortra/impacket",
