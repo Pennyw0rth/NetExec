@@ -52,6 +52,7 @@ a = Analysis(
         'nxc.helpers.dpapi',
         'nxc.helpers.even6_parser',
         'nxc.helpers.firefox',
+        'nxc.helpers.klist',
         'nxc.helpers.msada_guids',
         'nxc.helpers.negotiate_parser',
         'nxc.helpers.smb',
