@@ -65,7 +65,7 @@ class psql(connection):
 
     def print_host_info(self):
         info = f"{self.remote_version}"
-        version_range = self._protocol_version_to_range(self.protocol_version)
+        version_range = self.protocol_version_to_range(self.protocol_version)
         if version_range:
             info += f" ({version_range})"
         self.logger.display(info)
@@ -99,9 +99,8 @@ class psql(connection):
                 ctx.verify_mode = ssl.CERT_NONE
                 s = ctx.wrap_socket(s, server_hostname=self.host)
 
-            user = "nxc_" + os.urandom(4).hex()
             probe_version = (3 << 16) | PROBE_MINOR_VERSION
-            s.sendall(_startup_packet(user, user, protocol_version=probe_version))
+            s.sendall(startup_packet("postgres", self.args.database, protocol_version=probe_version))
 
             msg_type = read_exact(s, 1)
             length = struct.unpack("!I", read_exact(s, 4))[0]
@@ -136,7 +135,7 @@ class psql(connection):
             return False
 
         if self.postgres:
-            self.protocol_version = self._probe_protocol_version()
+            self.protocol_version = self.probe_protocol_version()
 
         return self.postgres
 
@@ -159,16 +158,14 @@ class psql(connection):
         except Exception as e:
             self.logger.fail(f"{username}:{process_secret(password)} Error: {e}")
             return False
-        try:
-            hosts = self.db.get_hosts(self.host)
-            host_id = hosts[0].id if hosts else None
-            cred_id = self.db.add_credential("plaintext", username, password)
-            if host_id and cred_id:
-                self.db.add_loggedin_relation(cred_id, host_id)
-                if self.admin_privs:
-                    self.db.add_admin_user(cred_id, host_id)
-        except Exception as e:
-            self.logger.debug(f"Failed to record credential/relation in db: {e}")
+        hosts = self.db.get_hosts(self.host)
+        host_id = hosts[0].id if hosts else None
+        cred_id = self.db.add_credential("plaintext", username, password)
+
+        if host_id and cred_id:
+            self.db.add_loggedin_relation(cred_id, host_id)
+            if self.admin_privs:
+                self.db.add_admin_user(cred_id, host_id)
 
         self.logger.success(
             f"{username}:{process_secret(password)} {self.mark_pwned()} "

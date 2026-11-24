@@ -400,5 +400,5 @@ netexec nfs TARGET_HOST -u "" -p "" --put-file ../test.txt /NFStest/test
 netexec nfs TARGET_HOST -u "" -p "" --chmod 666 /NFStest/test/test.txt
 ##### PSQL
 netexec psql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD
-netexec psql TARGET_HOST -u "" -p "" --get-file /etc/passwd ../passwd
-netexec psql TARGET_HOST -u "" -p "" --put-file /tmp/local_file.txt /tmp/file.txt
+netexec psql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --get-file /etc/passwd ../passwd
+netexec psql TARGET_HOST -u LOGIN_USERNAME -p LOGIN_PASSWORD --put-file /tmp/local_file.txt /tmp/file.txt

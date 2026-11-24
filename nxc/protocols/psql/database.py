@@ -122,7 +122,6 @@ class database(BaseDB):
             return updated_ids
 
     def add_credential(self, credtype, username, password):
-        """Check if this credential has already been added to the database, if not add it in."""
         credentials = []
 
         q = select(self.CredentialsTable).filter(
@@ -191,8 +190,20 @@ class database(BaseDB):
 
     def get_hosts(self, filter_term=""):
         q = select(self.HostsTable)
-        q = format_host_query(q, filter_term, self.HostsTable)
+
+        if self.is_host_valid(filter_term):
+            q = q.filter(self.HostsTable.c.id == filter_term)
+        elif filter_term:
+            q = format_host_query(q, filter_term, self.HostsTable)
+
         return self.db_execute(q).all()
+
+
+    def is_host_valid(self, host_id):
+        q = select(self.HostsTable).filter(
+            self.HostsTable.c.id == host_id
+        )
+        return len(self.db_execute(q).all()) > 0
 
     def add_loggedin_relation(self, credential_id, host_id):
         loggedin_relations = []
