@@ -866,22 +866,53 @@ class wmi(connection):
 
     @requires_admin
     def loggedon_users(self):
-        users = {
-            account for record in self.query_values("SELECT Antecedent FROM Win32_LoggedOnUser") if (account := self.parse_account_path(record["Antecedent"]))
+        sessions = {
+            str(session["LogonId"]): session
+            for session in self.query_values("SELECT LogonId, LogonType, AuthenticationPackage FROM Win32_LogonSession")
         }
+        logon_types = {
+            0: "System",
+            2: "Interactive",
+            3: "Network",
+            4: "Batch",
+            5: "Service",
+            6: "Proxy",
+            7: "Unlock",
+            8: "Network Cleartext",
+            9: "New Credentials",
+            10: "Remote Interactive",
+            11: "Cached Interactive",
+            12: "Cached Remote Interactive",
+            13: "Cached Unlock",
+        }
+        users = {}
+        for association in self.query_values("SELECT Antecedent, Dependent FROM Win32_LoggedOnUser"):
+            account = self.parse_account_path(association["Antecedent"])
+            logon_id = re.search(r'LogonId="([^"]+)"', association["Dependent"] or "")
+            if not account or not logon_id or logon_id.group(1) not in sessions:
+                continue
+            session = sessions[logon_id.group(1)]
+            user = users.setdefault(account, {"LogonTypes": set(), "AuthenticationPackages": set()})
+            logon_type = int(session["LogonType"])
+            user["LogonTypes"].add((logon_type, f"{logon_types.get(logon_type, 'Unknown')} ({logon_type})"))
+            if session["AuthenticationPackage"]:
+                user["AuthenticationPackages"].add(session["AuthenticationPackage"])
         if self.args.loggedon_users:
             try:
                 pattern = re.compile(self.args.loggedon_users, re.IGNORECASE)
             except re.error as e:
                 self.logger.fail(f"Invalid user filter: {e}")
                 return
-            users = {account for account in users if pattern.search(account[1])}
+            users = {account: details for account, details in users.items() if pattern.search(account[1])}
         if not users:
             self.logger.fail("No logged on users found")
             return
 
-        for domain, username in sorted(users):
+        self.logger.success(f"Enumerated {len(users)} logged on users")
+        for (domain, username), details in sorted(users.items()):
             self.logger.highlight(f"{domain}\\{username}")
+            self.logger.highlight(f"  Logon Types: {', '.join(name for _, name in sorted(details['LogonTypes']))}")
+            self.logger.highlight(f"  Authentication Packages: {', '.join(sorted(details['AuthenticationPackages'], key=str.casefold))}")
 
     @requires_admin
     def services(self):
