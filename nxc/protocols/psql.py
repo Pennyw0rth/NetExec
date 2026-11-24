@@ -84,7 +84,6 @@ class psql(connection):
         except Exception as e:
             self.logger.fail(f"Error: {e}")
 
-
     def probe_protocol_version(self):
         s = None
         try:
