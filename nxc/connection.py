@@ -339,6 +339,7 @@ class connection:
 
         for cred in creds:
             c_id, domain, username, secret, cred_type, pillaged_from = cred
+            domain = self.args.domain if hasattr(self.args, "domain") and self.args.domain is not None else domain
             domains.append(domain)
             usernames.append(username)
             owned.append(False)  # As these are likely valid we still want to test them if they are specified in the command line
