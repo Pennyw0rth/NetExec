@@ -1018,7 +1018,7 @@ class smb(connection):
             return False
 
     @requires_admin
-    def execute(self, payload=None, get_output=False, methods=None) -> str:
+    def execute(self, payload=None, get_output=False, methods=None, codec=None) -> str:
         """
         Executes a command on the target host using CMD.exe and the specified method(s).
 
@@ -1027,6 +1027,7 @@ class smb(connection):
             payload (str): The command to execute
             get_output (bool): Whether to get the output of the command (can be useful for AV evasion)
             methods (list): The method(s) to use for command execution
+            codec (str): Decode the output with this codec instead of the --codec default
 
         Returns:
         -------
@@ -1134,7 +1135,7 @@ class smb(connection):
             output = exec_method.execute(payload, get_output)
             try:
                 if not isinstance(output, str):
-                    output = output.decode(self.args.codec)
+                    output = output.decode(codec or self.args.codec)
             except UnicodeDecodeError:
                 self.logger.debug("Decoding error detected, consider running chcp.com at the target, map the result with https://docs.python.org/3/library/codecs.html#standard-encodings")
                 output = output.decode("cp437")
