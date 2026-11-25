@@ -31,6 +31,7 @@
 - In files under `nxc/modules/`, do not define variables, constants, or helper functions at module scope.
 - Keep all module-specific state, constants, and helper methods inside the `NXCModule` class.
 - Module scope should contain only imports and the `NXCModule` class definition.
+- The module variables `opsec_safe` and `multiple_hosts` are obsolete and must no longer be added.
 - When module options are invalid, log the reason with `context.log.fail()` and `return False` from `options()`; do not call `exit()`.
 - Do not over-validate module options. Check only that required arguments are present, mutually exclusive arguments are not combined, or a value would otherwise cause the module to fail before performing its normal lookup or operation.
 - Do not validate whether user-supplied object names, identifiers, or similar values are semantically correct when the underlying protocol lookup can handle them; let a misspecified value produce the normal "not found" result.

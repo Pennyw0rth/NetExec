@@ -202,11 +202,11 @@ class DatabaseNavigator(cmd.Cmd):
                 return
 
             shares = self.db.get_shares()
-            csv_header = ("id", "host", "userid", "name", "remark", "read", "write")
+            csv_header = ("id", "host", "userid", "name", "read", "write", "type", "remark")
             filename = line[2]
 
             if line[1].lower() == "simple":
-                write_csv(filename, csv_header, shares)
+                write_csv(filename, csv_header, [(share.id, share.hostid, share.userid, share.name, share.read, share.write, share.type, share.remark) for share in shares])
                 print("[+] shares exported")
             # Detailed view gets hostname, usernames, and true false statement
             elif line[1].lower() == "detailed":
@@ -220,9 +220,10 @@ class DatabaseNavigator(cmd.Cmd):
                         share_host,  # hosts
                         f"{user[1]}\\{user[2]}",  # userID
                         share[3],  # name
-                        share[4],  # remark
                         bool(share[5]),  # read
                         bool(share[6]),  # write
+                        share[7],  # type
+                        share[4],  # remark
                     )
                     formatted_shares.append(entry)
                 write_csv(filename, csv_header, formatted_shares)

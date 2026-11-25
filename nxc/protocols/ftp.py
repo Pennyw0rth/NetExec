@@ -27,8 +27,7 @@ class ftp(connection):
     def enum_host_info(self):
         welcome = self.conn.getwelcome()
         self.logger.debug(f"Welcome result: {welcome}")
-        for line in welcome.splitlines():
-            self.welcome_banner += line.split("220", 1)[1].strip()  # strip out the extra space in the front
+        self.welcome_banner = " - ".join(line.removeprefix("220").lstrip() for line in welcome.splitlines())
         self.logger.debug(f"Remote version: {self.welcome_banner}")
 
     def print_host_info(self):
@@ -152,7 +151,7 @@ class ftp(connection):
         try:
             # Attempt to upload the file
             with open(local_file, "rb") as f:
-                self.conn.storbinary(f"STOR {remote_file}", f.read)
+                self.conn.storbinary(f"STOR {remote_file}", f)
         except error_perm as error_message:
             self.logger.fail(f"Failed to upload file. Response: ({error_message})")
             return False
