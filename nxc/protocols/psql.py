@@ -50,6 +50,16 @@ class psql(connection):
             "hostname": self.hostname,
         })
 
+    def enum_host_info(self):
+        self.db.add_host(self.host, self.port, self.remote_version)
+
+    def print_host_info(self):
+        info = f"{self.remote_version}"
+        version_range = self.protocol_version_to_range(self.protocol_version)
+        if version_range:
+            info += f" ({version_range})"
+        self.logger.display(info)
+
     @staticmethod
     def protocol_version_to_range(protocol_version):
         if not protocol_version:
@@ -63,16 +73,6 @@ class psql(connection):
         if minor >= 2:
             return "version >= 18"
         return "version < 18"
-
-    def print_host_info(self):
-        info = f"{self.remote_version}"
-        version_range = self.protocol_version_to_range(self.protocol_version)
-        if version_range:
-            info += f" ({version_range})"
-        self.logger.display(info)
-
-    def enum_host_info(self):
-        self.db.add_host(self.host, self.port, self.remote_version)
 
     def check_if_admin(self):
         try:
