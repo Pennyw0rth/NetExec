@@ -20,6 +20,7 @@ from certihound import ADCSCollector, BloodHoundCEExporter, ImpacketLDAPAdapter
 from impacket.dcerpc.v5.samr import (
     UF_ACCOUNTDISABLE,
     UF_DONT_REQUIRE_PREAUTH,
+    UF_DONT_EXPIRE_PASSWD,
     UF_TRUSTED_FOR_DELEGATION,
     UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION,
     UF_SERVER_TRUST_ACCOUNT,
@@ -1270,38 +1271,11 @@ class ldap(connection):
                     self.logger.highlight(f"{attribute:<20} {value}")
 
     def find_delegation(self):
-        def printTable(items, header):
-            colLen = []
-
-            # Calculating maximum length before parsing CN.
-            for i, col in enumerate(header):
-                rowMaxLen = max(len(row[1].split(",")[0].split("CN=")[-1]) for row in items) if i == 1 else max(len(str(row[i])) for row in items)
-                colLen.append(max(rowMaxLen, len(col)))
-
-            # Create the format string for each row
-            outputFormat = " ".join([f"{{{num}:{width}s}}" for num, width in enumerate(colLen)])
-
-            # Print header
-            self.logger.highlight(outputFormat.format(*header))
-            self.logger.highlight(" ".join(["-" * itemLen for itemLen in colLen]))
-
-            # Print rows
-            for row in items:
-                # Get first CN value.
-                if "CN=" in row[1]:
-                    row[1] = row[1].split(",")[0].split("CN=")[-1]
-
-                # Added join for DelegationRightsTo
-                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
-
-                self.logger.highlight(outputFormat.format(*row))
-
         # Building the search filter
         search_filter = (f"(&(|(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION})"
                          f"(UserAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
                          "(msDS-AllowedToDelegateTo=*)(msDS-AllowedToActOnBehalfOfOtherIdentity=*))"
                          f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))")
-        # f"(!(UserAccountControl:1.2.840.113556.1.4.803:={UF_SERVER_TRUST_ACCOUNT})))")  This would filter out RBCD to DCs
 
         attributes = ["sAMAccountName", "pwdLastSet", "userAccountControl", "objectCategory", "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-AllowedToDelegateTo"]
 
@@ -1311,33 +1285,26 @@ class ldap(connection):
         self.logger.debug(f"Total of records returned {len(resp_parsed)}")
 
         for item in resp_parsed:
-            sAMAccountName = ""
-            userAccountControl = 0
-            delegation = ""
-            objectType = ""
-            rightsTo = []
-            protocolTransition = 0
-
             try:
                 sAMAccountName = item["sAMAccountName"]
-
                 userAccountControl = int(item["userAccountControl"])
-                objectType = item.get("objectCategory")
+                objectType = item["objectCategory"]
 
+                # Unconstrained delegation
                 # Filter out DCs, unconstrained delegation to DCs is not a useful information
                 if userAccountControl & UF_TRUSTED_FOR_DELEGATION and not userAccountControl & UF_SERVER_TRUST_ACCOUNT:
-                    delegation = "Unconstrained"
-                    rightsTo.append("N/A")
-                elif userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
-                    delegation = "Constrained w/ Protocol Transition"
-                    protocolTransition = 1
+                    # Append immediately: an account can also have constrained delegation configured
+                    answers.append([sAMAccountName, objectType, "Unconstrained", "N/A"])
 
+                # Constrained delegation
                 if item.get("msDS-AllowedToDelegateTo") is not None:
-                    if protocolTransition == 0:
+                    if userAccountControl & UF_TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION:
+                        delegation = "Constrained w/ Protocol Transition"
+                    else:
                         delegation = "Constrained"
-                    rightsTo = item.get("msDS-AllowedToDelegateTo")
+                    answers.append([sAMAccountName, objectType, delegation, item["msDS-AllowedToDelegateTo"]])
 
-                # Not an elif as an object could both have RBCD and another type of delegation
+                # Resource-Based Constrained Delegation
                 if item.get("msDS-AllowedToActOnBehalfOfOtherIdentity") is not None:
                     databyte = item.get("msDS-AllowedToActOnBehalfOfOtherIdentity")
                     rbcdRights = []
@@ -1357,19 +1324,31 @@ class ldap(connection):
 
                         for rights, objType in zip(rbcdRights, rbcdObjType, strict=True):
                             answers.append([rights, objType, "Resource-Based Constrained", sAMAccountName])
-
-                if delegation in ["Unconstrained", "Constrained", "Constrained w/ Protocol Transition"]:
-                    answers.append([sAMAccountName, objectType, delegation, rightsTo])
-
             except Exception as e:
                 self.logger.error(f"Skipping item, cannot process due to error {e}")
 
         if answers:
-            printTable(answers, header=["AccountName", "AccountType", "DelegationType", "DelegationRightsTo"])
+            # Print header
+            self.logger.highlight(f"{'AccountName':<15} {'AccountType':<15} {'DelegationType':<35} {'DelegationRightsTo':<40}")
+            self.logger.highlight(f"{'-' * 15} {'-' * 15} {'-' * 35} {'-' * 40}")
+
+            # Print rows
+            for row in answers:
+                # Get first CN value.
+                if "CN=" in row[1]:
+                    row[1] = row[1].split(",")[0].split("CN=")[-1]
+
+                # Added join for DelegationRightsTo
+                row[3] = ", ".join(str(x) for x in row[3]) if isinstance(row[3], list) else row[3]
+
+                self.logger.highlight(f"{row[0]:<15} {row[1]:<15} {row[2]:<35} {row[3]:<40}")
         else:
             self.logger.fail("No entries found!")
 
     def trusted_for_delegation(self):
+        self.logger.fail("[REMOVED] Use --find-delegation instead.")
+        return
+
         # Building the search filter
         searchFilter = f"(userAccountControl:1.2.840.113556.1.4.803:={UF_TRUSTED_FOR_DELEGATION})"
         resp = self.search(searchFilter, attributes=["sAMAccountName"], sizeLimit=0)
@@ -1397,6 +1376,23 @@ class ldap(connection):
             for user in resp_parsed:
                 status = "disabled" if int(user["userAccountControl"]) & 2 else "enabled"
                 self.logger.highlight(f"User: {user['sAMAccountName']} Status: {status}")
+        else:
+            self.logger.fail("No entries found!")
+
+    def password_never_expires(self):
+        search_filter = f"(&(userAccountControl:1.2.840.113556.1.4.803:={UF_DONT_EXPIRE_PASSWD})(!(userAccountControl:1.2.840.113556.1.4.803:={UF_ACCOUNTDISABLE})))"
+        attributes = ["sAMAccountName", "pwdLastSet"]
+        resp = self.search(search_filter, attributes, baseDN=self.baseDN)
+        resp_parsed = parse_result_attributes(resp)
+        self.logger.debug(f"Total of records returned {len(resp_parsed):d}")
+
+        if resp_parsed:
+            self.logger.highlight(f"{'-Username-':<30}{'-Last PW Set-':<20}")
+            for user in resp_parsed:
+                pwd_last_set = user.get("pwdLastSet", "")
+                if pwd_last_set:
+                    pwd_last_set = "<never>" if pwd_last_set == "0" else datetime.fromtimestamp(self.getUnixTime(int(pwd_last_set))).strftime("%Y-%m-%d %H:%M:%S")
+                self.logger.highlight(f"{user.get('sAMAccountName', ''):<30}{pwd_last_set:<20}")
         else:
             self.logger.fail("No entries found!")
 

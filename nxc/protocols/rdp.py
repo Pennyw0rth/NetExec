@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import copy
 import contextlib
 from datetime import datetime
 from os import getenv
@@ -26,31 +25,28 @@ from aardwolf.commons.iosettings import RDPIOSettings
 from aardwolf.commons.target import RDPTarget
 from aardwolf.keyboard.layoutmanager import KeyboardLayoutManager
 from aardwolf.protocol.x224.constants import SUPP_PROTOCOLS
-from aardwolf.network.x224 import X224Network
-from aardwolf.network.tpkt import TPKTPacketizer
 from asyauth.common.credentials.ntlm import NTLMCredential
 from asyauth.common.credentials.kerberos import KerberosCredential
 from asyauth.common.constants import asyauthSecret
 from asysocks.unicomm.common.target import UniTarget, UniProto
-from asysocks.unicomm.client import UniClient
 
 
 class rdp(connection):
     def __init__(self, args, db, host):
-        self.domain = None
-        self.server_os = None
-        self.iosettings = RDPIOSettings()
-        self.iosettings.clipboard_use_pyperclip = False
         self.protoflags_nla = [
             SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
         ]
         self.protoflags = [
-            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.RDP,
+            SUPP_PROTOCOLS.SSL,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID,
             SUPP_PROTOCOLS.SSL | SUPP_PROTOCOLS.HYBRID_EX,
         ]
+        self.selected_proto = None
+        self.login_proto = None
+        self.iosettings = RDPIOSettings()
+        self.iosettings.clipboard_use_pyperclip = False
         width, height = args.res.upper().split("X")
         height = int(height)
         width = int(width)
@@ -61,6 +57,7 @@ class rdp(connection):
         self.iosettings.video_bpp_max = 32
         # screenshots read the desktop buffer, so don't PNG-encode every update put on ext_out_queue
         self.iosettings.video_out_format = VIDEO_FORMAT.PIL
+
         self.domain = None
         self.server_os = None
         self.url = None
@@ -112,8 +109,11 @@ class rdp(connection):
 
     def print_host_info(self):
         nla = colored(f"nla:{self.nla}", host_info_colors[3], attrs=["bold"]) if self.nla else colored(f"nla:{self.nla}", host_info_colors[2], attrs=["bold"])
-        if self.domain is None:
-            self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
+        if self.server_os is None:
+            if self.selected_proto == SUPP_PROTOCOLS.RDP:
+                self.logger.display(f"Standard RDP Security only, no server info available ({nla})")
+            else:
+                self.logger.display(f"Probably old, doesn't not support HYBRID or HYBRID_EX ({nla})")
         else:
             self.logger.display(f"{self.server_os} (name:{self.hostname}) (domain:{self.domain}) ({nla})")
             try:
@@ -121,52 +121,75 @@ class rdp(connection):
             except Exception as e:
                 self.logger.debug(f"Error adding host {self.host} into db: {e!s}")
 
-    def _create_rdp_connection(self, credentials, supported_protocols=None):
-        iosettings = self.iosettings.clone_for_connection()
-        # Explicit protocols are used by discovery and screenshot fallbacks.
-        # Authenticated connections leave this unset so aardwolf selects the
-        # X224 flags appropriate for the credential type.
-        iosettings.supported_protocols = supported_protocols
-        return RDPConnection(
-            iosettings=iosettings,
-            target=copy.deepcopy(self.target),
-            credentials=copy.deepcopy(credentials),
-        )
+    def create_conn_obj(self, credentials=None, supported_protocols=None, auth_only=False):
+        """Connect self.conn with the given credentials.
 
-    def create_conn_obj(self):
-        self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True)  # old servers only offer ciphers OpenSSL rejects at its default security level
-        self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
-
-        self.runner.run(self.check_nla())
-
-        for proto in reversed(self.protoflags):
-            try:
-                self.conn = self._create_rdp_connection(
-                    self.auth, supported_protocols=proto
-                )
-                self.runner.run(self.connect_rdp_with_cleanup())
-            except OSError as e:
-                if "Errno 104" not in str(e):
-                    return False
-            except Exception as e:
-                if "TCPSocket" in str(e):
-                    return False
-                if "Reason:" not in str(e):
-                    try:
-                        info_domain = self.conn.get_extra_info()
-                    except Exception:
-                        pass
-                    else:
-                        self.hostname = sanitize_dns(info_domain.get("computername"), self.logger)
-                        self.domain = sanitize_dns(info_domain.get("dnsdomainname"), self.logger)
-                        self.remoteName = sanitize_dns(info_domain.get("dnscomputername"), self.logger) if self.kerberos else self.host
-                        self.server_os = self.guess_os(info_domain)
-                        self.logger.extra["hostname"] = self.hostname
+        RDP authenticates inside the connection sequence (CredSSP), so the call from proto_flow() has no credentials and connects with dummy ones:
+        their NTLM challenge still names the host for enum_host_info(). That call returns False when the host doesn't answer.
+        """
+        if credentials is None:
+            self.target = RDPTarget(ip=self.host, domain="FAKE", port=self.port, timeout=self.args.rdp_timeout, unsafe_ssl=True, autologon=False)  # old servers only offer ciphers OpenSSL rejects at its default security level; no autologon with the dummy credentials
+            self.auth = NTLMCredential(secret="pass", username="user", domain="FAKE", stype=asyauthSecret.PASS)
+            for proto in reversed(self.protoflags):
+                try:
+                    self.create_conn_obj(self.auth, supported_protocols=proto)
+                except OSError as e:
+                    if "Errno 104" not in str(e):
+                        return False
+                except Exception as e:
+                    if "TCPSocket" in str(e):
+                        return False
+                    if "Reason:" not in str(e):
+                        self.selected_proto = proto
+                        break  # CredSSP ran, enum_host_info() reads the NTLM challenge
+                else:
+                    self.selected_proto = proto  # accepted: without CredSSP the dummy credentials cannot fail here
                     break
+                finally:
+                    self.disconnect()
+
+            if self.selected_proto is None:
+                self.logger.debug("Server rejected every protocol we offered")
+            elif self.selected_proto in (SUPP_PROTOCOLS.RDP, SUPP_PROTOCOLS.SSL):
+                self.login_proto = self.selected_proto
+            return True
+
+        iosettings = self.iosettings.clone_for_connection()
+        # the fingerprint, the NLA probe and the nla screenshot pin the protocols, the login passes None so aardwolf picks the X224 flags for the credential type, unless the server has no CredSSP and only takes the protocol the fingerprint found
+        iosettings.supported_protocols = self.login_proto if supported_protocols is None else supported_protocols
+        self.conn = RDPConnection(iosettings=iosettings, target=self.target, credentials=credentials)
+        self.conn.autologon_timeout = self.args.rdp_logon_timeout
+        # Without CredSSP, connect() also waits up to autologon_timeout for the server to confirm the logon
+        _, err = self.runner.run(asyncio.wait_for(self.conn.connect(auth_only=auth_only), timeout=self.args.rdp_timeout + (self.conn.autologon_timeout if self.login_proto is not None else 0)))
+        if err is not None:
+            raise err
+        self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
+        return True
+
+    def enum_host_info(self):
+        try:
+            info_domain = self.conn.get_extra_info()
+        except Exception:
+            pass
+        else:
+            self.hostname = sanitize_dns(info_domain.get("computername"), self.logger)
+            self.domain = sanitize_dns(info_domain.get("dnsdomainname"), self.logger)
+            self.remoteName = sanitize_dns(info_domain.get("dnscomputername"), self.logger) if self.kerberos else self.host
+            self.server_os = self.guess_os(info_domain)
+            self.logger.extra["hostname"] = self.hostname
+
+        self.logger.debug(f"Checking NLA for {self.host}")
+        try:
+            self.create_conn_obj(self.auth, supported_protocols=SUPP_PROTOCOLS.SSL, auth_only=True)
+        except Exception as e:
+            # a server that requires NLA refuses this SSL-only offer, else auth_only stops with a RuntimeError before any session opens
+            self.nla = not isinstance(e, RuntimeError) and "SSL_NOT_ALLOWED_BY_SERVER" not in str(e)
 
         if self.args.domain:
             self.domain = self.args.domain
         if self.args.local_auth:
+            self.domain = self.hostname
+        if self.domain is None:
             self.domain = self.hostname
 
         if not self.kdcHost and self.domain:
@@ -174,20 +197,7 @@ class rdp(connection):
             self.kdcHost = result["host"] if result else None
             self.logger.info(f"Resolved domain: {self.domain} with dns, kdcHost: {self.kdcHost}")
 
-        self.target = RDPTarget(
-            ip=self.host,
-            hostname=self.hostname,
-            port=self.port,
-            domain=self.domain,
-            dc_ip=self.domain,
-            timeout=self.args.rdp_timeout,
-            unsafe_ssl=True,
-        )
-
-        # Reset so aardwolf negotiates on its own (restricted admin + HYBRID_EX), the loop above pinned it
-        self.iosettings.supported_protocols = None
-
-        return True
+        self.target = RDPTarget(ip=self.host, hostname=self.hostname, port=self.port, domain=self.domain, dc_ip=self.domain, timeout=self.args.rdp_timeout, unsafe_ssl=True)
 
     def guess_os(self, info_domain):
         build = info_domain.get("os_build")
@@ -196,37 +206,6 @@ class rdp(connection):
         if info_domain.get("os_major_version") == "WINDOWS_MAJOR_VERSION_10":   # asyauth labels every 10.0 kernel "Windows 10 or Windows Server 2016", only trust it for older kernels
             return f"Windows 10.0 Build {build}"
         return f"{info_domain.get('os_guess') or 'Unknown'} Build {build or 'Unknown'}"
-
-    async def check_nla(self):
-        self.logger.debug(f"Checking NLA for {self.host}")
-        probe_connection = None
-        try:
-            self.conn = self._create_rdp_connection(
-                None, supported_protocols=SUPP_PROTOCOLS.SSL
-            )
-            packetizer = TPKTPacketizer()
-            client = UniClient(self.target, packetizer)
-            probe_connection = await asyncio.wait_for(client.connect(), timeout=self.args.rdp_timeout)
-            self.conn._connection = probe_connection
-            self.conn._x224net = X224Network(self.conn._connection)
-            _, err = await asyncio.wait_for(self.conn._x224net.client_negotiate(0, SUPP_PROTOCOLS.SSL), timeout=self.args.rdp_timeout)
-            # If no error SSL supported if SSL_NOT_ALLOWED_BY_SERVER error, plain RDP supported
-            if err is None or "SSL_NOT_ALLOWED_BY_SERVER" in str(err):
-                self.nla = False
-                return
-        except Exception:
-            pass
-        finally:
-            # this probe socket is not owned by aardwolf, terminate() would not close it
-            if probe_connection is not None:
-                await probe_connection.close()
-
-    async def connect_rdp(self):
-        """Connect to the RDP server. Does NOT clean up on exit."""
-        _, err = await asyncio.wait_for(self.conn.connect(), timeout=self.args.rdp_timeout)
-        if err is not None:
-            raise err
-        self.logger.debug(f"RDP negotiated protocol: {self.conn.x224_protocol}, authz_result: {self.conn.authz_result}")
 
     async def terminate_conn(self):
         """Terminate the RDP connection with a timeout so cleanup doesn't hang (https://github.com/skelsec/aardwolf/issues/43)."""
@@ -237,35 +216,21 @@ class rdp(connection):
     def disconnect(self):
         self.runner.run(self.terminate_conn())
 
-    async def connect_rdp_with_cleanup(self):
-        """Connect to the RDP server and always terminate the connection on exit"""
-        try:
-            await self.connect_rdp()
-        finally:
-            await self.terminate_conn()
-
-    async def login_and_confirm(self):
+    def login_and_confirm(self):
         """Log on and return whether a real session opened (Save Session Info PDU). The session stays open for -x/-X/--screenshot until disconnect().
 
         That PDU never comes when access is authorized but the logon is refused (restricted admin).
         """
-        await self.terminate_conn()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
-        self.conn = self._create_rdp_connection(self.auth)
-        await self.connect_rdp()
+        if self.login_proto is not None and self.auth.stype != asyauthSecret.PASSWORD:  # without CredSSP aardwolf sends the secret as the autologon password, so a hash, key or ccache only fails (+2 badPwdCount)
+            raise ValueError("no CredSSP on this server, only a password can log on")
+        self.disconnect()  # a session kept by an earlier success (--continue-on-success) would take a session slot this logon needs
+        self.create_conn_obj(self.auth)
         try:
-            await asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout)
+            self.runner.run(asyncio.wait_for(self.conn.logon_info_received.wait(), timeout=self.args.rdp_timeout))
             return True
         except TimeoutError:
             self.logger.debug("No Save Session Info PDU: RDP access is granted but the interactive logon was refused (restricted admin)")
             return False
-
-    def rdp_access_denied(self):
-        """Whether the Early User Authorization Result PDU says the account has no RDP access right at all.
-
-        Distinct from a valid right whose logon is later refused (restricted admin), which yields no such PDU.
-        """
-        self.logger.debug(f"authz_result from Early User Authorization Result PDU: {self.conn.authz_result}")
-        return self.conn.authz_result == AUTHZ_ACCESS_DENIED
 
     def kerberos_login(self, domain, username, password="", ntlm_hash="", aesKey="", kdcHost="", useCache=False):
         self.username = username
@@ -320,7 +285,7 @@ class rdp(connection):
                 domain=domain,
                 stype=stype,
             )
-            self.admin_privs = self.runner.run(self.login_and_confirm())
+            self.admin_privs = self.login_and_confirm()
 
             self.logger.success(
                 "{}\\{}{} {}".format(
@@ -349,7 +314,7 @@ class rdp(connection):
                     (f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'} ({reason if reason else str(e)})"),
                     color=("magenta" if ((reason or "CredSSP" in str(e)) and reason != "KDC_ERR_C_PRINCIPAL_UNKNOWN") else "red"),
                 )
-            elif self.rdp_access_denied():
+            elif self.conn.authz_result == AUTHZ_ACCESS_DENIED:  # valid credentials without the RDP access right
                 self.logger.success(f"{domain}\\{username}{' from ccache' if useCache else f':{process_secret(kerb_pass)}'}")
                 if not self.args.local_auth and self.username != "":
                     add_user_bh(username, domain, self.logger, self.config)
@@ -378,7 +343,7 @@ class rdp(connection):
                 domain=domain,
                 stype=asyauthSecret.PASS,
             )
-            self.admin_privs = self.runner.run(self.login_and_confirm())
+            self.admin_privs = self.login_and_confirm()
 
             self.logger.success(f"{domain}\\{username}:{process_secret(password)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -387,7 +352,7 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if self.rdp_access_denied():
+            if self.conn.authz_result == AUTHZ_ACCESS_DENIED:  # valid credentials without the RDP access right
                 self.logger.success(f"{domain}\\{username}:{process_secret(password)}")
                 if not self.args.local_auth and self.username != "":
                     add_user_bh(username, domain, self.logger, self.config)
@@ -414,7 +379,7 @@ class rdp(connection):
                 domain=domain,
                 stype=asyauthSecret.NT,
             )
-            self.admin_privs = self.runner.run(self.login_and_confirm())
+            self.admin_privs = self.login_and_confirm()
 
             self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)} {self.mark_pwned()}")
             if not self.args.local_auth and self.username != "":
@@ -423,7 +388,7 @@ class rdp(connection):
                 add_user_bh(f"{self.hostname}$", domain, self.logger, self.config)
             return True
         except Exception as e:
-            if self.rdp_access_denied():
+            if self.conn.authz_result == AUTHZ_ACCESS_DENIED:  # valid credentials without the RDP access right
                 self.logger.success(f"{self.domain}\\{username}:{process_secret(ntlm_hash)}")
                 if not self.args.local_auth and self.username != "":
                     add_user_bh(username, domain, self.logger, self.config)
@@ -734,28 +699,25 @@ Add-Type -AssemblyName System.Windows.Forms
         elif not self.conn.disconnected_evt.is_set():  # no session to capture: same silent skip as execute()
             self.runner.run(self.screen())
 
-    async def nla_screen(self):
+    def nla_screenshot(self):
+        if self.nla:
+            return
         self.auth = NTLMCredential(secret="", username="", domain="", stype=asyauthSecret.PASS)
         connected = False
         for proto in self.protoflags_nla:
             try:
-                self.conn = self._create_rdp_connection(self.auth, supported_protocols=proto)
-                await self.connect_rdp()
+                self.create_conn_obj(self.auth, supported_protocols=proto)
             except Exception as e:
                 self.logger.debug(f"Failed to connect for nla_screenshot with {proto} {e}")
-                await self.terminate_conn()
+                self.disconnect()
                 continue
 
             connected = True
             try:
-                await asyncio.sleep(self.args.screentime)
-                if self.conn is not None and self.conn.desktop_buffer_has_data is True:
-                    await self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "NLA Screenshot")
+                self.runner.run(asyncio.sleep(self.args.screentime))
+                if self.conn.desktop_buffer_has_data:
+                    self.runner.run(self.save_screenshot(self.conn.get_desktop_buffer(VIDEO_FORMAT.PIL), "NLA Screenshot"))
                     return
             finally:
-                await self.terminate_conn()
+                self.disconnect()
         self.logger.fail(f"No login screen data after {self.args.screentime}s, try a longer --screentime" if connected else "Could not connect without NLA to capture the login screen")
-
-    def nla_screenshot(self):
-        if not self.nla:
-            self.runner.run(self.nla_screen())

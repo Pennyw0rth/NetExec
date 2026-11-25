@@ -26,7 +26,7 @@ class NXCModule:
       Podalirius: @podalirius_
     """
     name = "maq"
-    description = "Retrieves the MachineAccountQuota domain-level attribute and check SeMachineAccountPrivilege (GPO/SYSVOL)"
+    description = "Retrieves the MachineAccountQuota domain-level attribute, check SeMachineAccountPrivilege (GPO/SYSVOL) and containers where computers can be created"
     supported_protocols = ["ldap"]
     category = CATEGORY.ENUMERATION
 
@@ -45,6 +45,24 @@ class NXCModule:
         context.log.highlight(f"MachineAccountQuota: {entries[0]['ms-DS-MachineAccountQuota']}")
 
         self.get_SeMachineAccountPrivilege(context, connection)
+        self.get_computer_containers(context, connection)
+
+    def get_computer_containers(self, context, connection):
+        context.log.display("Getting containers where computer accounts can be created")
+        # The DC computes allowedChildClassesEffective from the bound user's effective rights
+        resp = connection.search("(|(objectClass=organizationalUnit)(objectClass=container)(objectClass=domainDNS))", ["distinguishedName", "allowedChildClassesEffective"])
+        containers = []
+        for entry in parse_result_attributes(resp):
+            classes = entry.get("allowedChildClassesEffective", [])
+            if "computer" in ([classes] if isinstance(classes, str) else classes):
+                containers.append(entry["distinguishedName"])
+
+        if not containers:
+            context.log.highlight("No container grants CreateChild on computer objects")
+            return
+        context.log.success(f"Computer accounts can be created in {len(containers)} container(s)")
+        for dn in containers:
+            context.log.highlight(f"\t - {dn}")
 
     def get_SeMachineAccountPrivilege(self, context, connection):
         gpo_links = self.get_gpo_links(context, connection)
