@@ -36,7 +36,7 @@ class NXCModule:
         list: List of rows with the grantee and the target login.
         """
         query = """
-        SELECT ge.name AS grantee, ISNULL(tg.name, 'any login') AS target
+        SELECT ge.name AS grantee, CASE WHEN p.permission_name = 'IMPERSONATE ANY LOGIN' THEN 'any login' ELSE ISNULL(tg.name, CONCAT('principal_id ', p.major_id)) END AS target
         FROM sys.server_permissions p
         INNER JOIN sys.server_principals ge ON ge.principal_id = p.grantee_principal_id
         LEFT JOIN sys.server_principals tg ON tg.principal_id = p.major_id AND p.class_desc = 'SERVER_PRINCIPAL'
