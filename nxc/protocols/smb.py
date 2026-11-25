@@ -91,6 +91,7 @@ from nxc.protocols.ldap.resolution import LDAPResolution
 
 from dploot.lib.network.smb import SMBTarget as Target
 
+from threading import Lock
 from time import time, ctime, sleep
 from traceback import format_exc
 from termcolor import colored
@@ -130,6 +131,9 @@ def get_error_string(exception):
 
 
 class smb(connection):
+    # Logins run concurrently, so writes to the shared --generate-st file must not overlap
+    st_file_lock = Lock()
+
     def __init__(self, args, db, host):
         self.domain = None
         self.server_os = None
@@ -776,7 +780,8 @@ class smb(connection):
             ccache.credentials[0]["server"].fromPrincipal(principal)
 
         st_file = f"{self.args.generate_st.removesuffix('.ccache')}.ccache"
-        ccache.saveFile(st_file)
+        with self.st_file_lock:
+            ccache.saveFile(st_file)
         self.logger.success(f"Saved ST to {st_file}")
 
     def generate_tgt(self):
