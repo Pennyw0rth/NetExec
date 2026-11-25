@@ -58,7 +58,7 @@ class NXCModule:
                 containers.append(entry["distinguishedName"])
 
         if not containers:
-            context.log.highlight("No container allows computer account creation")
+            context.log.highlight("No container grants CreateChild on computer objects")
             return
         context.log.success(f"Computer accounts can be created in {len(containers)} container(s)")
         for dn in containers:
