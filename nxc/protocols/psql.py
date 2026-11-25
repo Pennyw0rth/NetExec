@@ -178,6 +178,23 @@ class psql(connection):
         )
         return True
 
+    def query(self):
+        self.logger.info(f"Query to run: {self.args.query}")
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(self.args.query)
+                if cur.description is None:
+                    self.logger.success(cur.statusmessage)
+                    return
+                if cur.rowcount == 0:
+                    self.logger.display("Query returned no rows")
+                for row in cur:
+                    self.logger.highlight("--------------------")
+                    for column, value in zip(cur.description, row, strict=True):
+                        self.logger.highlight(f"{column.name}:{'NULL' if value is None else value}")
+        except Exception as e:
+            self.logger.fail(f"Failed to execute PostgreSQL query: {e}")
+
     def get_file(self):
         for remote_path, local_path in self.args.get_file:
             try:
