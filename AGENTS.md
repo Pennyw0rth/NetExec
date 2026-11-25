@@ -7,6 +7,7 @@
 
 # Coding style
 
+- Where appropriate, link to existing documentation that defines the implemented logic (e.g., Microsoft docs or RFCs); keep each reference to a link and at most a few words.
 - Never add a comment or docstring at the top of a Python file unless that file already has a top-of-file comment or docstring.
 - In parenthesized Python import blocks, group multiple imported names on each line instead of placing every name on its own line.
 - Keep function and method call arguments on one line when practical, including `raise` and log calls; format object literals for readability.

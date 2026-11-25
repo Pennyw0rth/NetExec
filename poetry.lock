@@ -2809,6 +2809,18 @@ markupsafe = ">=2.1.1"
 watchdog = ["watchdog (>=2.3)"]
 
 [[package]]
+name = "wim-nxc"
+version = "0.1.0"
+description = "Pure-Python read-only reader for Windows Imaging (WIM) files, maintained for NetExec"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "wim_nxc-0.1.0-py3-none-any.whl", hash = "sha256:e5d5e16998025324d84564cc85a1fdb2a8cefe211e2946554384e39f84f25fd3"},
+    {file = "wim_nxc-0.1.0.tar.gz", hash = "sha256:b9dfcb4110ae1dda6206fa0b3be0c5a97d13faf06f20ce5cc05ee8c587076adb"},
+]
+
+[[package]]
 name = "winacl"
 version = "0.1.9"
 description = "ACL/ACE/Security Descriptor manipulation library in pure Python"
@@ -2841,4 +2853,4 @@ test = ["pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "a2b53674107a5f115a8daf45f5523aca0bfe2a0475bcb41d34f7a4f79f8c8e03"
+content-hash = "4c54295a190bd83bdc85cea183296af950cca72ff78ed37b530ead408d2f07da"

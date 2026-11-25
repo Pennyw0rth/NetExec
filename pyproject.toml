@@ -42,6 +42,7 @@ dependencies = [
     "sqlalchemy>=2.0.4",
     "termcolor>=2.4.0",
     "terminaltables3>=4.0.0",
+    "wim-nxc>=0.1.0",
     "xmltodict>=0.13.0",
     # Git Dependencies
     "impacket @ git+https://github.com/fortra/impacket",

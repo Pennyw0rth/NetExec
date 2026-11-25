@@ -6,6 +6,7 @@ import string
 import re
 import inspect
 import os
+import codecs
 from unicodedata import normalize
 from termcolor import colored
 from ipaddress import ip_address
@@ -312,6 +313,25 @@ def convert(low, high, lockout=False):
     elif minutes == 1:
         time += f"{minutes} minute "
     return time
+
+
+def decode_text(raw: bytes, encoding: str | None = None) -> str:
+    if encoding is not None:
+        try:
+            return raw.decode(encoding, errors="replace")
+        except (LookupError, UnicodeError):
+            pass
+
+    # UTF-32 must precede UTF-16 because their little-endian BOMs overlap.
+    for signatures, candidate in (
+        ((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE), "utf-32"),
+        ((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE), "utf-16"),
+        ((codecs.BOM_UTF8,), "utf-8-sig"),
+    ):
+        if raw.startswith(signatures):
+            return raw.decode(candidate, errors="replace")
+
+    return raw.decode("utf-8", errors="replace")
 
 
 def parse_argument(argument: list) -> list:

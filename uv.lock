@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11, <4.0"
 
 [options]
@@ -1266,6 +1266,7 @@ dependencies = [
     { name = "sqlalchemy" },
     { name = "termcolor" },
     { name = "terminaltables3" },
+    { name = "wim-nxc" },
     { name = "xmltodict" },
 ]
 
@@ -1305,6 +1306,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0.4" },
     { name = "termcolor", specifier = ">=2.4.0" },
     { name = "terminaltables3", specifier = ">=4.0.0" },
+    { name = "wim-nxc", specifier = ">=0.1.0" },
     { name = "xmltodict", specifier = ">=0.13.0" },
 ]
 
@@ -2113,6 +2115,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/b2/381be8cfdee792dd117872481b6e378f85c957dd7c5bca38897b08f765fd/werkzeug-3.1.8.tar.gz", hash = "sha256:9bad61a4268dac112f1c5cd4630a56ede601b6ed420300677a869083d70a4c44", size = 875852, upload-time = "2026-04-02T18:49:14.268Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/93/8c/2e650f2afeb7ee576912636c23ddb621c91ac6a98e66dc8d29c3c69446e1/werkzeug-3.1.8-py3-none-any.whl", hash = "sha256:63a77fb8892bf28ebc3178683445222aa500e48ebad5ec77b0ad80f8726b1f50", size = 226459, upload-time = "2026-04-02T18:49:12.72Z" },
+]
+
+[[package]]
+name = "wim-nxc"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/37/ca888eb06f54f6ab72a0eea08bf7cd8c85f794c918a18ad3766185167b79/wim_nxc-0.1.0.tar.gz", hash = "sha256:b9dfcb4110ae1dda6206fa0b3be0c5a97d13faf06f20ce5cc05ee8c587076adb", size = 8521, upload-time = "2026-11-24T12:05:13.729Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/3a/ae6016e6c032dd8b7140258df65841aa0f2f167b6ed259b2fe2b3b71030f/wim_nxc-0.1.0-py3-none-any.whl", hash = "sha256:e5d5e16998025324d84564cc85a1fdb2a8cefe211e2946554384e39f84f25fd3", size = 8990, upload-time = "2026-11-24T12:05:12.721Z" },
 ]
 
 [[package]]
