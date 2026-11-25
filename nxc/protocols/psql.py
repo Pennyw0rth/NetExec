@@ -5,10 +5,11 @@ import struct
 
 import psycopg
 from psycopg import OperationalError
+from termcolor import colored
 
 from nxc.connection import connection, highlight
 from nxc.logger import NXCAdapter
-from nxc.config import process_secret
+from nxc.config import process_secret, host_info_colors
 import contextlib
 
 SSL_REQUEST = b"\x00\x00\x00\x08\x04\xd2\x16\x2f"
@@ -58,7 +59,8 @@ class psql(connection):
         version_range = self.protocol_version_to_range(self.protocol_version)
         if version_range:
             info += f" ({version_range})"
-        self.logger.display(info)
+        ssl_supported = colored(f"TLS-supported:{self.ssl}", host_info_colors[0] if self.ssl else host_info_colors[1], attrs=["bold"])
+        self.logger.display(f"{info} ({ssl_supported})")
 
     @staticmethod
     def protocol_version_to_range(protocol_version):
