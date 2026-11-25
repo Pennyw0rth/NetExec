@@ -86,6 +86,11 @@ class psql(connection):
             self.logger.fail(f"Error: {e}")
 
     def probe_protocol_version(self):
+        """
+        References:
+        - https://www.postgresql.org/docs/current/protocol-message-formats.html#PROTOCOL-MESSAGE-FORMATS-NEGOTIATEPROTOCOLVERSION
+        - https://www.postgresql.org/docs/18/protocol-overview.html#PROTOCOL-VERSIONS
+        """
         s = None
         try:
             s = socket.create_connection((self.host, self.port), timeout=self.args.psql_timeout)
@@ -126,6 +131,9 @@ class psql(connection):
             s.sendall(SSL_REQUEST)
             response = s.recv(1)
             s.close()
+
+            # Check if the response is either 'S' (supports SSL) or 'N' (does not support SSL)
+            # Reference: https://www.postgresql.org/docs/current/protocol-message-formats.html
             if response in (b"S", b"N"):
                 self.ssl = response == b"S"
                 self.postgres = True
