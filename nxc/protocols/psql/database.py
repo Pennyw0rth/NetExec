@@ -1,6 +1,6 @@
 import configparser
 
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
+from sqlalchemy import Boolean, Column, ForeignKeyConstraint, Integer, PrimaryKeyConstraint, String, select, func, delete
 from sqlalchemy.dialects.sqlite import Insert
 from sqlalchemy.orm import declarative_base
 
@@ -42,6 +42,7 @@ class database(BaseDB):
         port = Column(Integer)
         banner = Column(String)
         os = Column(String)
+        tls_supported = Column(Boolean)
 
         __table_args__ = (
             PrimaryKeyConstraint("id"),
@@ -81,7 +82,7 @@ class database(BaseDB):
         self.LoggedinRelationsTable = self.reflect_table(self.LoggedInRelation)
         self.AdminRelationsTable = self.reflect_table(self.AdminRelation)
 
-    def add_host(self, host, port, banner, os=None):
+    def add_host(self, host, port, banner, tls_supported, os=None):
         """Check if this host has already been added to the database, if not, add it in."""
         hosts = []
         updated_ids = []
@@ -96,6 +97,7 @@ class database(BaseDB):
                 "port": port,
                 "banner": banner if banner is not None else "",
                 "os": os if os is not None else "",
+                "tls_supported": tls_supported,
             }
             hosts = [new_host]
         else:
@@ -109,6 +111,8 @@ class database(BaseDB):
                     host_data["banner"] = banner
                 if os is not None:
                     host_data["os"] = os
+                if tls_supported is not None:
+                    host_data["tls_supported"] = tls_supported
                 if host_data not in hosts:
                     hosts.append(host_data)
                     updated_ids.append(host_data["id"])
@@ -197,7 +201,6 @@ class database(BaseDB):
             q = format_host_query(q, filter_term, self.HostsTable)
 
         return self.db_execute(q).all()
-
 
     def is_host_valid(self, host_id):
         q = select(self.HostsTable).filter(

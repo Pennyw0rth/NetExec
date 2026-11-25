@@ -52,7 +52,7 @@ class psql(connection):
         })
 
     def enum_host_info(self):
-        self.db.add_host(self.host, self.port, self.remote_version)
+        self.db.add_host(self.host, self.port, self.remote_version, self.ssl)
 
     def print_host_info(self):
         info = f"{self.remote_version}"

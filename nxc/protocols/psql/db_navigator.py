@@ -35,6 +35,7 @@ class navigator(DatabaseNavigator):
                 "Host",
                 "Port",
                 "Banner",
+                "TLS Supported",
                 "Pwn3d!",
             ]
         ]
@@ -49,6 +50,7 @@ class navigator(DatabaseNavigator):
                     h[1],
                     h[2],
                     h[3],
+                    h[5],
                     "Pwn3d!" if admin_rels else "",
                 ]
             )
@@ -66,10 +68,10 @@ class navigator(DatabaseNavigator):
             if len(hosts) > 1:
                 self.display_hosts(hosts)
             elif len(hosts) == 1:
-                data = [["HostID", "Host", "Port", "Banner"]]
+                data = [["HostID", "Host", "Port", "Banner", "TLS Supported"]]
                 host_id_list = [h[0] for h in hosts]
 
-                data += [[h[0], h[1], h[2], h[3]] for h in hosts]
+                data += [[h[0], h[1], h[2], h[3], h[5]] for h in hosts]
 
                 print_table(data, title="Host")
 
@@ -97,8 +99,7 @@ class navigator(DatabaseNavigator):
                     admin_data = [["CredID", "UserName", "Password"]]
                     for cred_id in admin_cred_ids:
                         creds = self.db.get_credentials(filter_term=cred_id)
-                        for cred in creds:
-                            admin_data.append([cred[0], cred[1], cred[2]])
+                        admin_data.extend([cred[0], cred[1], cred[2]] for cred in creds)
                     print_table(admin_data, title="Admin (superuser) Credential(s)")
 
     @staticmethod
@@ -107,7 +108,7 @@ class navigator(DatabaseNavigator):
         hosts [filter_term]
         By default prints all hosts
         Table format:
-        | 'HostID', 'Total Users', 'Host', 'Port', 'Banner', 'Pwn3d!' |
+        | 'HostID', 'Total Users', 'Host', 'Port', 'Banner', 'TLS Supported', 'Pwn3d!' |
         """
         print_help(help_string)
 
@@ -152,8 +153,8 @@ class navigator(DatabaseNavigator):
                     cred_data.append([cred_id, username, password])
                 print_table(cred_data, title="Credential(s)")
 
-                access_data = [["HostID", "Host", "Port", "Banner"]]
-                admin_access_data = [["HostID", "Host", "Port", "Banner"]]
+                access_data = [["HostID", "Host", "Port", "Banner", "TLS Supported"]]
+                admin_access_data = [["HostID", "Host", "Port", "Banner", "TLS Supported"]]
 
                 for cred_id in cred_id_list:
                     logins = self.db.get_loggedin_relations(cred_id=cred_id)
@@ -163,7 +164,7 @@ class navigator(DatabaseNavigator):
                     for link in logins:
                         hosts = self.db.get_hosts(link.hostid)
                         for h in hosts:
-                            row = [h[0], h[1], h[2], h[3]]
+                            row = [h[0], h[1], h[2], h[3], h[5]]
                             if row not in access_data:
                                 access_data.append(row)
                             if link.hostid in admin_host_ids and row not in admin_access_data:
@@ -186,8 +187,8 @@ class navigator(DatabaseNavigator):
             filter_term - filters creds with filter_term
                 If a single credential is returned (e.g. `creds 15`), it prints the following tables:
                     Credential(s) | 'CredID', 'UserName', 'Password' |
-                    Access to Host(s) | 'HostID', 'Host', 'Port', 'Banner' |
-                    Admin (superuser) Access to Host(s) | 'HostID', 'Host', 'Port', 'Banner' |
+                    Access to Host(s) | 'HostID', 'Host', 'Port', 'Banner', 'TLS Supported' |
+                    Admin (superuser) Access to Host(s) | 'HostID', 'Host', 'Port', 'Banner', 'TLS Supported' |
                 Otherwise, it prints the default credential table from a `like` query on the `username` column
         """
         print_help(help_string)
