@@ -44,70 +44,65 @@ class NXCModule:
         salt = ""
 
         try:
-            remoteOps = RemoteOperations(connection.conn, False)
-            remoteOps.enableRegistry()
+            with RemoteOperations(connection.conn, False) as remoteOps:
+                remoteOps.enableRegistry()
 
-            ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-            regHandle = ans["phKey"]
+                ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
+                regHandle = ans["phKey"]
 
-            # Veeam v12 check
-            try:
-                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations")
-                keyHandle = ans["phkResult"]
-
-                database_config = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlActiveConfiguration")[1].split("\x00")[:-1][0]
-
-                context.log.success("Veeam v12 installation found!")
-                if database_config == "PostgreSql":
-                    # Find the PostgreSql installation path containing "psql.exe"
-                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\PostgreSQL Global Development Group\\PostgreSQL")
+                # Veeam v12 check
+                try:
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations")
                     keyHandle = ans["phkResult"]
-                    PostgreSqlExec = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "Location")[1].split("\x00")[:-1][0] + "\\bin\\psql.exe"
 
-                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\PostgreSQL")
-                    keyHandle = ans["phkResult"]
-                    PostgresUserForWindowsAuth = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "PostgresUserForWindowsAuth")[1].split("\x00")[:-1][0]
-                    SqlDatabaseName = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
-                elif database_config == "MsSql":
-                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\MsSql")
+                    database_config = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlActiveConfiguration")[1].split("\x00")[:-1][0]
+
+                    context.log.success("Veeam v12 installation found!")
+                    if database_config == "PostgreSql":
+                        # Find the PostgreSql installation path containing "psql.exe"
+                        ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\PostgreSQL Global Development Group\\PostgreSQL")
+                        keyHandle = ans["phkResult"]
+                        PostgreSqlExec = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "Location")[1].split("\x00")[:-1][0] + "\\bin\\psql.exe"
+
+                        ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\PostgreSQL")
+                        keyHandle = ans["phkResult"]
+                        PostgresUserForWindowsAuth = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "PostgresUserForWindowsAuth")[1].split("\x00")[:-1][0]
+                        SqlDatabaseName = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
+                    elif database_config == "MsSql":
+                        ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication\\DatabaseConfigurations\\MsSql")
+                        keyHandle = ans["phkResult"]
+
+                        SqlDatabase = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
+                        SqlInstance = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlInstanceName")[1].split("\x00")[:-1][0]
+                        SqlServer = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlServerName")[1].split("\x00")[:-1][0]
+
+                    salt = self.get_salt(context, remoteOps, regHandle)
+                except DCERPCException as e:
+                    if str(e).find("ERROR_FILE_NOT_FOUND"):
+                        context.log.debug("No Veeam v12 installation found")
+                except Exception as e:
+                    context.log.fail(f"UNEXPECTED ERROR: {e}")
+                    context.log.debug(traceback.format_exc())
+
+                # Veeam v11 check
+                try:
+                    ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication")
                     keyHandle = ans["phkResult"]
 
                     SqlDatabase = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
                     SqlInstance = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlInstanceName")[1].split("\x00")[:-1][0]
                     SqlServer = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlServerName")[1].split("\x00")[:-1][0]
 
-                salt = self.get_salt(context, remoteOps, regHandle)
-            except DCERPCException as e:
-                if str(e).find("ERROR_FILE_NOT_FOUND"):
-                    context.log.debug("No Veeam v12 installation found")
-            except Exception as e:
-                context.log.fail(f"UNEXPECTED ERROR: {e}")
-                context.log.debug(traceback.format_exc())
-
-            # Veeam v11 check
-            try:
-                ans = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Veeam\\Veeam Backup and Replication")
-                keyHandle = ans["phkResult"]
-
-                SqlDatabase = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlDatabaseName")[1].split("\x00")[:-1][0]
-                SqlInstance = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlInstanceName")[1].split("\x00")[:-1][0]
-                SqlServer = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "SqlServerName")[1].split("\x00")[:-1][0]
-
-                context.log.success("Veeam v11 installation found!")
-            except DCERPCException as e:
-                if str(e).find("ERROR_FILE_NOT_FOUND"):
-                    context.log.debug("No Veeam v11 installation found")
-            except Exception as e:
-                context.log.fail(f"UNEXPECTED ERROR: {e}")
-                context.log.debug(traceback.format_exc())
+                    context.log.success("Veeam v11 installation found!")
+                except DCERPCException as e:
+                    if str(e).find("ERROR_FILE_NOT_FOUND"):
+                        context.log.debug("No Veeam v11 installation found")
+                except Exception as e:
+                    context.log.fail(f"UNEXPECTED ERROR: {e}")
+                    context.log.debug(traceback.format_exc())
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
-        finally:
-            try:
-                remoteOps.finish()
-            except Exception as e:
-                context.log.debug(f"Error shutting down remote registry service: {e}")
 
         # Check if we found an SQL Server of some kind
         if SqlDatabase and SqlInstance and SqlServer:

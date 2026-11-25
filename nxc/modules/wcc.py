@@ -151,13 +151,13 @@ class HostChecker:
     def __init__(self, context, connection):
         self.context = context
         self.connection = connection
-        remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
-        remoteOps.enableRegistry()
-        self.dce = remoteOps._RemoteOperations__rrp
 
     def run(self):
-        self.init_checks()
-        self.check_config()
+        with RemoteOperations(smbConnection=self.connection.conn, doKerberos=False) as remoteOps:
+            remoteOps.enableRegistry()
+            self.dce = remoteOps._RemoteOperations__rrp
+            self.init_checks()
+            self.check_config()
 
     def init_checks(self):
         # Declare the checks to do and how to do them
@@ -683,39 +683,35 @@ class HostChecker:
 
     def get_service(self, service_name, connection):
         """Get the service status and configuration for specified service"""
-        remoteOps = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
-        machine_name, _ = remoteOps.getMachineNameAndDomain()
-        remoteOps._RemoteOperations__connectSvcCtl()
-        dce = remoteOps._RemoteOperations__scmr
-        scm_handle = scmr.hROpenSCManagerW(dce, machine_name)["lpScHandle"]
-        service_handle = scmr.hROpenServiceW(dce, scm_handle, service_name)["lpServiceHandle"]
-        service_config = scmr.hRQueryServiceConfigW(dce, service_handle)["lpServiceConfig"]
-        service_status = scmr.hRQueryServiceStatus(dce, service_handle)["lpServiceStatus"]["dwCurrentState"]
-        remoteOps.finish()
+        with RemoteOperations(smbConnection=connection.conn, doKerberos=False) as remoteOps:
+            machine_name, _ = remoteOps.getMachineNameAndDomain()
+            remoteOps._RemoteOperations__connectSvcCtl()
+            dce = remoteOps._RemoteOperations__scmr
+            scm_handle = scmr.hROpenSCManagerW(dce, machine_name)["lpScHandle"]
+            service_handle = scmr.hROpenServiceW(dce, scm_handle, service_name)["lpServiceHandle"]
+            service_config = scmr.hRQueryServiceConfigW(dce, service_handle)["lpServiceConfig"]
+            service_status = scmr.hRQueryServiceStatus(dce, service_handle)["lpServiceStatus"]["dwCurrentState"]
 
         return service_config, service_status
 
     def get_user_info(self, connection, rid=501):
         """Get user information for the user with the specified RID"""
-        remote_ops = RemoteOperations(smbConnection=connection.conn, doKerberos=False)
-        machine_name, domain_name = remote_ops.getMachineNameAndDomain()
+        with RemoteOperations(smbConnection=connection.conn, doKerberos=False) as remote_ops:
+            machine_name, domain_name = remote_ops.getMachineNameAndDomain()
 
-        try:
-            remote_ops.connectSamr(machine_name)
-        except samr.DCERPCSessionError:
-            # If connecting to machine_name didn't work, it's probably because
-            # we're dealing with a domain controller, so we need to use the
-            # actual domain name instead of the machine name, because DCs don't
-            # use the SAM
-            remote_ops.connectSamr(domain_name)
+            try:
+                remote_ops.connectSamr(machine_name)
+            except samr.DCERPCSessionError:
+                # If connecting to machine_name didn't work, it's probably because
+                # we're dealing with a domain controller, so we need to use the
+                # actual domain name instead of the machine name, because DCs don't
+                # use the SAM
+                remote_ops.connectSamr(domain_name)
 
-        dce = remote_ops._RemoteOperations__samr
-        domain_handle = remote_ops._RemoteOperations__domainHandle
-        user_handle = samr.hSamrOpenUser(dce, domain_handle, userId=rid)["UserHandle"]
-        user_info = samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)
-        user_info = user_info["Buffer"]["All"]
-        remote_ops.finish()
-        return user_info
+            dce = remote_ops._RemoteOperations__samr
+            domain_handle = remote_ops._RemoteOperations__domainHandle
+            user_handle = samr.hSamrOpenUser(dce, domain_handle, userId=rid)["UserHandle"]
+            return samr.hSamrQueryInformationUser2(dce, user_handle, samr.USER_INFORMATION_CLASS.UserAllInformation)["Buffer"]["All"]
 
     def ls(self, smb, path="\\", share="C$"):
         file_listing = []

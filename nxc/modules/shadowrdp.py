@@ -29,56 +29,54 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         try:
-            remoteOps = RemoteOperations(connection.conn, False)
-            remoteOps.enableRegistry()
-            if remoteOps._RemoteOperations__rrp:
-                ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-                regHandle = ans["phKey"]
+            with RemoteOperations(connection.conn, False) as remoteOps:
+                remoteOps.enableRegistry()
+                if remoteOps._RemoteOperations__rrp:
+                    ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
+                    regHandle = ans["phKey"]
 
-                keyHandle = rrp.hBaseRegOpenKey(
-                    remoteOps._RemoteOperations__rrp,
-                    regHandle,
-                    "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\"
-                )["phkResult"]
-
-                # Checks if the key already exists or not
-                try:
-                    rrp.hBaseRegQueryValue(
+                    keyHandle = rrp.hBaseRegOpenKey(
                         remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "Shadow\x00"
-                    )
-                except Exception as e:
-                    if "ERROR_FILE_NOT_FOUND" in str(e):
-                        context.log.debug("here")
-                        ans = rrp.hBaseRegCreateKey(
+                        regHandle,
+                        "Software\\Policies\\Microsoft\\Windows NT\\Terminal Services\\"
+                    )["phkResult"]
+
+                    # Checks if the key already exists or not
+                    try:
+                        rrp.hBaseRegQueryValue(
                             remoteOps._RemoteOperations__rrp,
                             keyHandle,
-                            "Shadow\x00")
+                            "Shadow\x00"
+                        )
+                    except Exception as e:
+                        if "ERROR_FILE_NOT_FOUND" in str(e):
+                            context.log.debug("here")
+                            ans = rrp.hBaseRegCreateKey(
+                                remoteOps._RemoteOperations__rrp,
+                                keyHandle,
+                                "Shadow\x00")
 
-                # Disable remote UAC
-                if self.action == "disable":
-                    rrp.hBaseRegSetValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "Shadow\x00",
-                        rrp.REG_DWORD,
-                        0
-                    )
-                    context.log.highlight("Shadow RDP disabled")
+                    # Disable remote UAC
+                    if self.action == "disable":
+                        rrp.hBaseRegSetValue(
+                            remoteOps._RemoteOperations__rrp,
+                            keyHandle,
+                            "Shadow\x00",
+                            rrp.REG_DWORD,
+                            0
+                        )
+                        context.log.highlight("Shadow RDP disabled")
 
-                # Enable remote UAC
-                if self.action == "enable":
-                    rrp.hBaseRegSetValue(
-                        remoteOps._RemoteOperations__rrp,
-                        keyHandle,
-                        "Shadow\x00",
-                        rrp.REG_DWORD,
-                        2
-                    )
-                    context.log.highlight("Shadow RDP with full access enabled")
+                    # Enable remote UAC
+                    if self.action == "enable":
+                        rrp.hBaseRegSetValue(
+                            remoteOps._RemoteOperations__rrp,
+                            keyHandle,
+                            "Shadow\x00",
+                            rrp.REG_DWORD,
+                            2
+                        )
+                        context.log.highlight("Shadow RDP with full access enabled")
 
         except Exception as e:
             context.log.debug(f"Error {e}")
-        finally:
-            remoteOps.finish()
