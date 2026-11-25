@@ -183,15 +183,18 @@ class psql(connection):
         try:
             with self.conn.cursor() as cur:
                 cur.execute(self.args.query)
-                if cur.description is None:
-                    self.logger.success(cur.statusmessage)
-                    return
-                if cur.rowcount == 0:
-                    self.logger.display("Query returned no rows")
-                for row in cur:
-                    self.logger.highlight("--------------------")
-                    for column, value in zip(cur.description, row, strict=True):
-                        self.logger.highlight(f"{column.name}:{'NULL' if value is None else value}")
+                while True:
+                    if cur.description is None:
+                        self.logger.success(cur.statusmessage)
+                    elif cur.rowcount == 0:
+                        self.logger.display("Query returned no rows")
+                    else:
+                        for row in cur:
+                            self.logger.highlight("--------------------")
+                            for column, value in zip(cur.description, row, strict=True):
+                                self.logger.highlight(f"{column.name}:{'NULL' if value is None else value}")
+                    if not cur.nextset():
+                        break
         except Exception as e:
             self.logger.fail(f"Failed to execute PostgreSQL query: {e}")
 
