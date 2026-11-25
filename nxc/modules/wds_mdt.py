@@ -24,6 +24,7 @@ class NXCModule:
     CustomSettings.ini, Unattend.xml, and candidate WinPE images.
     Download discovered configuration files.
     Extract matching MDT INI and unattended XML files from WIM images, read in place without downloading them.
+    Download the WIM images themselves only with DOWNLOAD_WIM=TRUE.
     Report deployment secrets and store complete Windows account credentials.
 
     Module by:
@@ -66,7 +67,8 @@ class NXCModule:
     }
 
     def options(self, context, module_options):
-        """No options available"""
+        """DOWNLOAD_WIM     Download the WIM images found on the WDS share (default: False)"""
+        self.download_wim = module_options.get("DOWNLOAD_WIM", "false").lower() == "true"
         self.output_path = Path(NXC_PATH, "modules", "wds_mdt").resolve()
 
     def on_login(self, context, connection):
@@ -80,14 +82,18 @@ class NXCModule:
             elif share.lower() == "deploymentshare$":
                 self.explore_mdt(share)
 
-    def save_file(self, share, path, content):
+    def save_file(self, share, path, content=None):
         try:
             local_path = self.output_path / sanitize_path_component(f"{self.connection.hostname}_{self.connection.host}_{PureWindowsPath(path).stem}_{datetime.now().strftime('%Y-%m-%d_%H%M%S_%f')}{PureWindowsPath(path).suffix}")
             local_path = local_path.resolve()
             if not local_path.is_relative_to(self.output_path):
                 raise ValueError("Output path escapes the module directory")
             self.output_path.mkdir(parents=True, exist_ok=True)
-            local_path.write_bytes(content)
+            with local_path.open("wb") as output:
+                if content is None:
+                    self.connection.conn.getFile(share, path, output.write)
+                else:
+                    output.write(content)
             self.context.log.success(f"Saved {share}\\{path} to: {self.output_path}")
         except Exception as e:
             self.context.log.fail(f"Failed to save {share}\\{path}: {e}")
@@ -106,6 +112,8 @@ class NXCModule:
                     continue
                 self.context.log.success(f"Found WIM image: {share}\\{path}\\{entry.get_longname()} ({entry.get_filesize() / (1024 * 1024):.0f} MB)")
                 self.explore_wim(share, f"{path}\\{entry.get_longname()}")
+                if self.download_wim:
+                    self.save_file(share, f"{path}\\{entry.get_longname()}")
 
     def explore_wim(self, share, path):
         try:
@@ -121,6 +129,8 @@ class NXCModule:
                     self.parse_file(content, f"{share}\\{path}!\\{entry}")
         except Exception as e:
             self.context.log.fail(f"Failed to extract WIM {share}\\{path}: {e}")
+            if not self.download_wim:
+                self.context.log.display("Use DOWNLOAD_WIM=TRUE to download the image and extract it manually")
 
     def explore_mdt(self, share):
         self.context.log.display(f"Found share: {share} (should require admin access)")
