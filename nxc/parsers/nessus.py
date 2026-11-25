@@ -13,6 +13,7 @@ protocol_dict = {
     "ldap": {"ports": [389, 636], "services": ["ldap"]},
     "wmi": {"ports": [135], "services": ["epmap"]},
     "nfs": {"ports": [2049], "services": ["rpc-nfs", "nfs"]},
+    "psql": {"ports": [5432], "services": ["psql"]},
 }
 
 

@@ -38,6 +38,7 @@
 
 # Development and validation
 
+- Assume databases are newly created at runtime; do not add migrations or compatibility fallbacks for existing database schemas.
 - To verify that a module works, run the module's actual NetExec command instead of pytest or compilation checks.
 - Record every module-verification command in `tests/e2e_commands.txt` using the file's placeholders (`TARGET_HOST`, `LOGIN_USERNAME`, `LOGIN_PASSWORD`, `KERBEROS`), never real targets or credentials.
 - Do not run compilation checks.

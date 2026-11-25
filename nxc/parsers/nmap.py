@@ -13,6 +13,7 @@ protocol_dict = {
     "vnc": {"ports": [5900, 5901, 5902, 5903, 5904, 5905, 5906], "services": ["vnc"]},
     "wmi": {"ports": [135], "services": ["msrpc"]},
     "nfs": {"ports": [2049], "services": ["nfs"]},
+    "psql": {"ports": [5432], "services": ["psql"]},
 }
 
 
