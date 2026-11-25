@@ -54,9 +54,15 @@ class NXCModule:
 
 
 class Modify_Func:
+    class NoMICChallengeResponse(ntlm.NTLMAuthChallengeResponse):
+        # impacket's SMB3 login writes the MIC after getNTLMSSPType3() returns, drop it so the message goes out without one
+        def __setitem__(self, key, value):
+            if key != "MIC":
+                super().__setitem__(key, value)
+
     # Slightly modified version of impackets computeResponseNTLMv2
     def mod_computeResponseNTLMv2(flags, serverChallenge, clientChallenge, serverName, domain, user, password, lmhash="", nthash="",
-                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs"):
+                    use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs", include_mic=False):
 
         responseServerVersion = b"\x01"
         hiResponseServerVersion = b"\x01"
@@ -103,7 +109,7 @@ class Modify_Func:
 
         return ntChallengeResponse, lmChallengeResponse, sessionBaseKey
 
-    def mod_getNTLMSSPType3(type1, type2, user, password, domain, lmhash="", nthash="", use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b""):
+    def mod_getNTLMSSPType3(type1, type2, user, password, domain, lmhash="", nthash="", use_ntlmv2=ntlm.USE_NTLMv2, channel_binding_value=b"", service="cifs", version=None, include_mic=False):
         # Safety check in case somebody sent password = None.. That's not allowed. Setting it to '' and hope for the best.
         if password is None:
             password = ""
@@ -133,7 +139,7 @@ class Modify_Func:
 
         # Token received and parsed. Depending on the authentication
         # method we will create a valid ChallengeResponse
-        ntlmChallengeResponse = ntlm.NTLMAuthChallengeResponse(user, password, ntlmChallenge["challenge"])
+        ntlmChallengeResponse = Modify_Func.NoMICChallengeResponse(user, password, ntlmChallenge["challenge"])
 
         clientChallenge = ntlm.b("".join([random.choice(string.digits + string.ascii_letters) for _ in range(8)]))
 
@@ -162,6 +168,8 @@ class Modify_Func:
             responseFlags ^= ntlm.NTLMSSP_NEGOTIATE_SIGN
         if ntlmChallenge["flags"] & ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN == ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN:
             responseFlags ^= ntlm.NTLMSSP_NEGOTIATE_ALWAYS_SIGN
+        # impacket's NEGOTIATE now advertises a version: drop it with the MIC, both fields depend on this flag
+        responseFlags &= 0xffffffff ^ ntlm.NTLMSSP_NEGOTIATE_VERSION
 
         keyExchangeKey = ntlm.KXKEY(ntlmChallenge["flags"], sessionBaseKey, lmResponse, ntlmChallenge["challenge"], password,
                             lmhash, nthash, use_ntlmv2)
