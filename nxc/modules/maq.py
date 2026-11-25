@@ -50,7 +50,7 @@ class NXCModule:
     def get_computer_containers(self, context, connection):
         context.log.display("Getting containers where computer accounts can be created")
         # The DC computes allowedChildClassesEffective from the bound user's effective rights
-        resp = connection.search("(|(objectClass=organizationalUnit)(objectClass=container))", ["distinguishedName", "allowedChildClassesEffective"])
+        resp = connection.search("(|(objectClass=organizationalUnit)(objectClass=container)(objectClass=domainDNS))", ["distinguishedName", "allowedChildClassesEffective"])
         containers = []
         for entry in parse_result_attributes(resp):
             classes = entry.get("allowedChildClassesEffective", [])
