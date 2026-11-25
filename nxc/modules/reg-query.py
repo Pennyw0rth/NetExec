@@ -83,80 +83,78 @@ class NXCModule:
             self.context.log.fail("Please provide the registry key to query")
             return
 
-        remote_ops = RemoteOperations(connection.conn, False)
-        remote_ops.enableRegistry()
-
         try:
-            if "HKLM" in self.path or "HKEY_LOCAL_MACHINE" in self.path:
-                self.path = self.path.replace("HKLM\\", "")
-                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            elif "HKCU" in self.path or "HKEY_CURRENT_USER" in self.path:
-                self.path = self.path.replace("HKCU\\", "")
-                ans = rrp.hOpenCurrentUser(remote_ops._RemoteOperations__rrp)
-            elif "HKCR" in self.path or "HKEY_CLASSES_ROOT" in self.path:
-                self.path = self.path.replace("HKCR\\", "")
-                ans = rrp.hOpenClassesRoot(remote_ops._RemoteOperations__rrp)
-            else:
-                self.context.log.fail(f"Unsupported registry hive specified in path: {self.path}")
-                return
+            with RemoteOperations(connection.conn, False) as remote_ops:
+                remote_ops.enableRegistry()
 
-            reg_handle = ans["phKey"]
-            ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, self.path)
-            key_handle = ans["phkResult"]
-
-            if self.delete:
-                # Delete registry
-                try:
-                    # Check if value exists
-                    data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
-                except Exception as e:
-                    self.context.log.fail(f"Registry key {self.key} does not exist: {e}")
+                if "HKLM" in self.path or "HKEY_LOCAL_MACHINE" in self.path:
+                    self.path = self.path.replace("HKLM\\", "")
+                    ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                elif "HKCU" in self.path or "HKEY_CURRENT_USER" in self.path:
+                    self.path = self.path.replace("HKCU\\", "")
+                    ans = rrp.hOpenCurrentUser(remote_ops._RemoteOperations__rrp)
+                elif "HKCR" in self.path or "HKEY_CLASSES_ROOT" in self.path:
+                    self.path = self.path.replace("HKCR\\", "")
+                    ans = rrp.hOpenClassesRoot(remote_ops._RemoteOperations__rrp)
+                else:
+                    self.context.log.fail(f"Unsupported registry hive specified in path: {self.path}")
                     return
-                # Delete value
-                rrp.hBaseRegDeleteValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
-                self.context.log.success(f"Registry key {self.key} has been deleted successfully")
-                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
 
-            if self.value is not None:
-                # Check if value exists
-                try:
-                    # Check if value exists
-                    data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
-                    self.context.log.highlight(f"Key {self.key} exists with value {reg_value}")
-                    # Modification
-                    rrp.hBaseRegSetValue(
-                        remote_ops._RemoteOperations__rrp,
-                        key_handle,
-                        self.key,
-                        self.type,
-                        self.value,
-                    )
-                    self.context.log.success(f"Key {self.key} has been modified to {self.value}")
-                except Exception:
-                    rrp.hBaseRegSetValue(
-                        remote_ops._RemoteOperations__rrp,
-                        key_handle,
-                        self.key,
-                        self.type,
-                        self.value,
-                    )
-                    self.context.log.success(f"New Key {self.key} has been added with value {self.value}")
-                    rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
-            else:
-                # Query
-                try:
-                    data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
-                    self.context.log.highlight(f"{self.key}: {reg_value}")
-                except Exception:
-                    if self.delete:
-                        pass
-                    else:
-                        self.context.log.fail(f"Registry key {self.key} does not exist")
+                reg_handle = ans["phKey"]
+                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, self.path)
+                key_handle = ans["phkResult"]
+
+                if self.delete:
+                    # Delete registry
+                    try:
+                        # Check if value exists
+                        data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
+                    except Exception as e:
+                        self.context.log.fail(f"Registry key {self.key} does not exist: {e}")
                         return
-            rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                    # Delete value
+                    rrp.hBaseRegDeleteValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
+                    self.context.log.success(f"Registry key {self.key} has been deleted successfully")
+                    rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+
+                if self.value is not None:
+                    # Check if value exists
+                    try:
+                        # Check if value exists
+                        data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
+                        self.context.log.highlight(f"Key {self.key} exists with value {reg_value}")
+                        # Modification
+                        rrp.hBaseRegSetValue(
+                            remote_ops._RemoteOperations__rrp,
+                            key_handle,
+                            self.key,
+                            self.type,
+                            self.value,
+                        )
+                        self.context.log.success(f"Key {self.key} has been modified to {self.value}")
+                    except Exception:
+                        rrp.hBaseRegSetValue(
+                            remote_ops._RemoteOperations__rrp,
+                            key_handle,
+                            self.key,
+                            self.type,
+                            self.value,
+                        )
+                        self.context.log.success(f"New Key {self.key} has been added with value {self.value}")
+                        rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                else:
+                    # Query
+                    try:
+                        data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, self.key)
+                        self.context.log.highlight(f"{self.key}: {reg_value}")
+                    except Exception:
+                        if self.delete:
+                            pass
+                        else:
+                            self.context.log.fail(f"Registry key {self.key} does not exist")
+                            return
+                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
         except DCERPCException as e:
             self.context.log.fail(f"DCERPC Error while querying or modifying registry: {e}")
         except Exception as e:
             self.context.log.fail(f"Error while querying or modifying registry: {e}")
-        finally:
-            remote_ops.finish()

@@ -18,23 +18,22 @@ class NXCModule:
         """ """
 
     def on_admin_login(self, context, connection):
-        remoteOps = RemoteOperations(connection.conn, False)
-        remoteOps.enableRegistry()
+        with RemoteOperations(connection.conn, False) as remoteOps:
+            remoteOps.enableRegistry()
 
-        ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-        regHandle = ans["phKey"]
-        ans = rrp.hBaseRegOpenKey(
-            remoteOps._RemoteOperations__rrp,
-            regHandle,
-            "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
-        )
-        keyHandle = ans["phkResult"]
-        dataType, uac_value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "EnableLUA")
+            ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
+            regHandle = ans["phKey"]
+            ans = rrp.hBaseRegOpenKey(
+                remoteOps._RemoteOperations__rrp,
+                regHandle,
+                "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+            )
+            keyHandle = ans["phkResult"]
+            dataType, uac_value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "EnableLUA")
 
-        if uac_value == 1:
-            context.log.highlight("UAC Status: 1 (UAC Enabled)")
-        elif uac_value == 0:
-            context.log.highlight("UAC Status: 0 (UAC Disabled)")
+            if uac_value == 1:
+                context.log.highlight("UAC Status: 1 (UAC Enabled)")
+            elif uac_value == 0:
+                context.log.highlight("UAC Status: 0 (UAC Disabled)")
 
-        rrp.hBaseRegCloseKey(remoteOps._RemoteOperations__rrp, keyHandle)
-        remoteOps.finish()
+            rrp.hBaseRegCloseKey(remoteOps._RemoteOperations__rrp, keyHandle)

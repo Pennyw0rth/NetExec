@@ -74,12 +74,12 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         try:
-            remoteOps = RemoteOperations(connection.conn, False)
-            remoteOps.enableRegistry()
+            with RemoteOperations(connection.conn, False) as remoteOps:
+                remoteOps.enableRegistry()
 
-            regHandle = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)["phKey"]
-            keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters")["phkResult"]
-            value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "VulnerableChannelAllowList")[1].rstrip("\x00")
-            context.log.success(f"Found VulnerableChannelAllowList registry configuration: {value}")
+                regHandle = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)["phKey"]
+                keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SYSTEM\\CurrentControlSet\\Services\\Netlogon\\Parameters")["phkResult"]
+                value = rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "VulnerableChannelAllowList")[1].rstrip("\x00")
+                context.log.success(f"Found VulnerableChannelAllowList registry configuration: {value}")
         except Exception as e:
             context.log.error(f"Error while querying registry: {e}")

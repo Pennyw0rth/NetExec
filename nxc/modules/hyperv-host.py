@@ -26,28 +26,26 @@ class NXCModule:
         key = "HostName"
 
         try:
-            remote_ops = RemoteOperations(connection.conn, False)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, False) as remote_ops:
+                remote_ops.enableRegistry()
 
-            ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
+                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                reg_handle = ans["phKey"]
 
-            # Query
-            try:
-                ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, path)
-                key_handle = ans["phkResult"]
+                # Query
+                try:
+                    ans = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, path)
+                    key_handle = ans["phkResult"]
 
-                data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, key)
-                self.context.log.highlight(f"{key}: {reg_value}")
+                    data_type, reg_value = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, key)
+                    self.context.log.highlight(f"{key}: {reg_value}")
 
-                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                    rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
 
-            except DCERPCException as e:
-                self.context.log.debug(f"Registry key {path}\\{key} does not exist: {e}")
+                except DCERPCException as e:
+                    self.context.log.debug(f"Registry key {path}\\{key} does not exist: {e}")
 
         except DCERPCException as e:
             self.context.log.fail(f"DCERPC Error while querying registry: {e}")
         except Exception as e:
             self.context.log.fail(f"Error while querying registry: {e}")
-        finally:
-            remote_ops.finish()

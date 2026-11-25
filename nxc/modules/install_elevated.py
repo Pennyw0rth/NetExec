@@ -1,5 +1,4 @@
 from impacket.dcerpc.v5 import rrp
-from impacket.dcerpc.v5 import scmr
 from impacket.examples.secretsdump import RemoteOperations
 from nxc.helpers.misc import CATEGORY
 
@@ -14,8 +13,7 @@ class NXCModule:
         """ """
 
     def on_admin_login(self, context, connection):
-        try:
-            remote_ops = RemoteOperations(connection.conn, False)
+        with RemoteOperations(connection.conn, False) as remote_ops:
             remote_ops.enableRegistry()
 
             try:
@@ -62,10 +60,3 @@ class NXCModule:
                 context.log.highlight("AlwaysInstallElevated Status: 1 (Enabled: Computer Only)")
             else:
                 context.log.highlight("AlwaysInstallElevated Status: 1 (Enabled)")
-        finally:
-            try:
-                remote_ops.finish()
-            except scmr.DCERPCSessionError as e:
-                context.log.debug(f"Received SessionError while attempting to clean up logins: {e}")
-            except Exception as e:
-                context.log.debug(f"Received general exception while attempting to clean up logins: {e}")

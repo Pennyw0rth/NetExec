@@ -33,33 +33,31 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         try:
-            remoteOps = RemoteOperations(connection.conn, False)
-            remoteOps.enableRegistry()
-            if remoteOps._RemoteOperations__rrp:
-                ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
-                regHandle = ans["phKey"]
+            with RemoteOperations(connection.conn, False) as remoteOps:
+                remoteOps.enableRegistry()
+                if remoteOps._RemoteOperations__rrp:
+                    ans = rrp.hOpenLocalMachine(remoteOps._RemoteOperations__rrp)
+                    regHandle = ans["phKey"]
 
-                keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System")["phkResult"]
+                    keyHandle = rrp.hBaseRegOpenKey(remoteOps._RemoteOperations__rrp, regHandle, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System")["phkResult"]
 
-                # Checks if the key already exists or not
-                try:
-                    rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
-                except Exception as e:
-                    if "ERROR_FILE_NOT_FOUND" in str(e):
-                        context.log.debug("Registry key 'LocalAccountTokenFilterPolicy' does not exist, creating it")
-                        ans = rrp.hBaseRegCreateKey(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
+                    # Checks if the key already exists or not
+                    try:
+                        rrp.hBaseRegQueryValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
+                    except Exception as e:
+                        if "ERROR_FILE_NOT_FOUND" in str(e):
+                            context.log.debug("Registry key 'LocalAccountTokenFilterPolicy' does not exist, creating it")
+                            ans = rrp.hBaseRegCreateKey(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00")
 
-                # Disable remote UAC
-                if self.action == "disable":
-                    rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 1)
-                    context.log.highlight("Remote UAC disabled")
+                    # Disable remote UAC
+                    if self.action == "disable":
+                        rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 1)
+                        context.log.highlight("Remote UAC disabled")
 
-                # Enable remote UAC
-                if self.action == "enable":
-                    rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 0)
-                    context.log.highlight("Remote UAC enabled")
+                    # Enable remote UAC
+                    if self.action == "enable":
+                        rrp.hBaseRegSetValue(remoteOps._RemoteOperations__rrp, keyHandle, "LocalAccountTokenFilterPolicy\x00", rrp.REG_DWORD, 0)
+                        context.log.highlight("Remote UAC enabled")
 
         except Exception as e:
             context.log.debug(f"Error {e}")
-        finally:
-            remoteOps.finish()

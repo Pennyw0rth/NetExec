@@ -20,34 +20,32 @@ class NXCModule:
 
     def on_admin_login(self, context, connection):
         try:
-            remote_ops = RemoteOperations(connection.conn, False)
-            remote_ops.enableRegistry()
+            with RemoteOperations(connection.conn, False) as remote_ops:
+                remote_ops.enableRegistry()
 
-            if remote_ops._RemoteOperations__rrp:
-                ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
-                reg_handle = ans["phKey"]
-                ans = rrp.hBaseRegOpenKey(
-                    remote_ops._RemoteOperations__rrp,
-                    reg_handle,
-                    "SYSTEM\\CurrentControlSet\\Control\\Lsa"
-                )
-                key_handle = ans["phkResult"]
-                _ = data = None
-                try:
-                    _, data = rrp.hBaseRegQueryValue(
+                if remote_ops._RemoteOperations__rrp:
+                    ans = rrp.hOpenLocalMachine(remote_ops._RemoteOperations__rrp)
+                    reg_handle = ans["phKey"]
+                    ans = rrp.hBaseRegOpenKey(
                         remote_ops._RemoteOperations__rrp,
-                        key_handle,
-                        "RunAsPPL\x00",
+                        reg_handle,
+                        "SYSTEM\\CurrentControlSet\\Control\\Lsa"
                     )
-                except rrp.DCERPCSessionError as e:
-                    context.log.debug(f"RunAsPPL error {e} on host {connection.host}")
+                    key_handle = ans["phkResult"]
+                    _ = data = None
+                    try:
+                        _, data = rrp.hBaseRegQueryValue(
+                            remote_ops._RemoteOperations__rrp,
+                            key_handle,
+                            "RunAsPPL\x00",
+                        )
+                    except rrp.DCERPCSessionError as e:
+                        context.log.debug(f"RunAsPPL error {e} on host {connection.host}")
 
-                if data is None or data not in [1, 2]:
-                    context.log.highlight("RunAsPPL disabled")
-                else:
-                    context.log.highlight("RunAsPPL enabled")
+                    if data is None or data not in [1, 2]:
+                        context.log.highlight("RunAsPPL disabled")
+                    else:
+                        context.log.highlight("RunAsPPL enabled")
 
         except DCERPCSessionError as e:
             context.log.debug(f"Error connecting to RemoteRegistry {e} on host {connection.host}")
-        finally:
-            remote_ops.finish()

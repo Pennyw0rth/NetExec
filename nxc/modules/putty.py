@@ -206,25 +206,23 @@ class NXCModule:
         self.context = context
 
         try:
-            self.rrp = RemoteOperations(connection.conn, connection.kerberos)
-            self.rrp.enableRegistry()
+            with RemoteOperations(connection.conn, connection.kerberos) as self.rrp:
+                self.rrp.enableRegistry()
 
-            all_users = self.get_all_users()
-            loaded_user_objects = self.get_logged_on_users()
-            self.user_dict = self.sid_to_name(all_users)
+                all_users = self.get_all_users()
+                loaded_user_objects = self.get_logged_on_users()
+                self.user_dict = self.sid_to_name(all_users)
 
-            # Users which must be loaded into registry:
-            unloaded_user_objects = list(set(all_users).symmetric_difference(set(loaded_user_objects)))
-            self.load_missing_users(unloaded_user_objects)
+                # Users which must be loaded into registry:
+                unloaded_user_objects = list(set(all_users).symmetric_difference(set(loaded_user_objects)))
+                self.load_missing_users(unloaded_user_objects)
 
-            sessions = self.get_private_key_paths(all_users)
-            if sessions:
-                self.extract_session(sessions)
-            else:
-                self.context.log.info("No saved putty sessions found in registry")
+                sessions = self.get_private_key_paths(all_users)
+                if sessions:
+                    self.extract_session(sessions)
+                else:
+                    self.context.log.info("No saved putty sessions found in registry")
 
-            self.unload_missing_users(unloaded_user_objects)
+                self.unload_missing_users(unloaded_user_objects)
         except Exception as e:
             context.log.exception(f"Error: {e}")
-        finally:
-            self.rrp.finish()
