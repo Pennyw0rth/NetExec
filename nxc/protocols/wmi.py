@@ -682,9 +682,6 @@ class wmi(connection):
             self.logger.fail(e)
 
     def query_values(self, wql, namespace="//./root/cimv2"):
-        if not self.admin_privs:
-            self.logger.fail("WMI query requires admin privileges")
-            return []
         records = self.wmi_query(wql=wql, namespace=namespace, print_results=False) or []
         return [{name: value["value"] for name, value in record.items()} for record in records]
 
