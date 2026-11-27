@@ -100,6 +100,7 @@ class vnc(connection):
             self.target = RDPTarget(ip=self.host, port=self.port, timeout=self.args.vnc_timeout)
             credential = UniCredential(protocol=asyauthProtocol.PLAIN, stype=asyauthSecret.PASS)
             self.conn = VNCConnection(target=self.target, credentials=credential, iosettings=self.iosettings)
+            self.conn.shared_flag = True
             asyncio.run(self.connect_vnc(True))
         except TimeoutError:
             # asyncio.TimeoutError is only an alias of the builtin from 3.11 on,
@@ -134,6 +135,7 @@ class vnc(connection):
                 credentials=self.credential,
                 iosettings=self.iosettings,
             )
+            self.conn.shared_flag = True
             asyncio.run(self.connect_vnc())
 
             self.admin_privs = True
@@ -157,6 +159,7 @@ class vnc(connection):
 
     async def screen(self):
         self.conn = VNCConnection(target=self.target, credentials=self.credential, iosettings=self.iosettings)
+        self.conn.shared_flag = True
         await self.connect_vnc()
         await asyncio.sleep(int(self.args.screentime))
         if self.conn is not None and self.conn.desktop_buffer_has_data is True:
