@@ -11,7 +11,7 @@ from nxc.logger import NXCAdapter
 from paramiko.ssh_exception import (
     AuthenticationException,
     NoValidConnectionsError,
-    SSHException,
+    SSHException, IncompatiblePeer
 )
 
 from nxc.protocols.ssh.keyfiles import is_key_type_rejected
@@ -131,6 +131,8 @@ class ssh(connection):
                 self.logger.fail(f"{username}:{process_secret(password)} Key type rejected by server (pubkey algorithm not allowed)")
             else:
                 self.logger.fail(f"{username}:{process_secret(password)}")
+        except IncompatiblePeer as e:
+            self.logger.error(f"Incompatible SSH peer for {username}:{process_secret(password)}, {e}")
         except SSHException as e:
             if "Invalid key" in str(e):
                 self.logger.fail(f"{username}:{process_secret(password)} Could not decrypt private key, invalid password")
